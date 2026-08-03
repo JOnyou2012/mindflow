@@ -37,10 +37,11 @@ def build_transition_matrix(p: MarkovParams) -> np.ndarray:
     # Fatigue drift: harder tasks + lower personal calibration → more decay
     fatigue_drift = min(0.95, (b / 5.0) * (1.0 / a) * g * 0.25)
 
-    # Staying in flow
-    p_flow_stay = max(0.15, 0.85 - fatigue_drift * 1.5)
+    # Flow → Distracted / Fatigue (scaled by drift)
     p_flow_distracted = fatigue_drift * 0.8
     p_flow_fatigue = fatigue_drift * 0.2
+    # Remainder stays in Flow (guarantees row-sum = 1.0)
+    p_flow_stay = max(0.10, 1.0 - p_flow_distracted - p_flow_fatigue)
 
     # From distracted
     p_dist_stay = 0.55
