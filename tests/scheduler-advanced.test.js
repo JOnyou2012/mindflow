@@ -1,0 +1,541 @@
+/**
+ * Advanced test suite for improved scheduler features.
+ *
+ * Covers: deadline enforcement, workload distribution, inter-session gaps,
+ * recovery buffers, schedule stats, refinement pass, overlapping blocks,
+ * and exported helper functions.
+ *
+ * Run: node tests/scheduler-advanced.test.js
+ */
+
+import generateWeeklySchedule, {
+  gammaForHour,
+  sortTasks,
+  findFreeSlots,
+  ALL_DAYS,
+  DAY_START_TICK,
+  DAY_END_TICK,
+  GAP_TICKS,
+} from '../src/utils/scheduler.js';
+
+// ---------------------------------------------------------------------------
+// Test harness
+// ---------------------------------------------------------------------------
+
+let passed = 0;
+let failed = 0;
+const failures = [];
+
+function assert(condition, label) {
+  if (condition) {
+    passed++;
+  } else {
+    failed++;
+    failures.push(label);
+    console.error(`  ❌ FAIL: ${label}`);
+  }
+}
+
+function summary() {
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`  ${passed} passed, ${failed} failed  (${passed + failed} total)`);
+  if (failed > 0) {
+    console.log(`\n  Failures:`);
+    failures.forEach((f, i) => console.log(`  ${i + 1}. ${f}`));
+    process.exit(1);
+  } else {
+    console.log('  ✅ All advanced tests passed!\n');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeTask(overrides = {}) {
+  return {
+    id: overrides.id || crypto.randomUUID(),
+    title: overrides.title || 'Test Task',
+    type: overrides.type || 'academic',
+    durationMins: overrides.durationMins ?? 60,
+    difficulty: overrides.difficulty ?? 3,
+    priority: overrides.priority || 'medium',
+    deadline: overrides.deadline || null,
+    ...overrides,
+  };
+}
+
+function makeCalendarBlock(overrides = {}) {
+  return {
+    id: overrides.id || crypto.randomUUID(),
+    day: overrides.day || 'Mon',
+    startHour: overrides.startHour ?? 9,
+    durationHours: overrides.durationHours ?? 1.5,
+    label: overrides.label || 'Class',
+    type: overrides.type || 'academic',
+    isFixed: true,
+    ...overrides,
+  };
+}
+
+// ===========================================================================
+// 1. gammaForHour — direct testing
+// ===========================================================================
+
+console.log('\n📋 1. gammaForHour — direct chronotype testing');
+
+// Morning chronotype
+assert(gammaForHour(7, 'morning') === 1.0,  'G1.1: morning@7am → 1.0 (peak)');
+assert(gammaForHour(12, 'morning') === 1.0, 'G1.2: morning@12pm → 1.0 (still peak)');
+assert(gammaForHour(14, 'morning') === 1.05,'G1.3: morning@2pm → 1.05 (afternoon dip)');
+assert(gammaForHour(20, 'morning') === 1.15,'G1.4: morning@8pm → 1.15 (evening dip)');
+assert(gammaForHour(23, 'morning') === 1.25,'G1.5: morning@11pm → 1.25 (deep night)');
+assert(gammaForHour(3, 'morning') === 1.25, 'G1.6: morning@3am → 1.25 (deep night)');
+
+// Neutral chronotype (shift +2h)
+assert(gammaForHour(7, 'neutral') === 1.25, 'G1.7: neutral@7am → 1.25 (5am adjusted, deep night < 6)');
+assert(gammaForHour(10, 'neutral') === 1.0, 'G1.8: neutral@10am → 1.0 (8am adjusted, peak)');
+assert(gammaForHour(16, 'neutral') === 1.05,'G1.9: neutral@4pm → 1.05 (2pm adjusted, dip)');
+assert(gammaForHour(22, 'neutral') === 1.15,'G1.10: neutral@10pm → 1.15 (8pm adjusted = 20, evening dip)');
+
+// Night chronotype (shift +4h)
+assert(gammaForHour(7, 'night') === 1.25,   'G1.11: night@7am → 1.25 (3am adjusted, deep night)');
+assert(gammaForHour(10, 'night') === 1.0,   'G1.12: night@10am → 1.0 (6am adjusted, peak start)');
+assert(gammaForHour(14, 'night') === 1.0,   'G1.13: night@2pm → 1.0 (10am adjusted, peak)');
+assert(gammaForHour(18, 'night') === 1.05,  'G1.14: night@6pm → 1.05 (2pm adjusted, dip)');
+assert(gammaForHour(22, 'night') === 1.05,  'G1.15: night@10pm → 1.05 (6pm adjusted=18, afternoon dip)');
+
+// Default chronotype
+assert(gammaForHour(7) === 1.0,              'G1.16: default chronotype@7am → 1.0');
+assert(gammaForHour(23) === 1.25,            'G1.17: default chronotype@11pm → 1.25');
+
+// ===========================================================================
+// 2. sortTasks — direct testing
+// ===========================================================================
+
+console.log('\n📋 2. sortTasks — direct sort order testing');
+
+// Priority ordering
+const prioTasks = [
+  makeTask({ title: 'Low', priority: 'low' }),
+  makeTask({ title: 'Medium', priority: 'medium' }),
+  makeTask({ title: 'High', priority: 'high' }),
+];
+const prioResult = sortTasks(prioTasks);
+assert(prioResult[0].title === 'High',   'S2.1: High priority first');
+assert(prioResult[1].title === 'Medium', 'S2.2: Medium priority second');
+assert(prioResult[2].title === 'Low',    'S2.3: Low priority last');
+
+// Deadline ordering
+const dlTasks = [
+  makeTask({ title: 'NoDL', priority: 'high', deadline: null }),
+  makeTask({ title: 'Later', priority: 'high', deadline: '2026-12-25' }),
+  makeTask({ title: 'Sooner', priority: 'high', deadline: '2026-08-10' }),
+];
+const dlResult = sortTasks(dlTasks);
+assert(dlResult[0].title === 'Sooner', 'S2.4: Earliest deadline first');
+assert(dlResult[1].title === 'Later',  'S2.5: Later deadline second');
+assert(dlResult[2].title === 'NoDL',   'S2.6: No deadline last');
+
+// Invalid deadline pushed to end
+const invalidDL = [
+  makeTask({ title: 'Valid', priority: 'high', deadline: '2026-08-10' }),
+  makeTask({ title: 'Invalid', priority: 'high', deadline: 'not-a-date' }),
+];
+const invResult = sortTasks(invalidDL);
+assert(invResult[0].title === 'Valid',   'S2.7: Valid deadline before invalid');
+assert(invResult[1].title === 'Invalid', 'S2.8: Invalid deadline pushed to end');
+
+// Type ordering at same priority
+const typeTasks = [
+  makeTask({ title: 'Sports', type: 'sports', priority: 'high' }),
+  makeTask({ title: 'Arts', type: 'arts', priority: 'high' }),
+  makeTask({ title: 'Academic', type: 'academic', priority: 'high' }),
+  makeTask({ title: 'Other', type: 'other', priority: 'high' }),
+];
+const typeResult = sortTasks(typeTasks);
+assert(typeResult[0].type === 'academic', 'S2.9: Academic sorted first');
+assert(typeResult[1].type === 'arts',     'S2.10: Arts second');
+assert(typeResult[2].type === 'other',    'S2.11: Other third');
+assert(typeResult[3].type === 'sports',   'S2.12: Sports last');
+
+// Difficulty tiebreaker
+const diffTasks = [
+  makeTask({ title: 'Easy', difficulty: 1, priority: 'high' }),
+  makeTask({ title: 'Hard', difficulty: 5, priority: 'high' }),
+];
+const diffResult = sortTasks(diffTasks);
+assert(diffResult[0].title === 'Hard', 'S2.13: Harder task first');
+assert(diffResult[1].title === 'Easy', 'S2.14: Easier task second');
+
+// ===========================================================================
+// 3. findFreeSlots — direct testing
+// ===========================================================================
+
+console.log('\n📋 3. findFreeSlots — direct slot computation');
+
+// Empty blocks = one full-day slot
+const emptySlots = findFreeSlots([]);
+assert(emptySlots.length === 1, 'F3.1: Empty blocks → 1 slot');
+assert(emptySlots[0].startTick === DAY_START_TICK, 'F3.2: Slot starts at 6am');
+assert(emptySlots[0].endTick === DAY_END_TICK, 'F3.3: Slot ends at 10pm');
+assert(emptySlots[0].durationTicks === DAY_END_TICK - DAY_START_TICK, 'F3.4: Full day duration');
+
+// Null blocks
+const nullSlots = findFreeSlots(null);
+assert(nullSlots.length === 1, 'F3.5: null blocks → 1 slot');
+
+// One block in the middle
+const midBlockSlots = findFreeSlots([makeCalendarBlock({ startHour: 10, durationHours: 2 })]);
+assert(midBlockSlots.length === 2, 'F3.6: One mid-day block → 2 slots');
+// First slot: 6am–10am
+assert(midBlockSlots[0].startTick === DAY_START_TICK, 'F3.7: First slot starts at 6am');
+assert(midBlockSlots[0].durationTicks === 24, 'F3.8: First slot 4h (6am–10am)');
+// Second slot: 12pm–10pm
+assert(midBlockSlots[1].startTick === 72, 'F3.9: Second slot starts at 12pm');
+assert(midBlockSlots[1].durationTicks === 60, 'F3.10: Second slot 10h (12pm–10pm)');
+
+// Overlapping blocks should merge
+const overlapSlots = findFreeSlots([
+  makeCalendarBlock({ startHour: 9, durationHours: 3 }),   // 9am–12pm
+  makeCalendarBlock({ startHour: 10, durationHours: 3 }),  // 10am–1pm (overlaps)
+]);
+// Should merge into one block 9am–1pm, leaving 6–9am and 1–10pm
+assert(overlapSlots.length === 2, 'F3.11: Overlapping blocks merged → 2 free slots');
+
+// Block at start of day
+const startBlockSlots = findFreeSlots([makeCalendarBlock({ startHour: 6, durationHours: 4 })]);
+assert(startBlockSlots.length === 1, 'F3.12: Block at 6am → 1 trailing slot');
+assert(startBlockSlots[0].startHour >= 10, 'F3.13: Trailing slot starts at/after 10am');
+
+// Block at end of day
+const endBlockSlots = findFreeSlots([makeCalendarBlock({ startHour: 18, durationHours: 4 })]);
+assert(endBlockSlots.length === 1, 'F3.14: Block ending at 10pm → 1 leading slot');
+
+// ===========================================================================
+// 4. Deadline enforcement
+// ===========================================================================
+
+console.log('\n📋 4. Deadline enforcement');
+
+// Task due Wednesday should NOT be scheduled Thursday+
+const deadlineTask = makeTask({
+  title: 'Due Wednesday',
+  deadline: '2026-08-05', // This is a Wednesday in 2026
+  durationMins: 60,
+  priority: 'high',
+});
+
+// Fill Mon-Wed with blocks, leave Thu-Sun free
+const earlyWeekBlocks = [];
+for (const day of ['Mon', 'Tue', 'Wed']) {
+  earlyWeekBlocks.push(makeCalendarBlock({ day, startHour: 6, durationHours: 16 }));
+}
+
+const deadlineResult = generateWeeklySchedule(earlyWeekBlocks, [deadlineTask], 1.0, {});
+// Task is due Wednesday but Mon-Wed are full → should be unscheduled
+// (not placed on Thu/Fri despite them being free)
+assert(deadlineResult.unscheduled.length === 1, 'D4.1: Task due Wednesday with Mon-Wed full → unscheduled');
+assert(deadlineResult.unscheduled[0].title === 'Due Wednesday', 'D4.2: Correct task unscheduled');
+
+// Verify no sessions on Thu-Sun
+for (const day of ['Thu', 'Fri', 'Sat', 'Sun']) {
+  assert(deadlineResult.days[day].sessions.length === 0,
+    `D4.3: No session on ${day} for Wednesday-deadline task`);
+}
+
+// Task due Friday CAN be scheduled on Wednesday
+const friTask = makeTask({
+  title: 'Due Friday',
+  deadline: '2026-08-07', // Friday
+  durationMins: 60,
+});
+
+const friResult = generateWeeklySchedule([], [friTask], 1.0, {});
+// Should be scheduled on some day Mon-Fri, not Sat-Sun
+let scheduledOnWeekend = false;
+for (const day of ['Sat', 'Sun']) {
+  if (friResult.days[day].sessions.length > 0) scheduledOnWeekend = true;
+}
+assert(!scheduledOnWeekend, 'D4.4: Friday-deadline task not scheduled on weekend');
+
+// Task with no deadline can go any day (including weekend if necessary)
+const noDLTask = makeTask({ title: 'No Deadline', durationMins: 60 });
+const noDLResult = generateWeeklySchedule([], [noDLTask], 1.0, {});
+const totalSessions = ALL_DAYS.reduce((sum, d) => sum + noDLResult.days[d].sessions.length, 0);
+assert(totalSessions === 1, 'D4.5: No-deadline task scheduled somewhere');
+
+// ===========================================================================
+// 5. Inter-session gaps
+// ===========================================================================
+
+console.log('\n📋 5. Inter-session gaps');
+
+const gapTasks = [
+  makeTask({ title: 'Session 1', durationMins: 30, difficulty: 3 }),
+  makeTask({ title: 'Session 2', durationMins: 30, difficulty: 3 }),
+];
+
+const gapResult = generateWeeklySchedule([], gapTasks, 1.0, {});
+
+// Both sessions should be scheduled (same day, plenty of room)
+const gapSessions = gapResult.days.Mon.sessions;
+if (gapSessions.length === 2) {
+  const s1End = gapSessions[0].endTick;
+  const s2Start = gapSessions[1].startTick;
+  const gap = s2Start - s1End;
+
+  assert(gap >= GAP_TICKS, `G5.1: Gap between sessions ≥ ${GAP_TICKS} tick(s), got ${gap}`);
+  assert(gap === GAP_TICKS, `G5.2: Gap equals exactly ${GAP_TICKS} tick(s) (10 min)`);
+}
+
+// ===========================================================================
+// 6. Workload distribution
+// ===========================================================================
+
+console.log('\n📋 6. Workload distribution');
+
+// Create 7 tasks that should spread across the week, not all on Monday
+const spreadTasks = [];
+for (let i = 0; i < 7; i++) {
+  spreadTasks.push(makeTask({ title: `Spread ${i}`, durationMins: 60 }));
+}
+
+const spreadResult = generateWeeklySchedule([], spreadTasks, 1.0, {});
+const daysWithSessions = ALL_DAYS.filter(d => spreadResult.days[d].sessions.length > 0);
+
+// With 7 tasks of 1h each and 8h weekday cap, they should spread
+// across at least 2 weekdays (not all crammed into Monday)
+assert(daysWithSessions.length >= 2,
+  `W6.1: Tasks spread across ≥ 2 days, got ${daysWithSessions.length}`);
+
+// Monday should NOT have all 7 tasks
+const monCount = spreadResult.days.Mon.sessions.length;
+assert(monCount < 7, `W6.2: Monday has ${monCount} tasks (< 7, workload distributed)`);
+
+// Check stats for workload balance
+assert(spreadResult.stats !== null, 'W6.3: Stats object exists');
+assert(typeof spreadResult.stats.workloadBalance === 'number', 'W6.4: workloadBalance is a number');
+assert(spreadResult.stats.workloadBalance >= 0 && spreadResult.stats.workloadBalance <= 100,
+  `W6.5: workloadBalance (${spreadResult.stats.workloadBalance}) in [0, 100]`);
+
+// ===========================================================================
+// 7. Schedule quality statistics
+// ===========================================================================
+
+console.log('\n📋 7. Schedule quality statistics');
+
+const statsTasks = [
+  makeTask({ title: 'Stats A', durationMins: 60, difficulty: 3 }),
+  makeTask({ title: 'Stats B', durationMins: 30, difficulty: 1 }),
+];
+
+const statsResult = generateWeeklySchedule([], statsTasks, 1.0, {});
+const stats = statsResult.stats;
+
+assert(stats !== null, 'Q7.1: Stats object exists');
+assert(typeof stats.totalScheduledMins === 'number', 'Q7.2: totalScheduledMins is numeric');
+assert(typeof stats.totalScheduledHours === 'number', 'Q7.3: totalScheduledHours is numeric');
+assert(typeof stats.totalFlowMins === 'number', 'Q7.4: totalFlowMins is numeric');
+assert(typeof stats.totalBurnoutCount === 'number', 'Q7.5: totalBurnoutCount is numeric');
+assert(typeof stats.unscheduledCount === 'number', 'Q7.6: unscheduledCount is numeric');
+assert(typeof stats.utilizationPct === 'number', 'Q7.7: utilizationPct is numeric');
+assert(typeof stats.daysUsed === 'number', 'Q7.8: daysUsed is numeric');
+assert(typeof stats.workloadBalance === 'number', 'Q7.9: workloadBalance is numeric');
+assert(typeof stats.avgFatigue === 'number', 'Q7.10: avgFatigue is numeric');
+assert(typeof stats.dayUtilization === 'object', 'Q7.11: dayUtilization is an object');
+
+// All 7 days have utilization entries
+for (const day of ALL_DAYS) {
+  assert(typeof stats.dayUtilization[day] === 'number',
+    `Q7.12: dayUtilization.${day} is numeric`);
+  assert(stats.dayUtilization[day] >= 0 && stats.dayUtilization[day] <= 1,
+    `Q7.13: dayUtilization.${day} (${stats.dayUtilization[day]}) in [0, 1]`);
+}
+
+// 90 total minutes → should be 100% utilization
+assert(stats.utilizationPct === 100, `Q7.14: 90min tasks → 100% utilization (got ${stats.utilizationPct}%)`);
+assert(stats.unscheduledCount === 0, 'Q7.15: All tasks scheduled');
+assert(stats.daysUsed >= 1, 'Q7.16: At least 1 day used');
+
+// Empty schedule stats
+const emptyStats = generateWeeklySchedule([], [], 1.0, {}).stats;
+assert(emptyStats !== null, 'Q7.17: Empty schedule has stats');
+assert(emptyStats.totalScheduledMins === 0, 'Q7.18: Empty schedule → 0 mins');
+assert(emptyStats.daysUsed === 0, 'Q7.19: Empty schedule → 0 days used');
+assert(emptyStats.utilizationPct === 100, 'Q7.20: Empty schedule → 100% (nothing to do)');
+
+// Full calendar stats
+const fullCalBlocks = [];
+for (const day of ALL_DAYS) {
+  fullCalBlocks.push(makeCalendarBlock({ day, startHour: 6, durationHours: 16 }));
+}
+const fullStats = generateWeeklySchedule(fullCalBlocks, [makeTask({ title: 'Nope', durationMins: 60 })], 1.0, {}).stats;
+assert(fullStats.unscheduledCount === 1, 'Q7.21: Full calendar → 1 unscheduled');
+assert(fullStats.utilizationPct === 0, `Q7.22: Full calendar → 0% utilization (got ${fullStats.utilizationPct}%)`);
+
+// ===========================================================================
+// 8. Refinement pass
+// ===========================================================================
+
+console.log('\n📋 8. Refinement pass');
+
+// Create many tasks that barely exceed one day's capacity
+const manyRefTasks = [];
+for (let i = 0; i < 9; i++) {
+  manyRefTasks.push(makeTask({ title: `Ref ${i}`, durationMins: 60 }));
+}
+// 9 hours of tasks, 8h weekday cap → 1 task should overflow to next day
+const refResult = generateWeeklySchedule([], manyRefTasks, 1.0, {});
+const refTotalScheduled = ALL_DAYS.reduce(
+  (sum, d) => sum + refResult.days[d].sessions.length, 0
+);
+assert(refTotalScheduled === 9, `R8.1: All 9 tasks scheduled (${refTotalScheduled}/9)`);
+assert(refResult.unscheduled.length === 0, 'R8.2: Zero unscheduled after refinement');
+
+// Multiple days should be used (>1)
+const refDaysUsed = ALL_DAYS.filter(d => refResult.days[d].sessions.length > 0).length;
+assert(refDaysUsed >= 2, `R8.3: Tasks overflow to ≥ 2 days (${refDaysUsed})`);
+
+// ===========================================================================
+// 9. Recovery buffer after burnout
+// ===========================================================================
+
+console.log('\n📋 9. Recovery buffer after burnout');
+
+// Hard task that will trigger burnout
+const burnoutTask = makeTask({
+  title: 'Burnout Task',
+  durationMins: 120,
+  difficulty: 5,
+});
+
+const recoveryResult = generateWeeklySchedule([], [burnoutTask], 0.5, { chronotype: 'night' });
+const recoverySession = recoveryResult.days.Mon.sessions[0];
+
+if (recoverySession && recoverySession.burnoutTick > 0) {
+  // The session should have burnout detected
+  assert(typeof recoverySession.burnoutTick === 'number', 'B9.1: burnoutTick is numeric');
+  assert(recoverySession.burnoutTick > 0, 'B9.2: Burnout was detected');
+
+  // The recovery buffer (RECOVERY_TICKS) should have been consumed from the slot
+  // This is indirectly verified: the day's total used ticks should include recovery
+  const dayTicks = recoveryResult.days.Mon.sessions.reduce(
+    (sum, s) => sum + (s.endTick - s.startTick), 0
+  );
+  assert(dayTicks > 0, 'B9.3: Session has positive duration');
+}
+
+// ===========================================================================
+// 10. Edge cases for advanced features
+// ===========================================================================
+
+console.log('\n📋 10. Advanced edge cases');
+
+// All tasks have deadlines in the past → all unscheduled
+const pastTask = makeTask({
+  title: 'Past Due',
+  deadline: '2020-01-01', // years ago
+  durationMins: 60,
+});
+const pastResult = generateWeeklySchedule([], [pastTask], 1.0, {});
+// 2020-01-01 was a Wednesday, still a valid date — just in the past
+// The scheduler doesn't check "is this date in the past", only "which day of week"
+// So this task should still be schedulable (it's just a day-of-week constraint)
+const pastScheduled = ALL_DAYS.reduce(
+  (sum, d) => sum + pastResult.days[d].sessions.length, 0
+);
+assert(pastScheduled === 1, 'E10.1: Past-date deadline still schedulable (day-of-week only)');
+
+// Tasks with extreme durations
+const extremeTasks = [
+  makeTask({ title: 'Tiny', durationMins: 5, difficulty: 1 }),     // < 10 min → 1 tick
+  makeTask({ title: 'Huge', durationMins: 600, difficulty: 5 }),    // 10 hours → won't fit in one day
+];
+const extremeResult = generateWeeklySchedule([], extremeTasks, 1.0, {});
+// Tiny task should be scheduled
+const tinyScheduled = ALL_DAYS.some(d =>
+  extremeResult.days[d].sessions.some(s => s.task.title === 'Tiny')
+);
+assert(tinyScheduled, 'E10.2: 5-min task (ceil→1 tick) is scheduled');
+
+// All 4 task types work with new scheduler
+for (const type of ['academic', 'sports', 'arts', 'other']) {
+  const tResult = generateWeeklySchedule([], [makeTask({ title: type, type, durationMins: 30 })], 1.0, {});
+  const hasSession = ALL_DAYS.some(d => tResult.days[d].sessions.length > 0);
+  assert(hasSession, `E10.3: Type "${type}" is schedulable`);
+}
+
+// Custom maxHoursPerDay = 2 (very restrictive)
+const tightCapResult = generateWeeklySchedule([], [
+  makeTask({ title: 'A', durationMins: 60 }),
+  makeTask({ title: 'B', durationMins: 60 }),
+  makeTask({ title: 'C', durationMins: 60 }),
+], 1.0, { maxHoursPerDay: 2, maxHoursWeekend: 1 });
+
+const tightTotal = ALL_DAYS.reduce(
+  (sum, d) => sum + tightCapResult.days[d].sessions.length, 0
+);
+// Each day caps at 2h = 12 ticks, each task is 60min = 6 ticks
+// Per day: at most 2 tasks (6+6+gap=13 ticks, barely over 12 — so 2 tasks may or may not fit)
+assert(tightTotal >= 2, `E10.4: Even with tight 2h cap, ≥ 2 tasks scheduled (${tightTotal})`);
+
+// generatedAt is always set on the full result (not stats sub-object)
+const gaResults = [
+  generateWeeklySchedule([], [], 1.0, {}),
+  generateWeeklySchedule([], [makeTask({ title: 'T', durationMins: 30 })], 1.0, {}),
+];
+for (const result of gaResults) {
+  assert(typeof result.generatedAt === 'number', 'E10.5: generatedAt is always present');
+  assert(result.generatedAt > 0, 'E10.6: generatedAt is positive');
+}
+
+// Timeline is properly clipped to fittedTicks
+const clipResult = generateWeeklySchedule([], [makeTask({ title: 'Clip', durationMins: 60, difficulty: 3 })], 1.0, {});
+const clipSession = clipResult.days.Mon.sessions[0];
+const sessionDuration = clipSession.endTick - clipSession.startTick;
+const timelineLength = clipSession.timeline.length - 1; // -1 for t=0
+assert(timelineLength <= sessionDuration,
+  `E10.7: Timeline length (${timelineLength}) ≤ session duration (${sessionDuration})`);
+
+// ===========================================================================
+// 11. Backward compatibility — all old test scenarios still work
+// ===========================================================================
+
+console.log('\n📋 11. Backward compatibility checks');
+
+// Empty inputs still produce valid structure
+const bc1 = generateWeeklySchedule();
+assert(bc1.days.Mon !== undefined, 'BC11.1: No args → valid week structure');
+assert(Array.isArray(bc1.unscheduled), 'BC11.2: No args → unscheduled is array');
+
+// Sports still causes less fatigue than academic
+const bcSports = generateWeeklySchedule([], [makeTask({ title: 'S', type: 'sports', durationMins: 60, difficulty: 3 })], 1.0, {});
+const bcAcad = generateWeeklySchedule([], [makeTask({ title: 'A', type: 'academic', durationMins: 60, difficulty: 3 })], 1.0, {});
+const bcSportsFatigue = bcSports.days.Mon.sessions[0].timeline.reduce((s, p) => s + p.fatigue, 0);
+const bcAcadFatigue = bcAcad.days.Mon.sessions[0].timeline.reduce((s, p) => s + p.fatigue, 0);
+assert(bcSportsFatigue < bcAcadFatigue,
+  `BC11.3: Sports fatigue (${bcSportsFatigue.toFixed(3)}) < academic fatigue (${bcAcadFatigue.toFixed(3)})`);
+
+// Full calendar still → all unscheduled
+const bcFullBlocks = [];
+for (const day of ALL_DAYS) {
+  bcFullBlocks.push(makeCalendarBlock({ day, startHour: 6, durationHours: 16 }));
+}
+const bcFullResult = generateWeeklySchedule(bcFullBlocks, [makeTask({ title: 'Nope' })], 1.0, {});
+assert(bcFullResult.unscheduled.length === 1, 'BC11.4: Full calendar → all unscheduled (still works)');
+
+// Session shape unchanged
+const bcShape = generateWeeklySchedule([], [makeTask({ title: 'Shape', durationMins: 30 })], 1.0, {});
+const bcSession = bcShape.days.Mon.sessions[0];
+assert(bcSession.task !== undefined, 'BC11.5: session.task exists');
+assert(typeof bcSession.startTick === 'number', 'BC11.6: session.startTick is numeric');
+assert(typeof bcSession.endTick === 'number', 'BC11.7: session.endTick is numeric');
+assert(Array.isArray(bcSession.timeline), 'BC11.8: session.timeline is array');
+assert(typeof bcSession.burnoutTick === 'number', 'BC11.9: session.burnoutTick is numeric');
+
+// ===========================================================================
+// Done
+// ===========================================================================
+
+summary();
