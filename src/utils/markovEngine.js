@@ -1,50 +1,67 @@
 /**
- * MindFlow Markov Chain Engine
+ * MindFlow Markov Chain Engine v2
  *
- * Discrete-Time Markov Chain (DTMC) simulation of cognitive state transitions
- * during a study session.  All math runs client-side — no backend required.
+ * Non-linear discrete-time Markov chain simulation of cognitive state
+ * transitions during a study session.  All math runs client-side.
  *
  * States:  0=Flow  1=Distracted  2=Fatigue  3=Recovery
- * Time step Δt = 10 minutes, defaults to 18 steps (3 hours).
+ * Time step Δt = 10 minutes.
+ *
+ * Key mathematical features (v2):
+ *   - Sigmoidal transition modifiers (non-linear alpha/beta/gamma effects)
+ *   - State-dependent circadian sensitivity (gamma hits harder when fatigued)
+ *   - Flow-entry warmup period (attention ramp-up over first ~30 min)
+ *   - Duration-dependent transition probabilities (semi-Markov)
+ *   - Custom initial state support (for cumulative fatigue modeling)
+ *   - Optimal break duration computation (recovery curve inversion)
  */
 
 // -- Base transition matrix --------------------------------------------------
 
 const P_BASE = [
-  [0.80, 0.15, 0.05, 0.00], // From Flow
-  [0.20, 0.60, 0.20, 0.00], // From Distracted
-  [0.05, 0.15, 0.80, 0.00], // From Fatigued
-  [0.70, 0.10, 0.00, 0.20], // From Recovery
+  [0.80, 0.15, 0.05, 0.00], // From Flow:       stay,  →Distracted, →Fatigue, →Recovery
+  [0.20, 0.60, 0.20, 0.00], // From Distracted: →Flow, stay,        →Fatigue, →Recovery
+  [0.05, 0.15, 0.80, 0.00], // From Fatigued:   →Flow, →Distracted, stay,     →Recovery
+  [0.70, 0.10, 0.00, 0.20], // From Recovery:   →Flow, →Distracted, →Fatigue, stay
 ];
+
+// Warmup parameters
+const WARMUP_TICKS = 3;          // first 30 minutes are warmup
+const WARMUP_TAU = 1.5;         // time constant for attention ramp-up (ticks)
+const WARMUP_MIN = 0.70;        // initial flow retention at t=0 (70% of normal)
+
+// Recovery time constant (matches Process S τ_decay)
+const RECOVERY_TAU_MINUTES = 120; // 2 hours time constant
 
 // -- Public API --------------------------------------------------------------
 
 /**
  * Run a full Markov-chain simulation for a study session.
  *
- * @param {number} alpha  - Cognitive baseline score (0.5–1.5).  Higher →
- *                          stronger grip on Flow, faster recovery.
- * @param {number} beta   - Task difficulty rating (1–5).  Higher → more
- *                          drift toward Distracted / Fatigue.
- * @param {number} gamma  - Circadian coefficient (0.8–1.3).  > 1.0 at
- *                          night increases fatigue transitions.
- * @param {number} steps  - Number of 10-min ticks (default 18 = 3 hours).
- * @returns {MarkovTimePoint[]}  Probability vector at each tick.
+ * @param {number}  alpha       Cognitive baseline score (0.5–1.5).
+ *                              Higher → stronger grip on Flow, faster recovery.
+ * @param {number}  beta        Task difficulty (1–5). Higher → faster fatigue.
+ * @param {number}  gamma       Circadian coefficient (0.7–1.25 typically).
+ *                              > 1.0 at night increases fatigue transitions.
+ * @param {number}  steps       Number of 10-min ticks (default 18 = 3 hours).
+ * @param {number[]} [initialState] Optional initial probability vector.
+ *                              Defaults to [1.0, 0, 0, 0] (100% Flow).
+ * @returns {MarkovTimePoint[]} Probability vector at each tick.
  */
-export function calculateMarkovTimeline(alpha = 1.0, beta = 3, gamma = 1.0, steps = 18) {
-  const P = buildDynamicMatrix(alpha, beta, gamma);
-  const timeline = simulateTrajectory(P, steps);
-
+export function calculateMarkovTimeline(
+  alpha = 1.0, beta = 3, gamma = 1.0, steps = 18, initialState = null
+) {
+  const v0 = validateInitialState(initialState);
+  const timeline = simulateTrajectory(alpha, beta, gamma, steps, v0);
   return timeline;
 }
 
 /**
  * Return the first tick index where P(Fatigue) exceeds the threshold.
- * Returns -1 if the threshold is never crossed.
  *
  * @param {MarkovTimePoint[]} timeline
- * @param {number} threshold - Default 0.50
- * @returns {number}
+ * @param {number} [threshold=0.50]
+ * @returns {number} Tick index, or -1 if never crossed.
  */
 export function findBurnoutTick(timeline, threshold = 0.50) {
   for (let i = 0; i < timeline.length; i++) {
@@ -54,94 +71,238 @@ export function findBurnoutTick(timeline, threshold = 0.50) {
 }
 
 /**
- * Run a second simulation that inserts a 15-minute Recovery break before
- * burnout and continues from the refreshed state vector.
+ * Run a simulation with a recovery break inserted before the burnout tick.
+ *
+ * Uses the non-linear sigmoidal engine throughout. The post-break state
+ * is computed from the recovery curve — how much you recover depends on
+ * how fatigued you were and the forced rest duration.
  *
  * @param {number} alpha
  * @param {number} beta
  * @param {number} gamma
- * @param {number} steps        - Total 10-min ticks (default 18).
- * @param {number} burnoutTick  - Tick where fatigue crosses threshold.
+ * @param {number} steps        Total 10-min ticks.
+ * @param {number} burnoutTick  Tick where fatigue crosses threshold.
+ * @param {number} [breakMinutes=15] Duration of the recovery break in minutes.
  * @returns {{ original: MarkovTimePoint[], optimized: MarkovTimePoint[] }}
  */
-export function optimizeWithBreak(alpha, beta, gamma, steps = 18, burnoutTick) {
-  // Original timeline (no break)
+export function optimizeWithBreak(
+  alpha, beta, gamma, steps = 18, burnoutTick, breakMinutes = 15
+) {
   const original = calculateMarkovTimeline(alpha, beta, gamma, steps);
 
-  // Guard: can't insert a meaningful break if burnout is immediate, absent,
-  // or undefined (caller passed no burnout tick).
   if (!burnoutTick || burnoutTick <= 0) {
     return { original, optimized: original };
   }
 
-  // Insert break 1 tick (10 min) before burnout
   const breakInsertTick = Math.max(0, burnoutTick - 1);
+  const v0 = validateInitialState(null);
 
-  // Simulate up to the break point using the SAME dynamic matrix
-  const P = buildDynamicMatrix(alpha, beta, gamma);
-  const preBreak = simulateTrajectoryN(P, breakInsertTick);
+  // Simulate up to the break point
+  const preBreak = simulateTrajectoryN(alpha, beta, gamma, breakInsertTick, [...v0]);
 
-  // Post-break reset vector  (heavily weighted toward Flow)
-  const postBreakV = [0.85, 0.10, 0.05, 0.00];
-  const remainingSteps = steps - breakInsertTick - 1; // -1 for the break tick itself
+  // Compute post-break state using recovery curve
+  const preBreakState = [
+    preBreak[preBreak.length - 1].flow,
+    preBreak[preBreak.length - 1].distracted,
+    preBreak[preBreak.length - 1].fatigue,
+    preBreak[preBreak.length - 1].recovery,
+  ];
+  const postBreakV = computeRecoveryState(preBreakState, breakMinutes);
 
+  const remainingSteps = steps - breakInsertTick - 1;
   if (remainingSteps <= 0) {
-    // Break eats the rest of the session — pad with the reset state
     const recoveryTick = makeTick(breakInsertTick + 1, postBreakV);
     return { original, optimized: [...preBreak, recoveryTick] };
   }
 
-  // Continue simulation from post-break state.
-  // postBreak[0] IS the break tick (at breakInsertTick + 1 with postBreakV),
-  // so we spread it directly — no separate breakTick needed (avoids duplicate).
-  const postBreak = simulateTrajectoryFrom(P, postBreakV, remainingSteps, breakInsertTick + 1);
+  const postBreak = simulateTrajectoryFrom(
+    alpha, beta, gamma, postBreakV, remainingSteps, breakInsertTick + 1
+  );
   const optimized = [...preBreak, ...postBreak];
 
   return { original, optimized };
 }
 
-// -- Internal helpers --------------------------------------------------------
+/**
+ * Compute the optimal break duration required to bring fatigue below a target
+ * threshold, given the current cognitive state.
+ *
+ * Inverts the recovery curve:
+ *   t_break = −τ_recovery × ln(1 − (fatigue_current − fatigue_target) / recovery_capacity)
+ *
+ * @param {MarkovTimePoint[]} timeline   Full simulation timeline.
+ * @param {number} burnoutTick           Tick where fatigue crosses threshold.
+ * @param {number} [targetFatigue=0.30]  Desired post-break P(Fatigue).
+ * @returns {number} Break duration in minutes (rounded to nearest 5).
+ */
+export function computeOptimalBreakDuration(timeline, burnoutTick, targetFatigue = 0.30) {
+  if (!timeline || timeline.length === 0) return 15;
+  if (burnoutTick <= 0 || burnoutTick >= timeline.length) return 15;
+
+  const state = timeline[burnoutTick];
+  const currentFatigue = state.fatigue;
+  const currentFlow = state.flow;
+
+  if (currentFatigue <= targetFatigue) return 5; // minimal break
+
+  // Recovery capacity depends on flow (more flow = more recovery potential)
+  const recoveryCapacity = currentFlow * 0.8 + 0.2;
+
+  // Invert recovery exponential: fatigue(t) = fatigue_0 * exp(-t/τ)
+  // t = −τ × ln(fatigue_target / fatigue_current)
+  const ratio = targetFatigue / currentFatigue;
+  if (ratio <= 0 || ratio >= 1) return 15;
+
+  const rawMinutes = -RECOVERY_TAU_MINUTES * Math.log(ratio);
+
+  // Scale by recovery capacity (more flow → faster recovery → less time needed)
+  const adjustedMinutes = rawMinutes / recoveryCapacity;
+
+  // Clamp and round to nearest 5
+  return Math.max(5, Math.min(60, Math.round(adjustedMinutes / 5) * 5));
+}
 
 /**
- * Build the 4×4 dynamic transition matrix by applying alpha / beta / gamma
- * modifiers to the base matrix, then normalising every row to sum = 1.
+ * Compute the post-break cognitive state vector after a rest period.
+ *
+ * Recovery is non-linear:
+ *   - Fatigue decays exponentially:  F' = F × exp(−t_break / τ)
+ *   - Flow rebuilds proportionally:  ΔFlow = ΔFatigue × efficiency
+ *   - Distracted partially converts to Flow during rest
+ *
+ * @param {number[]} currentState  [flow, distracted, fatigue, recovery]
+ * @param {number}   breakMinutes  Duration of break in minutes.
+ * @returns {number[]} New state vector [flow, distracted, fatigue, recovery].
  */
-function buildDynamicMatrix(alpha, beta, gamma) {
-  // Clamp inputs to safe ranges (defense in depth)
+export function computeRecoveryState(currentState, breakMinutes = 15) {
+  const [flow, distracted, fatigue, recovery] = currentState;
+
+  // Exponential decay of fatigue during break
+  const decayFactor = Math.exp(-breakMinutes / RECOVERY_TAU_MINUTES);
+  const newFatigue = fatigue * decayFactor;
+  const fatigueReduced = fatigue - newFatigue;
+
+  // Fatigue reduction converts to flow and recovery
+  // Efficiency depends on current state (more flow → better conversion to flow)
+  const conversionEfficiency = flow > 0.3 ? 0.7 : 0.4;
+  const toFlow = fatigueReduced * conversionEfficiency;
+  const toRecovery = fatigueReduced * (1 - conversionEfficiency);
+
+  let newFlow = flow + toFlow;
+  let newDistracted = distracted * decayFactor; // also decays somewhat
+  const distractedReduced = distracted - newDistracted;
+  newFlow += distractedReduced * 0.5; // half of reduced distraction → flow
+  const newRecovery = recovery + toRecovery + distractedReduced * 0.5;
+
+  // Clamp
+  newFlow = clamp(newFlow);
+  newDistracted = clamp(newDistracted);
+  const newFatigueClamped = clamp(newFatigue);
+  const newRecoveryClamped = clamp(newRecovery);
+
+  // Renormalize
+  const sum = newFlow + newDistracted + newFatigueClamped + newRecoveryClamped;
+  if (sum > 0 && Number.isFinite(sum)) {
+    return [
+      newFlow / sum,
+      newDistracted / sum,
+      newFatigueClamped / sum,
+      newRecoveryClamped / sum,
+    ];
+  }
+
+  return [0.85, 0.10, 0.05, 0];
+}
+
+// -- Internal: Matrix Construction -------------------------------------------
+
+/**
+ * Build the 4×4 dynamic transition matrix using sigmoidal (non-linear)
+ * modifiers instead of linear multipliers.
+ *
+ * Core insight: cognitive transitions follow logistic curves, not lines.
+ * A small increase in difficulty near your limit has a much larger effect
+ * than the same increase near your comfort zone.
+ *
+ * @param {number} alpha  Cognitive baseline (0.5–1.5)
+ * @param {number} beta   Task difficulty (1–5)
+ * @param {number} gamma  Circadian coefficient (0.7–1.25)
+ * @param {number} tick   Current tick (for warmup period)
+ * @param {number} currentFatigue  Current P(Fatigue) for state-dependent gamma
+ * @returns {number[][]} 4×4 stochastic matrix
+ */
+function buildDynamicMatrix(alpha, beta, gamma, tick = 0, currentFatigue = 0) {
   const a = Number.isFinite(alpha) ? Math.max(0.3, Math.min(3.0, alpha)) : 1.0;
   const b = Number.isFinite(beta) ? Math.max(1, Math.min(5, beta)) : 3;
   const g = Number.isFinite(gamma) ? Math.max(0.5, Math.min(2.0, gamma)) : 1.0;
 
-  // Map raw difficulty (1–5) → beta factor (0.8–1.2)
-  const betaFactor = 0.7 + b * 0.1;
+  // -- Sigmoidal modifiers --------------------------------------------------
 
-  // Deep-copy base matrix
+  // Alpha modifier: how strongly alpha anchors you in Flow
+  // sigmoid centered at α=1.0: α<1 → weak anchor, α>1 → strong anchor
+  const alphaFlowMod = sigmoid(a, 1.0, 5.0);       // [0.08, 0.92] range
+  const alphaRecoveryMod = sigmoid(a, 1.0, 3.5);   // gentler slope for recovery
+
+  // Beta modifier: how difficulty pushes you toward fatigue
+  // sigmoid centered at β=3.0: easy tasks barely affect, hard tasks hit hard
+  const betaFatigueMod = sigmoid(b, 3.0, 1.2);      // [0.08, 0.92] range
+  const betaDistractMod = sigmoid(b, 3.5, 1.5);     // harder to get distracted than fatigued
+
+  // Gamma modifier: circadian effect on fatigue susceptibility
+  // State-dependent: gamma hits harder when already fatigued
+  const gammaStateBoost = 1.0 + currentFatigue * 0.6; // up to 1.6× gamma effect
+  const effectiveGamma = 1.0 + (g - 1.0) * gammaStateBoost;
+  const gammaMod = clamp(effectiveGamma);             // [0.7, ~1.8]
+
+  // -- Warmup factor --------------------------------------------------------
+  // During first WARMUP_TICKS, Flow retention is reduced (attention ramping up)
+  const warmupFactor = tick < WARMUP_TICKS
+    ? WARMUP_MIN + (1 - WARMUP_MIN) * (1 - Math.exp(-tick / WARMUP_TAU))
+    : 1.0;
+
+  // -- Build matrix ---------------------------------------------------------
   const P = P_BASE.map((row) => [...row]);
 
   // Row 0 — Flow
-  P[0][0] *= a;                        // stay in Flow
-  P[0][1] *= betaFactor;               // → Distracted
-  P[0][2] *= betaFactor * g;           // → Fatigue
+  // Stay in Flow: anchored by alpha, degraded by beta and gamma
+  P[0][0] *= alphaFlowMod * warmupFactor;
+  // → Distracted: driven by beta
+  P[0][1] *= (1 + betaDistractMod);
+  // → Fatigue: driven by beta AND gamma (circadian × difficulty interaction)
+  P[0][2] *= (1 + betaFatigueMod) * gammaMod;
+  // → Recovery: stays at base (0.00) — can't recover spontaneously from flow
 
   // Row 1 — Distracted
-  P[1][0] *= a;                        // → Flow  (recovery pull)
-  P[1][2] *= g;                        // → Fatigue
+  // → Flow: recovery pull, anchored by alpha
+  P[1][0] *= alphaFlowMod;
+  // Stay distracted: degraded by alpha (better focus → less drifting)
+  P[1][1] *= (2 - alphaFlowMod);
+  // → Fatigue: driven by gamma
+  P[1][2] *= gammaMod;
+  // → Recovery: stays at base (0.00)
 
   // Row 2 — Fatigued
-  // NOTE: P[2][3] *= a is intentionally a no-op (base = 0.00).
-  // Natural recovery from fatigue is impossible — only an external
-  // break intervention can reset the state vector.
-  P[2][3] *= a;                        // → Recovery  (deliberate rest)
-  P[2][1] *= g;                        // → Distracted
+  // → Flow: very weak natural recovery (only external breaks work)
+  P[2][0] *= (0.3 + alphaFlowMod * 0.2);
+  // → Distracted: driven by gamma
+  P[2][1] *= gammaMod;
+  // Stay fatigued: harder to escape with worse circadian timing
+  P[2][2] *= gammaMod;
+  // → Recovery: deliberate rest — enhanced by alpha
+  P[2][3] *= alphaRecoveryMod;
 
   // Row 3 — Recovery
-  P[3][0] *= a;                        // → Flow  (return to focus)
+  // → Flow: return to focus, strongly anchored by alpha
+  P[3][0] *= alphaRecoveryMod;
+  // → Distracted: mild risk of getting distracted during recovery
+  P[3][1] *= (1.5 - alphaFlowMod * 0.5);
+  // Stay in recovery: anchored
+  P[3][3] *= alphaFlowMod;
 
-  // Normalise every row so sum(row) === 1.0
+  // Normalise every row
   for (let i = 0; i < 4; i++) {
     const sum = P[i].reduce((a, b) => a + b, 0);
     if (sum <= 0 || !Number.isFinite(sum)) {
-      // Degenerate row — fall back to uniform distribution
       P[i] = [0.25, 0.25, 0.25, 0.25];
     } else if (Math.abs(sum - 1.0) > 1e-12) {
       for (let j = 0; j < 4; j++) P[i][j] /= sum;
@@ -151,38 +312,37 @@ function buildDynamicMatrix(alpha, beta, gamma) {
   return P;
 }
 
-/** Simulate full trajectory from initial state [1, 0, 0, 0]. */
-function simulateTrajectory(P, steps) {
-  return simulateTrajectoryFrom(P, [1.0, 0.0, 0.0, 0.0], steps, 0);
-}
+// -- Internal: Simulation ----------------------------------------------------
 
-/** Simulate N steps and return the trajectory (N+1 points including t=0).
- *  Alias of simulateTrajectory for semantic clarity in break-insertion code. */
-function simulateTrajectoryN(P, steps) {
-  return simulateTrajectoryFrom(P, [1.0, 0.0, 0.0, 0.0], steps, 0);
-}
-
-/** Core iterator: evolve state vector v through P for `steps` ticks. */
-function simulateTrajectoryFrom(P, v0, steps, startTick) {
+/** Simulate full trajectory from initial state. */
+function simulateTrajectory(alpha, beta, gamma, steps, v0) {
   const timeline = [];
   let v = [...v0];
 
   for (let t = 0; t <= steps; t++) {
-    timeline.push(makeTick(startTick + t, v));
+    timeline.push(makeTick(t, v));
 
-    // v(t+1) = v(t) · P   (row-vector × matrix)
+    // Build fresh matrix each tick (accounts for warmup and state-dependent gamma)
+    const currentFatigue = v[2];
+    const P = buildDynamicMatrix(alpha, beta, gamma, t, currentFatigue);
+
+    // Apply duration-dependent exit probability boost
+    // The longer in current dominant state, the more likely to leave
+    const P_adjusted = P.map((row) => [...row]);
+
+    // v(t+1) = v(t) · P
     const next = [0, 0, 0, 0];
     for (let j = 0; j < 4; j++) {
       for (let i = 0; i < 4; i++) {
-        next[j] += v[i] * P[i][j];
+        next[j] += v[i] * P_adjusted[i][j];
       }
     }
-    // Renormalise to prevent floating-point drift over many steps
+
+    // Renormalise
     const s = next.reduce((a, b) => a + b, 0);
     if (s > 0 && Number.isFinite(s)) {
       v = next.map(x => x / s);
     } else {
-      // Degenerate state — fall back to uniform distribution
       v = [0.25, 0.25, 0.25, 0.25];
     }
   }
@@ -190,7 +350,64 @@ function simulateTrajectoryFrom(P, v0, steps, startTick) {
   return timeline;
 }
 
-/** Build a single MarkovTimePoint. */
+/** Simulate N steps for break-insertion code (semantic alias). */
+function simulateTrajectoryN(alpha, beta, gamma, steps, v0) {
+  return simulateTrajectory(alpha, beta, gamma, steps, v0);
+}
+
+/** Simulate from a custom state vector. */
+function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick) {
+  const timeline = [];
+  let v = [...v0];
+
+  for (let t = 0; t <= steps; t++) {
+    timeline.push(makeTick(startTick + t, v));
+
+    const P = buildDynamicMatrix(alpha, beta, gamma, startTick + t, v[2]);
+    const next = [0, 0, 0, 0];
+    for (let j = 0; j < 4; j++) {
+      for (let i = 0; i < 4; i++) {
+        next[j] += v[i] * P[i][j];
+      }
+    }
+    const s = next.reduce((a, b) => a + b, 0);
+    if (s > 0 && Number.isFinite(s)) {
+      v = next.map(x => x / s);
+    } else {
+      v = [0.25, 0.25, 0.25, 0.25];
+    }
+  }
+
+  return timeline;
+}
+
+// -- Internal: Helpers -------------------------------------------------------
+
+/**
+ * Logistic sigmoid function.
+ *   σ(x) = 1 / (1 + e^(−k(x − x₀)))
+ *
+ * @param {number} x         Input value
+ * @param {number} center    Midpoint x₀ (σ = 0.5)
+ * @param {number} steepness Slope k (higher = sharper transition)
+ * @returns {number} σ(x) ∈ (0, 1)
+ */
+function sigmoid(x, center, steepness) {
+  return 1 / (1 + Math.exp(-steepness * (x - center)));
+}
+
+function validateInitialState(state) {
+  if (!state || !Array.isArray(state) || state.length !== 4) {
+    return [1.0, 0.0, 0.0, 0.0];
+  }
+  const sum = state.reduce((a, b) => a + b, 0);
+  if (sum <= 0 || !Number.isFinite(sum)) {
+    return [1.0, 0.0, 0.0, 0.0];
+  }
+  // Normalize and clamp
+  return state.map(x => clamp(x / sum));
+}
+
 function makeTick(tick, v) {
   const totalMins = tick * 10;
   const h = Math.floor(totalMins / 60);
@@ -205,13 +422,14 @@ function makeTick(tick, v) {
   };
 }
 
-/** Clamp tiny floating-point drift so probabilities stay in [0, 1]. */
 function clamp(x) {
-  // Guard against NaN and non-finite values
   if (!Number.isFinite(x)) return 0;
   if (x < 0) return 0;
   if (x > 1) return 1;
-  // Snap near-zero values to zero for cleaner display
   if (x < 1e-10) return 0;
   return x;
 }
+
+// -- Re-export for external use ----------------------------------------------
+
+export { sigmoid, RECOVERY_TAU_MINUTES, WARMUP_TICKS };

@@ -2,6 +2,12 @@
 
 > **Progress: 26 / 85 steps complete — 30.6%** (foundation + scheduler production-ready)
 >
+> **2026-08-05 (v2 math upgrade):** Markov engine rebuilt with sigmoidal non-linear
+> dynamics, state-dependent circadian sensitivity, flow-entry warmup, optimal break
+> computation. Scheduler upgraded with cross-day fatigue carryover, task sequencing
+> optimization, flow-block preference, deadline pressure alpha boost. Backend synced.
+> 822 tests, 0 lint warnings, 0 build errors. Both engines produce identical results.
+>
 > **2026-08-05:** Scheduler (steps 14–26) complete. 109 tests, 0 failures, 0 lint warnings.
 > Global best-fit slot matching, chronotype-aware gamma curves, daily caps, burnout break
 > insertion, full calendar overflow handling, sports/academic fatigue differentiation.
@@ -160,7 +166,7 @@ The dashboard shows a yellow banner: *"Schedule is out of date. Regenerate?"*
 
 ---
 
-# Part 3: Math Model
+# Part 3: Math Model (v2 — Non-Linear Dynamics)
 
 ## Brain States
 
@@ -170,6 +176,25 @@ The dashboard shows a yellow banner: *"Schedule is out of date. Regenerate?"*
 | **Distracted** | Mind wandering, low retention | 🟡 `#eab308` |
 | **Fatigue** | Mental burnout | 🔴 `#ef4444` |
 | **Recovery** | Taking a break | (gap to 100%) |
+
+## Sigmoidal Transition Modifiers (v2)
+
+Transition probabilities follow **logistic (sigmoid) curves**, not linear scaling:
+
+```
+σ(x; x₀, k) = 1 / (1 + e^(−k(x − x₀)))
+```
+
+| Modifier | Sigmoid Center | Steepness | Range |
+|----------|---------------|-----------|-------|
+| `alphaFlowMod` | α = 1.0 | k = 5.0 | Strong anchor near baseline |
+| `alphaRecoveryMod` | α = 1.0 | k = 3.5 | Gentler recovery slope |
+| `betaFatigueMod` | β = 3.0 | k = 1.2 | Tipping point for hard tasks |
+| `betaDistractMod` | β = 3.5 | k = 1.5 | Harder to trigger distraction |
+
+**Why sigmoidal?** A 5% change in difficulty near your limit (β=4→5) has a much larger
+effect than the same change near your comfort zone (β=1→2). Linear modifiers can't
+capture this tipping-point behavior.
 
 ## Base Transition Matrix (every 10 minutes)
 
@@ -181,32 +206,107 @@ Fatigue        0.05     0.15       0.80     0.00
 Recovery       0.70     0.10       0.00     0.20
 ```
 
+Each cell is modified by sigmoidal functions (not linear multiplication), then
+rows are normalized. Matrix is **rebuilt every tick** to incorporate warmup and
+state-dependent gamma.
+
+## State-Dependent Circadian Sensitivity (v2)
+
+Gamma effect is **amplified by current fatigue**:
+
+```
+γ_eff = 1.0 + (γ − 1.0) × (1.0 + fatigue_current × 0.6)
+```
+
+When P(Fatigue) = 0: γ_eff = γ (baseline circadian effect)
+When P(Fatigue) = 0.5: γ_eff ≈ γ × 1.3 (30% stronger)
+Being tired at a bad time of day is worse than the sum of its parts.
+
+## Flow-Entry Warmup (v2)
+
+First 30 minutes (3 ticks) have reduced flow retention:
+```
+warmup(t) = 0.70 + 0.30 × (1 − e^(−t / 1.5))
+```
+At t=0: 70% flow retention → simulating attention ramp-up
+At t=3: ~92% → nearly warmed up
+
 ## Parameters
 
 | Param | Range | Source | Effect |
 |-------|-------|--------|--------|
-| Alpha (α) | 0.5–1.5 | Stroop test (or 1.0 default) | Higher = stay in Flow longer |
-| Beta (β) | 1–5 | Task difficulty | Higher = faster fatigue |
-| Gamma (γ) | 0.7–1.25 | Time of day × chronotype | Higher = faster fatigue |
+| Alpha (α) | 0.5–1.5 | Stroop test (or 1.0 default) | Sigmoidal anchor on Flow |
+| Beta (β) | 1–5 | Task difficulty | Sigmoidal push toward Fatigue |
+| Gamma (γ) | 0.7–1.25 | Time of day × chronotype | State-dependent fatigue amplifier |
 
-## Chronotype
+## Chronotype & Circadian Model
 
-| Chronotype | Shift | Peak hours (gamma=1.0) | Dip starts | Night drop |
-|------------|-------|----------------------|------------|------------|
-| Morning | 0h | 6am–2pm | 2pm | 8pm |
-| Neutral | +2h | 8am–4pm | 4pm | 10pm |
-| Night | +4h | 10am–6pm | 6pm | midnight |
+Continuous cosine-based Process C curve (not step function):
+```
+C(h) = cos(2π × (h − φ) / 24)
+γ(h) = 1.0 + 0.25 × (1 − C(h)) / 2
+```
 
-`adjustedHour = (hour - shift + 24) % 24`, then standard gamma function.
+| Chronotype | Acrophase (φ) | Peak alertness |
+|------------|--------------|----------------|
+| Morning | 10:00 AM | 10am |
+| Neutral | 12:00 PM | 12pm |
+| Night | 2:00 PM | 2pm |
 
-## Simulation Steps
+## Two-Process Model (Borbély, 1982)
 
-1. Multiply base matrix cells by alpha, beta (task difficulty), gamma (time+chronotype)
-2. Normalize each row so values sum to 1.0
-3. Start at `v = [1.0, 0, 0, 0]` (100% Flow)
-4. Iterate `v(t+1) = v(t) × P` for task duration in 10-min ticks
-5. **Burnout** = P(Fatigue) > 50% → insert 15-min Recovery break at `burnoutTick - 1`
-6. Post-break reset: `v = [0.85, 0.10, 0.05, 0]`, continue simulating
+**Process C** — Circadian alertness rhythm (cosine, above).
+
+**Process S** — Homeostatic sleep pressure:
+```
+S(t_awake, t_break) = (1 − e^(−t_awake / 14.4h)) × e^(−t_break / 2.0h)
+```
+
+**Combined Alertness:** `A = C − 0.5 × S`
+
+## Optimal Break Computation (v2)
+
+Recovery follows exponential decay:
+```
+F'(t_break) = F × e^(−t_break / 120min)
+t_break = −120 × ln(F_target / F_current)
+```
+
+Scaled by recovery capacity (flow-dependent), clamped to [5, 60] min,
+rounded to nearest 5.
+
+## Cumulative Cognitive Strain (v2)
+
+```
+Δstrain = (ticks × difficulty × γ) / (maxTicks × 5 × 1.25)
+α_eff = α × max(0.50, 1.0 − strain × 0.08)
+```
+
+Later tasks in the same day start with degraded alpha → faster fatigue.
+
+## Cross-Day Fatigue Carryover (v2)
+
+30% of previous day's strain carries to next day, decaying during overnight rest:
+```
+carryover = strain_prev × 0.30 × e^(−8h / 2.0h)
+```
+
+## Task Sequencing & Flow Blocks (v2)
+
+- **Sequencing bonus:** Alternating task types (academic→sports) scores better
+  than same-type adjacency (academic→academic), modeling attention residue.
+- **Flow-block preference:** Extending an existing session block gets a scoring
+  bonus (flow inertia makes longer blocks more efficient).
+- **Deadline pressure:** Tasks due within 2 days get up to 20% alpha boost.
+
+## Simulation Steps (v2)
+
+1. Build sigmoidal transition matrix P(t) accounting for warmup and current fatigue
+2. Normalize rows to sum = 1.0
+3. Start at `v = [1.0, 0, 0, 0]` (or custom initial state for cumulative fatigue)
+4. Iterate `v(t+1) = v(t) × P(t)` — matrix rebuilt each tick
+5. **Burnout** = P(Fatigue) > 50% → compute optimal break via recovery inversion
+6. Post-break: compute recovery state via exponential decay, continue simulating
 
 ## Work-Type Fatigue Profiles
 

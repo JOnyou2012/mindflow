@@ -14,7 +14,12 @@
  * @module scheduler
  */
 
-import { calculateMarkovTimeline, findBurnoutTick, optimizeWithBreak } from './markovEngine.js';
+import {
+  calculateMarkovTimeline,
+  findBurnoutTick,
+  optimizeWithBreak,
+  computeOptimalBreakDuration,
+} from './markovEngine.js';
 
 // -- Constants ---------------------------------------------------------------
 
@@ -34,6 +39,19 @@ const DAY_INDEX = Object.fromEntries(ALL_DAYS.map((d, i) => [d, i]));
 
 const GAP_TICKS = 1;             // 10-minute break between consecutive sessions
 const RECOVERY_TICKS = 2;        // 20-minute forced rest after burnout
+
+// Cross-day fatigue carryover
+const CROSS_DAY_CARRYOVER = 0.30; // 30% of strain carries to next day
+const OVERNIGHT_RECOVERY_HOURS = 8; // assumed hours of sleep/rest between days
+
+// Task sequencing
+const SEQUENCING_BONUS = 0.15;    // score reduction for alternating task types
+const FLOW_BLOCK_MIN_TICKS = 6;   // 60 min minimum for flow-block bonus
+const FLOW_BLOCK_BONUS = 0.10;    // score reduction per additional hour of continuous block
+
+// Deadline pressure
+const DEADLINE_PRESSURE_BOOST = 0.20; // max 20% alpha boost near deadline
+const DEADLINE_PRESSURE_DAYS = 2;     // pressure kicks in within 2 days of deadline
 
 // Two-Process Model parameters (Borbély, 1982)
 const TAU_BUILD = 14.4;          // hours — homeostatic buildup time constant
@@ -346,7 +364,8 @@ function deadlineAllowsDay(task, day) {
  * @param {object} settings     User settings
  * @returns {number} Score (lower = better)
  */
-function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings) {
+function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings,
+                    lastTaskType = null, prevDayStrain = 0) {
   const hour = slot.startHour + (slot.usedTicks / 6);
 
   // Process C: circadian gamma
@@ -356,12 +375,9 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   const S = processS(timeAwakeHrs + (slot.usedTicks / 6), breakMins);
 
   // Combined fatigue factor: circadian × (1 + homeostatic)
-  // When S=0 (fresh): fatigueFactor = gamma
-  // When S=1 (exhausted): fatigueFactor = gamma × 2
   const fatigueFactor = gamma * (1 + S);
 
   // Non-linear congestion penalty: squared utilization
-  // 50% full → 0.2 penalty; 90% full → 0.65 penalty
   const dayCap = WEEKEND_DAYS.has(slot.day)
     ? (settings.maxHoursWeekend ?? 4)
     : (settings.maxHoursPerDay ?? 8);
@@ -373,10 +389,34 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Weekend penalty
   const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
 
-  // Position tiebreaker (prefer earlier within same slot, all else equal)
+  // Cross-day carryover: previous day's strain bleeds into today's first slot
+  const carryoverDecay = Math.exp(-OVERNIGHT_RECOVERY_HOURS / TAU_DECAY);
+  const crossDayPenalty = prevDayStrain * CROSS_DAY_CARRYOVER * carryoverDecay
+    * (1 - congestion); // diminishes as today fills up (strain already accounted)
+
+  // Task sequencing: alternating task types improves recovery
+  let sequencingScore = 0;
+  if (lastTaskType && slot.usedTicks === 0) {
+    const lastProfile = TYPE_PROFILES[lastTaskType] || TYPE_PROFILES.other;
+    if (profile.gammaBoost === lastProfile.gammaBoost) {
+      sequencingScore = SEQUENCING_BONUS; // same type → penalty
+    } else {
+      sequencingScore = -SEQUENCING_BONUS; // different type → bonus
+    }
+  }
+
+  // Flow-block preference: bonus for extending an existing block
+  let flowBlockScore = 0;
+  if (slot.usedTicks >= FLOW_BLOCK_MIN_TICKS) {
+    const extraHours = (slot.usedTicks - FLOW_BLOCK_MIN_TICKS) / 6;
+    flowBlockScore = -FLOW_BLOCK_BONUS * Math.min(extraHours, 3);
+  }
+
+  // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
-  return fatigueFactor + congestionPenalty + weekendPenalty + positionTiebreaker;
+  return fatigueFactor + congestionPenalty + weekendPenalty + crossDayPenalty
+       + sequencingScore + flowBlockScore + positionTiebreaker;
 }
 
 // ===========================================================================
@@ -507,17 +547,22 @@ export default function generateWeeklySchedule(
     return week;
   }
 
-  // Per-day state for two-process model
+  // Per-day state for two-process model + cross-day carryover
   const dayAccumulatedStrain = {};   // cumulative cognitive strain [0, 1]
   const dayTimeAwakeTicks = {};       // total ticks of cognitive work done
   const dayLastTaskEndTick = {};      // tick when the last task ended (for break gap calc)
   const dayUsedTicks = {};
+  const dayLastTaskType = {};         // last task type on each day (for sequencing)
 
+  // Initialize per-day state
+  // Cross-day carryover: strain from Mon bleeds into Tue, etc.
+  // Computed dynamically during scheduling as strain accumulates
   ALL_DAYS.forEach(d => {
     dayAccumulatedStrain[d] = 0;
     dayTimeAwakeTicks[d] = 0;
     dayLastTaskEndTick[d] = DAY_START_TICK;
     dayUsedTicks[d] = 0;
+    dayLastTaskType[d] = null;
   });
 
   // -- Phase 2: Primary placement -------------------------------------------
@@ -525,6 +570,19 @@ export default function generateWeeklySchedule(
   for (const task of sorted) {
     const taskTicks = Math.ceil((task.durationMins || 30) / 10);
     const profile = TYPE_PROFILES[task.type] || TYPE_PROFILES.other;
+
+    // Deadline pressure: alpha boost for tasks due within 2 days
+    let deadlineAlphaBoost = 1.0;
+    if (task.deadline) {
+      const deadlineDay = deadlineToDay(task.deadline);
+      if (deadlineDay) {
+        const daysUntilDeadline = DAY_INDEX[deadlineDay] - DAY_INDEX.Mon; // simplified
+        if (daysUntilDeadline >= 0 && daysUntilDeadline <= DEADLINE_PRESSURE_DAYS) {
+          deadlineAlphaBoost = 1.0 + DEADLINE_PRESSURE_BOOST
+            * (1 - daysUntilDeadline / DEADLINE_PRESSURE_DAYS);
+        }
+      }
+    }
 
     let bestSlot = null;
     let bestScore = Infinity;
@@ -534,11 +592,15 @@ export default function generateWeeklySchedule(
       if (taskTicks > slot.durationTicks) continue;
       if (!deadlineAllowsDay(task, slot.day)) continue;
 
-      // Compute break gap: how many ticks since last task ended on this day
       const ticksSinceLastTask = Math.max(0,
         (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
       const breakMinsSinceLastTask = ticksSinceLastTask * 10;
       const timeAwakeHrs = dayTimeAwakeTicks[slot.day] / 6;
+
+      // Previous day's strain (for cross-day carryover)
+      const prevDayIdx = DAY_INDEX[slot.day] - 1;
+      const prevDay = prevDayIdx >= 0 ? ALL_DAYS[prevDayIdx] : null;
+      const prevDayStrainVal = prevDay ? dayAccumulatedStrain[prevDay] : 0;
 
       const score = scoreSlot(
         slot, profile, chronotype,
@@ -546,6 +608,8 @@ export default function generateWeeklySchedule(
         timeAwakeHrs,
         breakMinsSinceLastTask,
         s,
+        dayLastTaskType[slot.day],
+        prevDayStrainVal,
       );
 
       if (score < bestScore) { bestScore = score; bestSlot = slot; }
@@ -557,15 +621,19 @@ export default function generateWeeklySchedule(
     const absStart = bestSlot.startTick + bestSlot.usedTicks;
     const gamma = circadianGamma(absStart / 6, chronotype) * profile.gammaBoost;
 
-    // Apply cumulative strain to degrade effective alpha
-    const effAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
+    // Apply cumulative strain + deadline pressure to effective alpha
+    const strainAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
+    const effAlpha = strainAlpha * deadlineAlphaBoost;
 
     try {
       let timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
       let burnoutTick = findBurnoutTick(timeline, 0.50);
 
       if (burnoutTick > 0) {
-        const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
+        // Compute optimal break duration from the engine's recovery model
+        const optimalBreak = computeOptimalBreakDuration(timeline, burnoutTick, 0.30);
+        const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks,
+                                       burnoutTick, optimalBreak);
         timeline = opt.optimized;
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
@@ -607,6 +675,7 @@ export default function generateWeeklySchedule(
       );
       dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
       dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
+      dayLastTaskType[bestSlot.day] = task.type || 'other';
 
       if (burnoutTick > 0) {
         bestSlot.usedTicks += RECOVERY_TICKS;
