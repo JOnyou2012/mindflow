@@ -2,25 +2,23 @@
 
 > **Progress: 26 / 85 steps complete — 30.6%** (foundation + scheduler production-ready)
 >
-> **2026-08-05 (v2.1 product upgrade):** Cumulative state propagation between tasks
-> (fatigue actually carries over now). Schedule warnings system (consecutive hard tasks,
-> deadline buffers, heavy days, unscheduled tasks). Pre-flight task list analysis.
-> Session placement explainability (why each task landed where). Session quality
-> metrics (efficiency, peak fatigue, avg flow per session).
-> 860 tests, 0 lint warnings, 0 build errors. JS + Python engines produce identical results.
+> **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
+> 120-min parasympathetic). Flow deepening with sudden collapse after ~2h tipping
+> point. Cognitive momentum (fatigue acceleration amplifies transitions). Intervention
+> sensitivity (breaks less effective at higher fatigue). Cognitive capacity ceiling
+> (diminishing returns beyond load threshold). Attention residue per task-type pair.
+> Sigmoid centers recalibrated for realistic flow retention at normal alpha.
+> 1,949 tests, 0 failures, build clean.
 >
-> **2026-08-05 (v2 math upgrade):** Markov engine rebuilt with sigmoidal non-linear
-> dynamics, state-dependent circadian sensitivity, flow-entry warmup, optimal break
-> computation. Scheduler upgraded with cross-day fatigue carryover, task sequencing
-> optimization, flow-block preference, deadline pressure alpha boost. Backend synced.
+> **2026-08-05 (v2.1 product):** Cumulative state propagation, schedule warnings,
+> pre-flight analysis, placement explainability, session quality metrics.
 >
-> **2026-08-05:** Scheduler (steps 14–26) complete. 109 tests, 0 failures, 0 lint warnings.
-> Global best-fit slot matching, chronotype-aware gamma curves, daily caps, burnout break
-> insertion, full calendar overflow handling, sports/academic fatigue differentiation.
+> **2026-08-05 (v2 math):** Sigmoidal non-linear dynamics, state-dependent circadian
+> sensitivity, flow warmup, optimal break computation, cross-day carryover, task
+> sequencing, flow-block preference, deadline pressure. Backend synced.
 >
-> **2026-08-04:** Comprehensive 5-pass audit. 38 bugs fixed. Backend & JS engine reconciled.
-> Foundation verified: 0 lint warnings, 0 build errors, 0 npm vulns, 1260 matrix combos,
-> e2e proxy chain tested. Both engines produce identical results to 4 decimal places.
+> **2026-08-04:** 5-pass audit, 38 bugs fixed. JS + Python engines identical.
+> 0 lint warnings, 0 build errors, 0 npm vulns.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Check the checklist. Percentage? Next step?"*
