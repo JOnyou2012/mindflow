@@ -306,7 +306,32 @@ ScheduledSession = {
 
 Before continuing with steps 14–85, a comprehensive 5-pass audit was performed
 on the existing codebase. **38 bugs were found and fixed** across 8 files
-(+310 / −121 lines). Key outcomes:
+(+310 / −121 lines). Steps 1–13 were re-verified on 2026-08-04.
+
+### Step-by-Step Re-Verification Results
+
+| Step | Test | Result |
+|------|------|--------|
+| 1 | All 3 exports (`calculateMarkovTimeline`, `findBurnoutTick`, `optimizeWithBreak`) | ✅ PASS |
+| 2 | Timeline length=19, initial=[1,0,0,0], last tick=18 | ✅ PASS |
+| 3 | All 19 ticks: sum∈[0.98,1.02], values∈[0,1] (tested with extreme params a=0.5,b=5,g=1.3) | ✅ PASS |
+| 4 | `findBurnoutTick` returns -1 for defaults, finds burnout with low threshold, default=0.50 | ✅ PASS |
+| 5 | `optimizeWithBreak(tick=0)`: original===optimized, no crash | ✅ PASS |
+| 6 | `optimizeWithBreak(tick=-1)` and `(tick=undefined)`: original===optimized, no crash | ✅ PASS |
+| 7 | Line 1 is `@import "tailwindcss"`, all 16 tokens present, body rule intact | ✅ PASS |
+| 8 | All 6 style blocks: scrollbar, pulse-glow, slide-up, fade-in, transitions, focus rings, selection | ✅ PASS |
+| 9 | `npm run build`: 0 errors, 0 CSS warnings | ✅ PASS |
+| 10 | All 9 storage functions exported | ✅ PASS |
+| 11 | Source logic verified: JSON roundtrip, try/catch guards, truthy checks | ✅ PASS |
+| 12 | Source logic verified: safe defaults (null→null, corrupt→[], typeof guard→default obj) | ✅ PASS |
+| 13 | Source logic verified: `clearAll()` iterates `Object.values(KEYS)`, wrapped in try/catch | ✅ PASS |
+
+> **Note on steps 10–13:** Full localStorage roundtrip tests require a browser
+> environment (Node.js CLI lacks `localStorage`). Code logic was verified by source
+> inspection: correct guards (`Array.isArray`, `typeof`, `if(cal)`), safe defaults,
+> and try/catch error swallowing. Browser testing recommended before production deploy.
+
+### Key outcomes:
 
 | Area | Before | After |
 |------|--------|-------|
