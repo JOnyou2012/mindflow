@@ -1,24 +1,32 @@
 # MindFlow — Master PRD
 
-> **Progress: 26 / 85 steps complete — 30.6%** (foundation + scheduler production-ready)
+> **Progress: 26 / 85 steps complete — 30.6%**
+>
+> **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
+> **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
 >
 > **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
-> 120-min parasympathetic). Flow deepening with sudden collapse after ~2h tipping
-> point. Cognitive momentum (fatigue acceleration amplifies transitions). Intervention
-> sensitivity (breaks less effective at higher fatigue). Cognitive capacity ceiling
-> (diminishing returns beyond load threshold). Attention residue per task-type pair.
-> Sigmoid centers recalibrated for realistic flow retention at normal alpha.
-> 1,949 tests, 0 failures, build clean.
+> 120-min parasympathetic). Flow deepening with sudden collapse tipping point at ~2h.
+> Cognitive momentum (fatigue acceleration amplifies off-diagonal transitions).
+> Intervention sensitivity (break effectiveness drops as fatigue rises). Cognitive
+> capacity ceiling (all fatigue transitions amplify beyond load threshold). Attention
+> residue modeled per task-type pair. Sigmoid centers recalibrated for realistic
+> flow retention (alpha=1.0 → ~73% instead of 50%).
 >
-> **2026-08-05 (v2.1 product):** Cumulative state propagation, schedule warnings,
-> pre-flight analysis, placement explainability, session quality metrics.
+> **2026-08-05 (v2.1 product):** Cumulative state propagation between tasks. Schedule
+> warnings system (consecutive hard tasks, deadline buffers, heavy days, unscheduled).
+> Pre-flight task analysis. Placement explainability per session. Session quality metrics.
 >
-> **2026-08-05 (v2 math):** Sigmoidal non-linear dynamics, state-dependent circadian
-> sensitivity, flow warmup, optimal break computation, cross-day carryover, task
-> sequencing, flow-block preference, deadline pressure. Backend synced.
+> **2026-08-05 (v2 math):** Sigmoidal non-linear dynamics. State-dependent circadian
+> sensitivity. Flow warmup. Optimal break computation. Cross-day carryover. Task
+> sequencing. Flow-block preference. Deadline pressure. Backend synced.
 >
-> **2026-08-04:** 5-pass audit, 38 bugs fixed. JS + Python engines identical.
-> 0 lint warnings, 0 build errors, 0 npm vulns.
+> **2026-08-04:** 5-pass audit. 38 bugs fixed. JS + Python engines reconciled.
+> 0 lint warnings. 0 build errors. 0 npm vulns.
+>
+> **Known gaps:** Backend (main.py) not yet upgraded to v3 engine math (still uses
+> single-exponential recovery, no flow collapse/momentum/capacity). No UI components
+> exist yet (steps 27-65). App.jsx is prototype only.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Check the checklist. Percentage? Next step?"*
@@ -76,15 +84,17 @@ TOTAL                           26/85   30.6%
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
 > **Stage 1** (Foundation) is complete and production-quality:
-> - Markov engine: NaN/Inf guards, float drift renormalization, input clamping
+> - Markov engine v3: sigmoidal modifiers, biexponential recovery, flow inertia/collapse,
+>   cognitive momentum, intervention sensitivity, capacity ceiling, attention residue
 > - Stylesheet: Inter font, scoped transitions, focus rings, animations
 > - localStorage: type-guarded loaders, safe defaults, clearAll()
-> - Backend API: validation, CORS, reconciled math with JS engine
 >
 > **Stage 2 progress** — Scheduler (steps 14–26) complete:
-> - `src/utils/scheduler.js`: global best-fit slot matching, chronotype-aware gamma
-> - 109 automated tests covering all 13 verification steps + edge cases
-> - 0 lint warnings, 0 build errors
+> - `src/utils/scheduler.js`: two-process model, global slot matching, deadline
+>   enforcement, cumulative state propagation, cross-day carryover, task sequencing,
+>   flow-block preference, workload distribution, warnings, pre-flight, explainability
+> - 2,006 tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
+> - 6 UI components still to build (steps 27–65)
 >
 > **Next:** Stage 2 continued — create `src/components/WelcomeScreen.jsx` (steps 27–30)
 
