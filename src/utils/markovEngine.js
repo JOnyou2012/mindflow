@@ -107,32 +107,43 @@ export function optimizeWithBreak(alpha, beta, gamma, steps = 18, burnoutTick) {
  * modifiers to the base matrix, then normalising every row to sum = 1.
  */
 function buildDynamicMatrix(alpha, beta, gamma) {
+  // Clamp inputs to safe ranges (defense in depth)
+  const a = Number.isFinite(alpha) ? Math.max(0.3, Math.min(3.0, alpha)) : 1.0;
+  const b = Number.isFinite(beta) ? Math.max(1, Math.min(5, beta)) : 3;
+  const g = Number.isFinite(gamma) ? Math.max(0.5, Math.min(2.0, gamma)) : 1.0;
+
   // Map raw difficulty (1–5) → beta factor (0.8–1.2)
-  const betaFactor = 0.7 + beta * 0.1;
+  const betaFactor = 0.7 + b * 0.1;
 
   // Deep-copy base matrix
   const P = P_BASE.map((row) => [...row]);
 
   // Row 0 — Flow
-  P[0][0] *= alpha;                    // stay in Flow
+  P[0][0] *= a;                        // stay in Flow
   P[0][1] *= betaFactor;               // → Distracted
-  P[0][2] *= betaFactor * gamma;       // → Fatigue
+  P[0][2] *= betaFactor * g;           // → Fatigue
 
   // Row 1 — Distracted
-  P[1][0] *= alpha;                    // → Flow  (recovery pull)
-  P[1][2] *= gamma;                    // → Fatigue
+  P[1][0] *= a;                        // → Flow  (recovery pull)
+  P[1][2] *= g;                        // → Fatigue
 
   // Row 2 — Fatigued
-  P[2][3] *= alpha;                    // → Recovery  (deliberate rest)
-  P[2][1] *= gamma;                    // → Distracted
+  // NOTE: P[2][3] *= a is intentionally a no-op (base = 0.00).
+  // Natural recovery from fatigue is impossible — only an external
+  // break intervention can reset the state vector.
+  P[2][3] *= a;                        // → Recovery  (deliberate rest)
+  P[2][1] *= g;                        // → Distracted
 
   // Row 3 — Recovery
-  P[3][0] *= alpha;                    // → Flow  (return to focus)
+  P[3][0] *= a;                        // → Flow  (return to focus)
 
   // Normalise every row so sum(row) === 1.0
   for (let i = 0; i < 4; i++) {
     const sum = P[i].reduce((a, b) => a + b, 0);
-    if (sum > 0) {
+    if (sum <= 0 || !Number.isFinite(sum)) {
+      // Degenerate row — fall back to uniform distribution
+      P[i] = [0.25, 0.25, 0.25, 0.25];
+    } else if (Math.abs(sum - 1.0) > 1e-12) {
       for (let j = 0; j < 4; j++) P[i][j] /= sum;
     }
   }
@@ -145,7 +156,8 @@ function simulateTrajectory(P, steps) {
   return simulateTrajectoryFrom(P, [1.0, 0.0, 0.0, 0.0], steps, 0);
 }
 
-/** Simulate N steps and return the trajectory (N+1 points including t=0). */
+/** Simulate N steps and return the trajectory (N+1 points including t=0).
+ *  Alias of simulateTrajectory for semantic clarity in break-insertion code. */
 function simulateTrajectoryN(P, steps) {
   return simulateTrajectoryFrom(P, [1.0, 0.0, 0.0, 0.0], steps, 0);
 }
@@ -165,7 +177,14 @@ function simulateTrajectoryFrom(P, v0, steps, startTick) {
         next[j] += v[i] * P[i][j];
       }
     }
-    v = next;
+    // Renormalise to prevent floating-point drift over many steps
+    const s = next.reduce((a, b) => a + b, 0);
+    if (s > 0 && Number.isFinite(s)) {
+      v = next.map(x => x / s);
+    } else {
+      // Degenerate state — fall back to uniform distribution
+      v = [0.25, 0.25, 0.25, 0.25];
+    }
   }
 
   return timeline;
@@ -188,6 +207,8 @@ function makeTick(tick, v) {
 
 /** Clamp tiny floating-point drift so probabilities stay in [0, 1]. */
 function clamp(x) {
+  // Guard against NaN and non-finite values
+  if (!Number.isFinite(x)) return 0;
   if (x < 0) return 0;
   if (x > 1) return 1;
   // Snap near-zero values to zero for cleaner display

@@ -32,7 +32,13 @@ export function saveSettings(settings) {
 export function loadSettings() {
   try {
     const d = localStorage.getItem(KEYS.SETTINGS);
-    if (d) return JSON.parse(d);
+    if (d) {
+      const parsed = JSON.parse(d);
+      // Guard against corrupt / non-object stored values
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
   } catch {}
   return { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
 }

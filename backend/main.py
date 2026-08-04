@@ -1,69 +1,97 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import math
 import numpy as np
-from dataclasses import dataclass
 from typing import Optional
 
 app = FastAPI(title="MindFlow API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# -- Validation -----------------------------------------------------------
+
+def validate_params(alpha: float, beta: float, gamma: float, steps: int) -> Optional[str]:
+    """Return an error message string if any parameter is out of range, else None."""
+    # Guard against NaN / Infinity which bypass numeric comparisons
+    if not (math.isfinite(alpha) and math.isfinite(beta) and math.isfinite(gamma)):
+        return "parameters must be finite numbers"
+    if alpha < 0.3 or alpha > 3.0:
+        return f"alpha must be in [0.3, 3.0], got {alpha}"
+    if beta < 1 or beta > 5:
+        return f"beta must be in [1, 5], got {beta}"
+    if gamma < 0.5 or gamma > 2.0:
+        return f"gamma must be in [0.5, 2.0], got {gamma}"
+    if steps < 1 or steps > 144:
+        return f"steps must be in [1, 144], got {steps}"
+    return None
+
+
 # -- Markov Chain Model ---------------------------------------------------
+# This implementation matches src/utils/markovEngine.js exactly.
+# Both use the multiplier-on-base-matrix approach specified in the PRD.
 
-@dataclass
-class MarkovParams:
-    """Parameters for the dynamic Markov transition matrix."""
-    alpha: float      # Personal calibration (Stroop score, 0.5–2.0)
-    beta: float       # Task difficulty (1–5)
-    gamma: float      # Circadian coefficient (0.8–1.3)
+# Base transition matrix (PRD §3)
+P_BASE = np.array([
+    [0.80, 0.15, 0.05, 0.00],  # From Flow
+    [0.20, 0.60, 0.20, 0.00],  # From Distracted
+    [0.05, 0.15, 0.80, 0.00],  # From Fatigued
+    [0.70, 0.10, 0.00, 0.20],  # From Recovery
+])
+
+INITIAL_STATE = np.array([1.0, 0.0, 0.0, 0.0])  # 100 % Flow at t=0
 
 
-def build_transition_matrix(p: MarkovParams) -> np.ndarray:
+def build_transition_matrix(alpha: float, beta: float, gamma: float) -> np.ndarray:
     """
-    Build a 4x4 transition matrix for states:
-        0: Flow  |  1: Distracted  |  2: Fatigue  |  3: Recovery
+    Build a 4x4 dynamic transition matrix by applying alpha / beta / gamma
+    multipliers to the base matrix, then normalising every row to sum = 1.
 
-    Base probabilities are scaled by alpha (personal), beta (difficulty),
-    and gamma (circadian).
+    This is the Python equivalent of markovEngine.js:buildDynamicMatrix().
     """
-    a, b, g = p.alpha, p.beta, p.gamma
+    # Clamp inputs to safe ranges (defence in depth)
+    a = max(0.3, min(3.0, alpha)) if math.isfinite(alpha) else 1.0
+    b = max(1.0, min(5.0, beta)) if math.isfinite(beta) else 3.0
+    g = max(0.5, min(2.0, gamma)) if math.isfinite(gamma) else 1.0
 
-    # Fatigue drift: harder tasks + lower personal calibration → more decay
-    fatigue_drift = min(0.95, (b / 5.0) * (1.0 / a) * g * 0.25)
+    # Map raw difficulty (1–5) → beta factor (0.8–1.2)
+    beta_factor = 0.7 + b * 0.1
 
-    # Flow → Distracted / Fatigue (scaled by drift)
-    p_flow_distracted = fatigue_drift * 0.8
-    p_flow_fatigue = fatigue_drift * 0.2
-    # Remainder stays in Flow (guarantees row-sum = 1.0)
-    p_flow_stay = max(0.10, 1.0 - p_flow_distracted - p_flow_fatigue)
+    # Deep-copy base matrix
+    P = P_BASE.copy()
 
-    # From distracted
-    p_dist_stay = 0.55
-    p_dist_fatigue = min(0.35, 0.20 + fatigue_drift * 0.6)
-    p_dist_flow = 1.0 - p_dist_stay - p_dist_fatigue
+    # Row 0 — Flow
+    P[0, 0] *= a                     # stay in Flow
+    P[0, 1] *= beta_factor           # → Distracted
+    P[0, 2] *= beta_factor * g       # → Fatigue
 
-    # From fatigue (hard to escape without intervention)
-    p_fat_stay = 0.75
-    p_fat_recovery = 0.15
-    p_fat_distracted = 0.10
+    # Row 1 — Distracted
+    P[1, 0] *= a                     # → Flow  (recovery pull)
+    P[1, 2] *= g                     # → Fatigue
 
-    # From recovery
-    p_rec_flow = 0.85
-    p_rec_distracted = 0.10
-    p_rec_stay = 0.05
+    # Row 2 — Fatigued
+    # NOTE: P[2,3] *= a is intentionally a no-op (base = 0.00).
+    # Natural recovery from fatigue is impossible — only an external
+    # break intervention can reset the state vector.
+    P[2, 3] *= a                     # → Recovery  (deliberate rest)
+    P[2, 1] *= g                     # → Distracted
 
-    P = np.array([
-        [p_flow_stay,      p_flow_distracted, p_flow_fatigue,   0.0             ],
-        [p_dist_flow,       p_dist_stay,       p_dist_fatigue,   0.0             ],
-        [0.0,               p_fat_distracted,  p_fat_stay,       p_fat_recovery  ],
-        [p_rec_flow,        p_rec_distracted,  0.0,              p_rec_stay      ],
-    ])
+    # Row 3 — Recovery
+    P[3, 0] *= a                     # → Flow  (return to focus)
+
+    # Normalise every row so sum(row) === 1.0
+    for i in range(4):
+        row_sum = P[i].sum()
+        if row_sum <= 0 or np.isnan(row_sum):
+            P[i] = np.array([0.25, 0.25, 0.25, 0.25])
+        elif abs(row_sum - 1.0) > 1e-12:
+            P[i] /= row_sum
+
     return P
 
 
@@ -74,17 +102,22 @@ def simulate(v0: np.ndarray, P: np.ndarray, steps: int) -> np.ndarray:
     v = v0.copy()
     for t in range(steps):
         v = v @ P
+        # Clamp + renormalise to prevent floating-point drift
+        v = np.clip(v, 0.0, 1.0)
+        s = v.sum()
+        if s > 0:
+            v /= s
         trajectory[t + 1] = v
     return trajectory
 
 
 def find_optimal_break(trajectory: np.ndarray) -> Optional[int]:
     """
-    Return the tick index (0-based) where P(Fatigue) first exceeds 40%.
+    Return the tick index (0-based) where P(Fatigue) first exceeds 50%.
     Returns None if it never crosses threshold within the simulation window.
     """
     fatigue_probs = trajectory[:, 2]  # column 2 = Fatigue
-    crossings = np.where(fatigue_probs > 0.40)[0]
+    crossings = np.where(fatigue_probs > 0.50)[0]
     return int(crossings[0]) if len(crossings) > 0 else None
 
 
@@ -108,10 +141,12 @@ def simulate_endpoint(
       - break_tick: the optimal break insertion point (or null)
       - matrix: the transition matrix used
     """
-    params = MarkovParams(alpha=alpha, beta=beta, gamma=gamma)
-    P = build_transition_matrix(params)
-    v0 = np.array([0.90, 0.07, 0.02, 0.01])  # start mostly in Flow
-    trajectory = simulate(v0, P, steps)
+    err = validate_params(alpha, beta, gamma, steps)
+    if err:
+        raise HTTPException(status_code=422, detail=err)
+
+    P = build_transition_matrix(alpha, beta, gamma)
+    trajectory = simulate(INITIAL_STATE, P, steps)
     break_tick = find_optimal_break(trajectory)
 
     return {

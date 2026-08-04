@@ -52,7 +52,7 @@ The transition matrix is dynamically scaled by three parameters:
 | Task difficulty | β | 1 – 5 | 1 = light reading, 5 = hard math |
 | Circadian coefficient | γ | 0.8 – 1.3 | Time-of-day alertness |
 
-The app simulates 18 ten-minute ticks (3 hours) and flags the first tick where **P(Fatigue) > 40%** — your optimal break window.
+The app simulates 18 ten-minute ticks (3 hours) and flags the first tick where **P(Fatigue) > 50%** — your optimal break window.
 
 ---
 
@@ -61,7 +61,7 @@ The app simulates 18 ten-minute ticks (3 hours) and flags the first tick where *
 | Layer | Tech |
 |-------|------|
 | **Frontend** | React, Vite, Tailwind CSS v4, Recharts, Lucide Icons |
-| **Backend** | Python, FastAPI, NumPy, SciPy |
+| **Backend** | Python, FastAPI, NumPy |
 | **Math** | Discrete-Time Markov Chains, Probability Vector Evolution |
 
 ---
@@ -73,13 +73,16 @@ mindflow/
 ├── index.html
 ├── vite.config.js
 ├── src/
-│   ├── main.jsx          # React entry
-│   ├── App.jsx           # Main dashboard + chart
-│   └── index.css         # Tailwind + MindFlow theme
+│   ├── main.jsx              # React entry
+│   ├── App.jsx               # Main dashboard + chart
+│   ├── index.css             # Tailwind + MindFlow theme
+│   └── utils/
+│       ├── markovEngine.js   # Client-side Markov chain engine
+│       └── storage.js        # localStorage persistence helpers
 ├── backend/
-│   ├── main.py           # FastAPI server + Markov model
-│   ├── requirements.txt  # Python dependencies
-│   └── venv/             # Virtual environment (not in git)
+│   ├── main.py               # FastAPI server + Markov model
+│   ├── requirements.txt      # Python dependencies
+│   └── venv/                 # Virtual environment (not in git)
 └── README.md
 ```
 
@@ -141,6 +144,8 @@ git push
 
 ## 🎯 What's Next
 
+- [x] Client-side Markov chain engine (`src/utils/markovEngine.js`)
+- [x] localStorage persistence layer (`src/utils/storage.js`)
 - [ ] Stroop Color-Word micro-test for personal α calibration
 - [ ] Weekly schedule / task manager UI
 - [ ] User accounts & session history

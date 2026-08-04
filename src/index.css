@@ -52,7 +52,9 @@ body {
 .animate-fade-in { animation: fade-in 0.3s ease-out; }
 
 /* ── Smooth transitions ──────────────────────────────────────────── */
-* { transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+a, button, input, select, textarea, .interactive {
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
 
 /* ── Focus rings (accessibility) ─────────────────────────────────── */
 input:focus-visible, button:focus-visible, select:focus-visible {
