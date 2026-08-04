@@ -1,6 +1,10 @@
 # MindFlow — Master PRD
 
-> **Progress: 13 / 85 steps complete — 15.3%** (foundation production-ready)
+> **Progress: 26 / 85 steps complete — 30.6%** (foundation + scheduler production-ready)
+>
+> **2026-08-05:** Scheduler (steps 14–26) complete. 109 tests, 0 failures, 0 lint warnings.
+> Global best-fit slot matching, chronotype-aware gamma curves, daily caps, burnout break
+> insertion, full calendar overflow handling, sports/academic fatigue differentiation.
 >
 > **2026-08-04:** Comprehensive 5-pass audit. 38 bugs fixed. Backend & JS engine reconciled.
 > Foundation verified: 0 lint warnings, 0 build errors, 0 npm vulns, 1260 matrix combos,
@@ -18,7 +22,7 @@
 | **1–6** | Markov Engine | `src/utils/markovEngine.js` — verify & fix | ✅ 6/6 — production-quality | 100% |
 | **7–9** | Stylesheet | `src/index.css` — append 6 style blocks | ✅ 3/3 — production-quality | 100% |
 | **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality | 100% |
-| **14–26** | Scheduler | `src/utils/scheduler.js` — create | ❌ 0/13 | 0% |
+| **14–26** | Scheduler | `src/utils/scheduler.js` — create | ✅ 13/13 — production-quality | 100% |
 | **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ❌ 0/4 | 0% |
 | **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ❌ 0/6 | 0% |
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ❌ 0/8 | 0% |
@@ -39,7 +43,7 @@
 Steps 1–6   Markov Engine      ████████████████████████ 6/6   100%
 Steps 7–9   Stylesheet         ████████████████████████ 3/3   100%
 Steps 10–13 localStorage        ████████████████████████ 4/4   100%
-Steps 14–26 Scheduler           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/13    0%
+Steps 14–26 Scheduler           ████████████████████████ 13/13  100%
 Steps 27–30 Welcome Screen      ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
 Steps 31–36 Stroop Test         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
 Steps 37–44 Task Form           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/8     0%
@@ -49,7 +53,7 @@ Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░�
 Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           13/85   15.3%
+TOTAL                           26/85   30.6%
 ```
 
 ### Stage Completion
@@ -57,7 +61,7 @@ TOTAL                           13/85   15.3%
 | Stage | Steps | Done | % | Status |
 |-------|-------|------|---|--------|
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
-| **Stage 2: Core Components** | 14–65 | 0/52 | **0%** | ❌ Not started |
+| **Stage 2: Core Components** | 14–65 | 13/52 | **25%** | 🟡 Scheduler done, 6 components remain |
 | **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
@@ -67,7 +71,12 @@ TOTAL                           13/85   15.3%
 > - localStorage: type-guarded loaders, safe defaults, clearAll()
 > - Backend API: validation, CORS, reconciled math with JS engine
 >
-> **Next:** Stage 2 — create `src/utils/scheduler.js` (steps 14–26)
+> **Stage 2 progress** — Scheduler (steps 14–26) complete:
+> - `src/utils/scheduler.js`: global best-fit slot matching, chronotype-aware gamma
+> - 109 automated tests covering all 13 verification steps + edge cases
+> - 0 lint warnings, 0 build errors
+>
+> **Next:** Stage 2 continued — create `src/components/WelcomeScreen.jsx` (steps 27–30)
 
 ---
 
@@ -558,10 +567,10 @@ export function clearAll() {
 ---
 
 **Step 14** — Create the file with the default export
-- [ ] 14. Create `src/utils/scheduler.js`
-- [ ] 14. Must have `export default function generateWeeklySchedule(calendarBlocks, tasks, alpha, settings)`
-- [ ] 14. Must import from `./markovEngine.js`: `calculateMarkovTimeline`, `findBurnoutTick`, `optimizeWithBreak`
-- [ ] 14. Copy the complete scheduler code below:
+- [x] 14. Create `src/utils/scheduler.js`
+- [x] 14. Must have `export default function generateWeeklySchedule(calendarBlocks, tasks, alpha, settings)`
+- [x] 14. Must import from `./markovEngine.js`: `calculateMarkovTimeline`, `findBurnoutTick`, `optimizeWithBreak`
+- [x] 14. Copy the complete scheduler code below:
 
 ```js
 import { calculateMarkovTimeline, findBurnoutTick, optimizeWithBreak } from './markovEngine.js';
@@ -751,62 +760,62 @@ export default function generateWeeklySchedule(
 ```
 
 **Step 15** — Verify `gammaForHour` with chronotype shift
-- [ ] 15. `gammaForHour(7, 'morning')` → `1.0` (7am is peak for morning types)
-- [ ] 15. `gammaForHour(7, 'night')` → `1.25` (7am is 3am adjusted = deep night for night owls)
-- [ ] 15. `gammaForHour(14, 'morning')` → `1.05` (2pm = start of afternoon dip)
-- [ ] 15. `gammaForHour(22, 'neutral')` → `1.25` (10pm = 8pm adjusted = night drop started)
+- [x] 15. `gammaForHour(7, 'morning')` → `1.0` (7am is peak for morning types)
+- [x] 15. `gammaForHour(7, 'night')` → `1.25` (7am is 3am adjusted = deep night for night owls)
+- [x] 15. `gammaForHour(14, 'morning')` → `1.05` (2pm = start of afternoon dip)
+- [x] 15. `gammaForHour(22, 'neutral')` → `1.25` (10pm = 8pm adjusted = night drop started)
 
 **Step 16** — Verify `sortTasks` ordering: priority → deadline → type → difficulty
-- [ ] 16. High priority tasks come before medium, medium before low
-- [ ] 16. Tasks with deadlines come before tasks without (at same priority)
-- [ ] 16. Earlier deadlines come before later deadlines
-- [ ] 16. Type order at same priority+deadline: academic → arts/sports → other
-- [ ] 16. At same priority+deadline+type: higher difficulty first
+- [x] 16. High priority tasks come before medium, medium before low
+- [x] 16. Tasks with deadlines come before tasks without (at same priority)
+- [x] 16. Earlier deadlines come before later deadlines
+- [x] 16. Type order at same priority+deadline: academic → arts/sports → other
+- [x] 16. At same priority+deadline+type: higher difficulty first
 
 **Step 17** — Verify global slot matching (tasks can land on any day)
-- [ ] 17. With free slots on Mon/Wed/Fri, a task can be assigned to Wednesday if it scores best there
-- [ ] 17. Not all tasks land on Monday (the old greedy-Monday-first bug is fixed)
+- [x] 17. With free slots on Mon/Wed/Fri, a task can be assigned to Wednesday if it scores best there
+- [x] 17. Not all tasks land on Monday (the old greedy-Monday-first bug is fixed)
 
 **Step 18** — Verify daily caps enforced
-- [ ] 18. Default: max 8h (48 ticks) per weekday, max 4h (24 ticks) per weekend day
-- [ ] 18. `settings.maxHoursPerDay` and `settings.maxHoursWeekend` control caps
-- [ ] 18. A slot's `usedTicks` never exceeds its `maxTicks`
+- [x] 18. Default: max 8h (48 ticks) per weekday, max 4h (24 ticks) per weekend day
+- [x] 18. `settings.maxHoursPerDay` and `settings.maxHoursWeekend` control caps
+- [x] 18. A slot's `usedTicks` never exceeds its `maxTicks`
 
 **Step 19** — Verify `optimizeWithBreak` only called when `burnoutTick > 0`
-- [ ] 19. The code has `if (burnoutTick > 0)` before calling `optimizeWithBreak`
-- [ ] 19. When burnout is at tick 0 or -1, the original timeline is used as-is
+- [x] 19. The code has `if (burnoutTick > 0)` before calling `optimizeWithBreak`
+- [x] 19. When burnout is at tick 0 or -1, the original timeline is used as-is
 
 **Step 20** — Verify return value includes `unscheduled` array and `generatedAt` timestamp
-- [ ] 20. `result.unscheduled` is an array (may be empty)
-- [ ] 20. `result.generatedAt` is a number (timestamp from `Date.now()`)
-- [ ] 20. `result.days.Mon` through `result.days.Sun` all exist
+- [x] 20. `result.unscheduled` is an array (may be empty)
+- [x] 20. `result.generatedAt` is a number (timestamp from `Date.now()`)
+- [x] 20. `result.days.Mon` through `result.days.Sun` all exist
 
 **Step 21** — Verify empty/null inputs don't crash
-- [ ] 21. `generateWeeklySchedule()` (no args) → valid empty week structure
-- [ ] 21. `generateWeeklySchedule([], [], 1.0, {})` → valid empty week structure
-- [ ] 21. `generateWeeklySchedule(null, null, null, null)` → valid empty week structure
-- [ ] 21. `generateWeeklySchedule([{...}], [{ durationMins: 0 }], 1.0, {})` → task with 0 duration is filtered out
+- [x] 21. `generateWeeklySchedule()` (no args) → valid empty week structure
+- [x] 21. `generateWeeklySchedule([], [], 1.0, {})` → valid empty week structure
+- [x] 21. `generateWeeklySchedule(null, null, null, null)` → valid empty week structure
+- [x] 21. `generateWeeklySchedule([{...}], [{ durationMins: 0 }], 1.0, {})` → task with 0 duration is filtered out
 
 **Step 22** — Verify completely full calendar → all tasks unscheduled
-- [ ] 22. Calendar with solid 6am-10pm blocks Mon-Sun → `generateWeeklySchedule(...)` → all tasks in `unscheduled`
-- [ ] 22. No crash, no infinite loop, no zero-duration slots
+- [x] 22. Calendar with solid 6am-10pm blocks Mon-Sun → `generateWeeklySchedule(...)` → all tasks in `unscheduled`
+- [x] 22. No crash, no infinite loop, no zero-duration slots
 
 **Step 23** — Verify sports tasks cause less fatigue than academic
-- [ ] 23. Sports `gammaBoost = 0.7`, academic `gammaBoost = 1.0`
-- [ ] 23. A 60-min sports task at the same time of day produces a lower fatigue curve than a 60-min academic task
+- [x] 23. Sports `gammaBoost = 0.7`, academic `gammaBoost = 1.0`
+- [x] 23. A 60-min sports task at the same time of day produces a lower fatigue curve than a 60-min academic task
 
 **Step 24** — Verify try/catch around simulation prevents scheduler crash
-- [ ] 24. If `calculateMarkovTimeline` throws, the task goes to `unscheduled` instead of crashing the whole scheduler
-- [ ] 24. Error is logged to console with the task title
+- [x] 24. If `calculateMarkovTimeline` throws, the task goes to `unscheduled` instead of crashing the whole scheduler
+- [x] 24. Error is logged to console with the task title
 
 **Step 25** — Verify all session objects have complete shape
-- [ ] 25. Each session has: `task`, `startTick`, `endTick`, `timeline`, `burnoutTick`
-- [ ] 25. `timeline` is an array of `MarkovTimePoint` objects (each has tick, timeLabel, flow, distracted, fatigue, recovery)
-- [ ] 25. `burnoutTick` is a number (may be -1)
+- [x] 25. Each session has: `task`, `startTick`, `endTick`, `timeline`, `burnoutTick`
+- [x] 25. `timeline` is an array of `MarkovTimePoint` objects (each has tick, timeLabel, flow, distracted, fatigue, recovery)
+- [x] 25. `burnoutTick` is a number (may be -1)
 
 **Step 26** — Verify break-extended tasks are clipped to slot bounds
-- [ ] 26. If `optimizeWithBreak` produces a timeline longer than the available slot, the code falls back to the non-break timeline
-- [ ] 26. `fittedTicks = Math.min(timeline.length - 1, bestSlot.durationTicks)` ensures no overflow
+- [x] 26. If `optimizeWithBreak` produces a timeline longer than the available slot, the code falls back to the non-break timeline
+- [x] 26. `fittedTicks = Math.min(timeline.length - 1, bestSlot.durationTicks)` ensures no overflow
 
 ---
 
