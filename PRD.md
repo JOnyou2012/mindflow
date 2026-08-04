@@ -2,10 +2,9 @@
 
 > **Progress: 13 / 85 steps complete — 15.3%** (foundation production-ready)
 >
-> **2026-08-04:** Comprehensive 5-pass audit completed. 38 bugs fixed across 8 files.
-> Backend & JS engine math reconciled — both produce identical results.
-> Foundation verified: 0 lint warnings, 0 build errors, 0 npm vulnerabilities,
-> 1260 matrix/simulation combos tested, full e2e proxy chain verified.
+> **2026-08-04:** Comprehensive 5-pass audit. 38 bugs fixed. Backend & JS engine reconciled.
+> Foundation verified: 0 lint warnings, 0 build errors, 0 npm vulns, 1260 matrix combos,
+> e2e proxy chain tested. Both engines produce identical results to 4 decimal places.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Check the checklist. Percentage? Next step?"*
@@ -14,20 +13,61 @@
 
 ## 📊 Master Progress Table
 
-| Step # | Section | What | Status |
-|--------|---------|------|--------|
-| **1–6** | Markov Engine | `src/utils/markovEngine.js` — verify & fix | ✅ 6/6 — production-quality, 38 bugs fixed |
-| **7–9** | Stylesheet | `src/index.css` — append 6 style blocks | ✅ 3/3 — production-quality |
-| **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality |
-| **14–26** | Scheduler | `src/utils/scheduler.js` — create | ❌ 0/13 |
-| **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ❌ 0/4 |
-| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ❌ 0/6 |
-| **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ❌ 0/8 |
-| **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ❌ 0/6 |
-| **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 |
-| **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 |
-| **66–74** | App Shell | `src/App.jsx` — rewrite | 🟡 3/9 — error boundary, abort controller, debounce, legend |
-| **75–85** | Integration | Manual walkthrough | ❌ 0/11 |
+| Step # | Section | What | Status | % |
+|--------|---------|------|--------|---|
+| **1–6** | Markov Engine | `src/utils/markovEngine.js` — verify & fix | ✅ 6/6 — production-quality | 100% |
+| **7–9** | Stylesheet | `src/index.css` — append 6 style blocks | ✅ 3/3 — production-quality | 100% |
+| **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality | 100% |
+| **14–26** | Scheduler | `src/utils/scheduler.js` — create | ❌ 0/13 | 0% |
+| **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ❌ 0/4 | 0% |
+| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ❌ 0/6 | 0% |
+| **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ❌ 0/8 | 0% |
+| **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ❌ 0/6 | 0% |
+| **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 | 0% |
+| **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 | 0% |
+| **66–74** | App Shell | `src/App.jsx` — rewrite | 🟡 0/9 (prototype hardened) | 0%* |
+| **75–85** | Integration | Manual walkthrough | ❌ 0/11 | 0% |
+
+> \* Step 66–74 is 0% toward the PRD-specified full rewrite, but the existing prototype
+> shell has been hardened with: ErrorBoundary, AbortController, 250ms debounce,
+> Legend/tooltip formatting, `useId()` SVG gradients, safe chaining, JSDoc, and
+> comprehensive error handling for all network failure modes.
+
+### Detailed Sub-Step Completion
+
+```
+Steps 1–6   Markov Engine      ████████████████████████ 6/6   100%
+Steps 7–9   Stylesheet         ████████████████████████ 3/3   100%
+Steps 10–13 localStorage        ████████████████████████ 4/4   100%
+Steps 14–26 Scheduler           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/13    0%
+Steps 27–30 Welcome Screen      ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
+Steps 31–36 Stroop Test         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
+Steps 37–44 Task Form           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/8     0%
+Steps 45–50 Calendar            ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
+Steps 51–54 Session Chart       ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
+Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
+Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
+Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
+────────────────────────────────────────────────────────────────
+TOTAL                           13/85   15.3%
+```
+
+### Stage Completion
+
+| Stage | Steps | Done | % | Status |
+|-------|-------|------|---|--------|
+| **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
+| **Stage 2: Core Components** | 14–65 | 0/52 | **0%** | ❌ Not started |
+| **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
+| **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
+
+> **Stage 1** (Foundation) is complete and production-quality:
+> - Markov engine: NaN/Inf guards, float drift renormalization, input clamping
+> - Stylesheet: Inter font, scoped transitions, focus rings, animations
+> - localStorage: type-guarded loaders, safe defaults, clearAll()
+> - Backend API: validation, CORS, reconciled math with JS engine
+>
+> **Next:** Stage 2 — create `src/utils/scheduler.js` (steps 14–26)
 
 ---
 
