@@ -2,11 +2,17 @@
 
 > **Progress: 26 / 85 steps complete — 30.6%** (foundation + scheduler production-ready)
 >
+> **2026-08-05 (v2.1 product upgrade):** Cumulative state propagation between tasks
+> (fatigue actually carries over now). Schedule warnings system (consecutive hard tasks,
+> deadline buffers, heavy days, unscheduled tasks). Pre-flight task list analysis.
+> Session placement explainability (why each task landed where). Session quality
+> metrics (efficiency, peak fatigue, avg flow per session).
+> 860 tests, 0 lint warnings, 0 build errors. JS + Python engines produce identical results.
+>
 > **2026-08-05 (v2 math upgrade):** Markov engine rebuilt with sigmoidal non-linear
 > dynamics, state-dependent circadian sensitivity, flow-entry warmup, optimal break
 > computation. Scheduler upgraded with cross-day fatigue carryover, task sequencing
 > optimization, flow-block preference, deadline pressure alpha boost. Backend synced.
-> 822 tests, 0 lint warnings, 0 build errors. Both engines produce identical results.
 >
 > **2026-08-05:** Scheduler (steps 14–26) complete. 109 tests, 0 failures, 0 lint warnings.
 > Global best-fit slot matching, chronotype-aware gamma curves, daily caps, burnout break
@@ -389,9 +395,12 @@ MarkovTimePoint = {
 }
 
 OptimizedWeek = {
-  days: { Mon: OptimizedDay, Tue: OptimizedDay, ..., Sun: OptimizedDay },
-  unscheduled: Task[],     // tasks that couldn't fit
-  generatedAt: number,     // Date.now() when generated — used for stale detection
+  days: { Mon: OptimizedDay, ..., Sun: OptimizedDay },
+  unscheduled: Task[],          // tasks that couldn't fit
+  generatedAt: number,          // Date.now() — used for stale detection
+  stats: ScheduleStats,         // quality metrics
+  warnings: Warning[],          // problematic patterns detected (v2.1)
+  preflight: PreflightAnalysis, // task list analysis before scheduling (v2.1)
 }
 
 OptimizedDay = {
@@ -402,8 +411,46 @@ OptimizedDay = {
 }
 
 ScheduledSession = {
-  task: Task, startTick: number, endTick: number,
-  timeline: MarkovTimePoint[], burnoutTick: number,  // -1 if none
+  task: Task,
+  startTick: number,
+  endTick: number,
+  timeline: MarkovTimePoint[],
+  burnoutTick: number,                // -1 if none
+  placementReason: {                  // v2.1: why this slot was chosen
+    score: number,
+    gamma: number,
+    hourPlaced: number,
+    alternativeSlots: number,
+    carryoverUsed: boolean,
+    reason: string,
+  },
+  sessionQuality: {                   // v2.1: per-session metrics
+    avgFlow: number,                  // 0-100
+    peakFatigue: number,              // 0-100
+    flowMinutes: number,
+    efficiency: number,               // 0-100
+  },
+}
+
+Warning = {
+  severity: 'high' | 'medium' | 'low',
+  type: string,        // 'heavy_day' | 'consecutive_hard' | 'same_type_streak' | ...
+  message: string,
+  day: string | null,
+  detail: string,
+}
+
+PreflightAnalysis = {
+  totalTasks: number,
+  totalHours: number,
+  weeklyCapacityHours: number,
+  capacityUtilizationPct: number,
+  avgDifficulty: number,
+  difficultyDistribution: { easy: number, medium: number, hard: number },
+  typeDistribution: { academic: number, sports: number, arts: number, other: number },
+  urgentTaskCount: number,
+  priorityDistribution: { high: number, medium: number, low: number },
+  isOverloaded: boolean,
 }
 ```
 

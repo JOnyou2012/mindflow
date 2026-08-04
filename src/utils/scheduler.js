@@ -19,6 +19,7 @@ import {
   findBurnoutTick,
   optimizeWithBreak,
   computeOptimalBreakDuration,
+  computeRecoveryState,
 } from './markovEngine.js';
 
 // -- Constants ---------------------------------------------------------------
@@ -486,6 +487,269 @@ function computeStats(week, tasks, settings) {
 }
 
 // ===========================================================================
+// Pre-Flight Task Analysis
+// ===========================================================================
+
+/**
+ * Analyze the task list before scheduling and return actionable insights.
+ *
+ * @param {Task[]} tasks
+ * @param {UserSettings} settings
+ * @returns {object} Preflight analysis
+ */
+function analyzePreflight(tasks, settings) {
+  const s = settings || {};
+  const maxWeekday = s.maxHoursPerDay ?? 8;
+  const maxWeekend = s.maxHoursWeekend ?? 4;
+
+  const totalMins = tasks.reduce((sum, t) => sum + (t.durationMins || 0), 0);
+  const totalHours = Math.round(totalMins / 6) / 10;
+  const weeklyCapacity = (maxWeekday * 5 + maxWeekend * 2) * 60;
+  const capacityPct = weeklyCapacity > 0 ? Math.round((totalMins / weeklyCapacity) * 100) : 0;
+
+  // Difficulty distribution
+  const diffBuckets = { easy: 0, medium: 0, hard: 0 };
+  let totalDifficulty = 0;
+  for (const t of tasks) {
+    const d = t.difficulty || 3;
+    totalDifficulty += d;
+    if (d <= 2) diffBuckets.easy++;
+    else if (d <= 3) diffBuckets.medium++;
+    else diffBuckets.hard++;
+  }
+  const avgDifficulty = tasks.length > 0
+    ? Math.round(totalDifficulty / tasks.length * 10) / 10
+    : 0;
+
+  // Type distribution
+  const typeCounts = {};
+  for (const t of tasks) {
+    const type = t.type || 'other';
+    typeCounts[type] = (typeCounts[type] || 0) + 1;
+  }
+
+  // Deadline pressure
+  let urgentCount = 0;
+  const now = Date.now();
+  for (const t of tasks) {
+    if (t.deadline) {
+      const dl = new Date(t.deadline);
+      if (!isNaN(dl.getTime())) {
+        const daysUntil = (dl.getTime() - now) / (86400000);
+        if (daysUntil <= 2) urgentCount++;
+      }
+    }
+  }
+
+  // Priority distribution
+  const priorityCounts = { high: 0, medium: 0, low: 0 };
+  for (const t of tasks) {
+    const p = t.priority || 'medium';
+    priorityCounts[p] = (priorityCounts[p] || 0) + 1;
+  }
+
+  return {
+    totalTasks: tasks.length,
+    totalHours,
+    weeklyCapacityHours: weeklyCapacity / 60,
+    capacityUtilizationPct: capacityPct,
+    avgDifficulty,
+    difficultyDistribution: diffBuckets,
+    typeDistribution: typeCounts,
+    urgentTaskCount: urgentCount,
+    priorityDistribution: priorityCounts,
+    isOverloaded: capacityPct > 90,
+    recommendationCount: 0,
+  };
+}
+
+// ===========================================================================
+// Schedule Warnings Generator
+// ===========================================================================
+
+/**
+ * Generate warnings about potentially problematic schedule patterns.
+ *
+ * @param {OptimizedWeek} week
+ * @param {Task[]} tasks
+ * @param {UserSettings} settings
+ * @returns {object[]} Array of warning objects { severity, message, day, detail }
+ */
+function generateWarnings(week, tasks, settings) {
+  const warnings = [];
+  const s = settings || {};
+  const maxWeekday = s.maxHoursPerDay ?? 8;
+  const maxWeekend = s.maxHoursWeekend ?? 4;
+
+  for (const day of ALL_DAYS) {
+    const sessions = week.days[day].sessions;
+    if (sessions.length === 0) continue;
+
+    const cap = WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday;
+    let dayTicks = 0;
+    let hardCount = 0;
+    let consecutiveHard = 0;
+    let maxConsecutiveHard = 0;
+    let sameTypeStreak = 0;
+    let maxSameTypeStreak = 0;
+    let lastType = null;
+    let burnoutSessions = 0;
+
+    for (const sess of sessions) {
+      dayTicks += (sess.endTick - sess.startTick);
+      if ((sess.task.difficulty || 3) >= 4) {
+        hardCount++;
+        consecutiveHard++;
+        maxConsecutiveHard = Math.max(maxConsecutiveHard, consecutiveHard);
+      } else {
+        consecutiveHard = 0;
+      }
+      if (sess.task.type === lastType && lastType !== null) {
+        sameTypeStreak++;
+        maxSameTypeStreak = Math.max(maxSameTypeStreak, sameTypeStreak);
+      } else {
+        sameTypeStreak = 0;
+      }
+      lastType = sess.task.type;
+      if (sess.burnoutTick > 0) burnoutSessions++;
+    }
+
+    const utilization = cap > 0 ? dayTicks / (cap * 6) : 0;
+
+    // Heavy day warning
+    if (utilization > 0.85) {
+      warnings.push({
+        severity: utilization > 0.95 ? 'high' : 'medium',
+        type: 'heavy_day',
+        message: `${day} is at ${Math.round(utilization * 100)}% capacity`,
+        day,
+        detail: `${sessions.length} sessions, ${Math.round(dayTicks * 10 / 60 * 10) / 10}h scheduled`,
+      });
+    }
+
+    // Consecutive hard tasks
+    if (maxConsecutiveHard >= 3) {
+      warnings.push({
+        severity: 'high',
+        type: 'consecutive_hard',
+        message: `${maxConsecutiveHard} consecutive high-difficulty tasks on ${day}`,
+        day,
+        detail: 'Consider inserting breaks or alternating with easier tasks',
+      });
+    }
+
+    // Same-type streak (attention residue)
+    if (maxSameTypeStreak >= 3) {
+      warnings.push({
+        severity: 'medium',
+        type: 'same_type_streak',
+        message: `${maxSameTypeStreak + 1} consecutive same-type tasks on ${day}`,
+        day,
+        detail: 'Alternating task types improves cognitive recovery between sessions',
+      });
+    }
+
+    // Weekend usage when weekday space available
+    if (WEEKEND_DAYS.has(day) && sessions.length > 0) {
+      // Check if any weekday has free capacity
+      let weekdaySlack = false;
+      for (const wd of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) {
+        let wdTicks = 0;
+        for (const ws of week.days[wd].sessions) {
+          wdTicks += (ws.endTick - ws.startTick);
+        }
+        if (wdTicks < maxWeekday * 6 * 0.7) { weekdaySlack = true; break; }
+      }
+      if (weekdaySlack) {
+        warnings.push({
+          severity: 'low',
+          type: 'weekend_with_slack',
+          message: `Tasks scheduled on ${day} while weekday capacity exists`,
+          day,
+          detail: 'Consider moving weekend tasks to available weekday slots for better recovery',
+        });
+      }
+    }
+  }
+
+  // Unscheduled tasks warning
+  if (week.unscheduled.length > 0) {
+    const unscheduledHours = week.unscheduled.reduce((sum, t) => sum + (t.durationMins || 0), 0) / 60;
+    warnings.push({
+      severity: 'high',
+      type: 'unscheduled_tasks',
+      message: `${week.unscheduled.length} task(s) could not be scheduled (${Math.round(unscheduledHours * 10) / 10}h total)`,
+      detail: week.unscheduled.map(t => t.title).join(', '),
+    });
+  }
+
+  // Deadline buffer check
+  for (const day of ALL_DAYS) {
+    for (const sess of week.days[day].sessions) {
+      if (sess.task.deadline) {
+        const dlDay = deadlineToDay(sess.task.deadline);
+        if (dlDay && DAY_INDEX[day] === DAY_INDEX[dlDay]) {
+          warnings.push({
+            severity: 'medium',
+            type: 'no_deadline_buffer',
+            message: `"${sess.task.title}" scheduled on its deadline day (${day})`,
+            day,
+            detail: 'No buffer day — any delay means missing the deadline',
+          });
+        }
+      }
+    }
+  }
+
+  return warnings;
+}
+
+// ===========================================================================
+// Cumulative State Propagation
+// ===========================================================================
+
+/**
+ * Compute the initial cognitive state for the next task on the same day,
+ * based on the end state of the previous task and the gap/recovery since.
+ *
+ * Fatigue carries over. Flow partially recovers during gaps.
+ * Burnout breaks provide stronger recovery.
+ *
+ * @param {MarkovTimePoint[]} prevTimeline  Timeline of the previous task
+ * @param {number} gapTicks                 Ticks of gap since previous task ended
+ * @param {boolean} hadBurnoutBreak          Whether burnout recovery was applied
+ * @returns {number[]|null} [flow, distracted, fatigue, recovery] or null for fresh start
+ */
+function computeNextInitialState(prevTimeline, gapTicks, hadBurnoutBreak) {
+  if (!prevTimeline || prevTimeline.length === 0) return null;
+
+  const endState = prevTimeline[prevTimeline.length - 1];
+  const currentState = [
+    endState.flow,
+    endState.distracted,
+    endState.fatigue,
+    endState.recovery,
+  ];
+
+  // Recovery during the gap
+  const gapMinutes = gapTicks * 10;
+  const recoveredState = computeRecoveryState(currentState, gapMinutes);
+
+  // If burnout break was applied, add extra recovery
+  if (hadBurnoutBreak) {
+    return computeRecoveryState(recoveredState, 20); // extra 20 min recovery
+  }
+
+  // Small degradation: carryover isn't perfect (attention residue)
+  return [
+    recoveredState[0] * 0.92,     // 8% flow loss from context switching
+    recoveredState[1] * 1.05,     // 5% more distracted (attention residue)
+    recoveredState[2],            // fatigue carries as-is after recovery
+    recoveredState[3] * 0.95,     // slight recovery decay
+  ];
+}
+
+// ===========================================================================
 // Main Scheduler — Two-Process Model Driven
 // ===========================================================================
 
@@ -518,6 +782,8 @@ export default function generateWeeklySchedule(
   const taskList = (tasks || []).filter(t => t && t.durationMins > 0);
   if (taskList.length === 0) {
     week.stats = computeStats(week, [], s);
+    week.warnings = [];
+    week.preflight = analyzePreflight([], s);
     return week;
   }
 
@@ -544,6 +810,8 @@ export default function generateWeeklySchedule(
   if (allSlots.length === 0) {
     week.unscheduled = [...sorted];
     week.stats = computeStats(week, sorted, s);
+    week.warnings = generateWarnings(week, sorted, s);
+    week.preflight = analyzePreflight(sorted, s);
     return week;
   }
 
@@ -553,16 +821,17 @@ export default function generateWeeklySchedule(
   const dayLastTaskEndTick = {};      // tick when the last task ended (for break gap calc)
   const dayUsedTicks = {};
   const dayLastTaskType = {};         // last task type on each day (for sequencing)
+  const dayNextInitialState = {};     // carryover cognitive state for next task on this day
+  const dayHadBurnout = {};           // whether the last task on this day had burnout
 
-  // Initialize per-day state
-  // Cross-day carryover: strain from Mon bleeds into Tue, etc.
-  // Computed dynamically during scheduling as strain accumulates
   ALL_DAYS.forEach(d => {
     dayAccumulatedStrain[d] = 0;
     dayTimeAwakeTicks[d] = 0;
     dayLastTaskEndTick[d] = DAY_START_TICK;
     dayUsedTicks[d] = 0;
     dayLastTaskType[d] = null;
+    dayNextInitialState[d] = null;   // null = fresh start [1,0,0,0]
+    dayHadBurnout[d] = false;
   });
 
   // -- Phase 2: Primary placement -------------------------------------------
@@ -625,12 +894,25 @@ export default function generateWeeklySchedule(
     const strainAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
     const effAlpha = strainAlpha * deadlineAlphaBoost;
 
+    // Count valid alternatives for explainability
+    let validAlternatives = 0;
+    for (const slot of allSlots) {
+      if (slot.usedTicks >= slot.maxTicks) continue;
+      if (taskTicks > slot.durationTicks) continue;
+      if (!deadlineAllowsDay(task, slot.day)) continue;
+      if (slot === bestSlot) continue;
+      validAlternatives++;
+    }
+
     try {
-      let timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
+      // Use carryover state from previous task on this day (cumulative fatigue)
+      const carryoverState = dayNextInitialState[bestSlot.day];
+      let timeline = calculateMarkovTimeline(
+        effAlpha, task.difficulty || 3, gamma, taskTicks, carryoverState
+      );
       let burnoutTick = findBurnoutTick(timeline, 0.50);
 
       if (burnoutTick > 0) {
-        // Compute optimal break duration from the engine's recovery model
         const optimalBreak = computeOptimalBreakDuration(timeline, burnoutTick, 0.30);
         const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks,
                                        burnoutTick, optimalBreak);
@@ -649,11 +931,42 @@ export default function generateWeeklySchedule(
       }
 
       let bc = 0, fm = 0;
-      for (const p of timeline) { if (p.fatigue > 0.50) bc++; fm += p.flow * 10; }
+      let peakFatigueInSession = 0;
+      for (const p of timeline) {
+        if (p.fatigue > 0.50) bc++;
+        fm += p.flow * 10;
+        if (p.fatigue > peakFatigueInSession) peakFatigueInSession = p.fatigue;
+      }
+
+      // Session quality metrics
+      const avgFlowInSession = timeline.length > 0
+        ? timeline.reduce((s, p) => s + p.flow, 0) / timeline.length
+        : 0;
+      const sessionEfficiency = Math.round(avgFlowInSession * 100);
+
+      // Placement explainability
+      const hourPlaced = absStart / 6;
+      const placementReason = {
+        score: Math.round(bestScore * 1000) / 1000,
+        gamma: Math.round(gamma * 1000) / 1000,
+        hourPlaced: Math.round(hourPlaced * 10) / 10,
+        alternativeSlots: validAlternatives,
+        carryoverUsed: carryoverState !== null,
+        reason: carryoverState !== null
+          ? `Placed at ${formatTickLabel(absStart)} on ${bestSlot.day} (γ=${gamma.toFixed(3)}, cumulative fatigue applied)`
+          : `Placed at ${formatTickLabel(absStart)} on ${bestSlot.day} (γ=${gamma.toFixed(3)}, fresh start)`,
+      };
 
       week.days[bestSlot.day].sessions.push({
         task, startTick: absStart, endTick: absStart + fittedTicks,
         timeline, burnoutTick,
+        placementReason,
+        sessionQuality: {
+          avgFlow: Math.round(avgFlowInSession * 1000) / 10,
+          peakFatigue: Math.round(peakFatigueInSession * 1000) / 10,
+          flowMinutes: Math.round(fm),
+          efficiency: sessionEfficiency,
+        },
       });
       week.days[bestSlot.day].totalFlowMins += Math.round(fm);
       if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
@@ -677,13 +990,24 @@ export default function generateWeeklySchedule(
       dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
       dayLastTaskType[bestSlot.day] = task.type || 'other';
 
-      if (burnoutTick > 0) {
+      // Compute carryover state for next task on this day
+      const hadBurnout = burnoutTick > 0;
+      dayNextInitialState[bestSlot.day] = computeNextInitialState(
+        timeline, GAP_TICKS, hadBurnout
+      );
+
+      if (hadBurnout) {
         bestSlot.usedTicks += RECOVERY_TICKS;
         bestSlot.durationTicks -= RECOVERY_TICKS;
         dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
-        // Burnout break gives some strain relief (partial Process S decay)
-        dayAccumulatedStrain[bestSlot.day] *= 0.85; // 15% strain reduction from forced rest
+        dayAccumulatedStrain[bestSlot.day] *= 0.85;
         dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
+        // Stronger recovery for next task
+        if (dayNextInitialState[bestSlot.day]) {
+          dayNextInitialState[bestSlot.day] = computeRecoveryState(
+            dayNextInitialState[bestSlot.day], RECOVERY_TICKS * 10
+          );
+        }
       }
     } catch (err) {
       console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
@@ -800,6 +1124,8 @@ export default function generateWeeklySchedule(
   }
 
   week.stats = computeStats(week, sorted, s);
+  week.warnings = generateWarnings(week, sorted, s);
+  week.preflight = analyzePreflight(sorted, s);
 
   return week;
 }
