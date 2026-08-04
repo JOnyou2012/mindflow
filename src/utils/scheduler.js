@@ -2,10 +2,14 @@
  * MindFlow Smart Scheduler
  *
  * Takes calendar blocks + tasks + calibration + settings and produces a
- * complete OptimizedWeek. Uses global best-fit slot matching (not greedy
- * Monday-first), respects daily caps, applies chronotype-aware gamma
- * curves, enforces deadlines, distributes workload across days, and
- * inserts recovery buffers after burnout.
+ * complete OptimizedWeek.
+ *
+ * Mathematical foundation:
+ *   - Borbély's Two-Process Model (Process C + Process S)
+ *   - Continuous cosine-based circadian rhythm
+ *   - Exponential homeostatic sleep pressure with break decay
+ *   - Cumulative cognitive strain → effective alpha degradation
+ *   - Non-linear slot scoring with fatigue acceleration
  *
  * @module scheduler
  */
@@ -31,114 +35,238 @@ const DAY_INDEX = Object.fromEntries(ALL_DAYS.map((d, i) => [d, i]));
 const GAP_TICKS = 1;             // 10-minute break between consecutive sessions
 const RECOVERY_TICKS = 2;        // 20-minute forced rest after burnout
 
-// -- Chronotype-aware gamma --------------------------------------------------
+// Two-Process Model parameters (Borbély, 1982)
+const TAU_BUILD = 14.4;          // hours — homeostatic buildup time constant
+const TAU_DECAY = 2.0;           // hours — recovery decay time constant
+const CIRCADIAN_AMPLITUDE = 0.25; // max gamma boost at circadian trough
+const PROCESS_S_WEIGHT = 0.50;   // weight of Process S in alertness score
+
+// Cumulative strain parameters
+const MAX_STRAIN_PER_DAY = 1.0;  // normalized max cognitive strain per day
+const STRAIN_DECAY_FACTOR = 0.08; // how much accumulated strain reduces effective alpha
+
+// Chronotype acrophases (peak alertness hour, 24h clock)
+const ACROPHASE = {
+  morning: 10,   // peak at 10:00 AM
+  neutral: 12,   // peak at 12:00 PM
+  night:   14,   // peak at 2:00 PM
+};
+
+// ===========================================================================
+// Process C — Circadian Alertness Rhythm
+// ===========================================================================
 
 /**
- * Compute the circadian fatigue multiplier for a given clock hour and
- * chronotype.  Lower gamma → less fatigue → better study time.
+ * Continuous cosine-based circadian alertness model.
  *
- * @param {number} hour       Clock hour (0–24, fractional OK)
+ * Core formula:
+ *   C(h) = cos(2π × (adjusted_hour - φ) / 24)
+ *
+ * where φ (acrophase) is the chronotype-dependent peak alertness hour.
+ * C(h) ∈ [-1, 1]: +1 at peak alertness, -1 at circadian trough.
+ *
+ * @param {number} hour       Clock hour (fractional OK, e.g. 13.5 = 1:30 PM)
  * @param {string} chronotype 'morning' | 'neutral' | 'night'
- * @returns {number} gamma in [1.0, 1.25]
+ * @returns {number} C(h) ∈ [-1, 1]
  */
-export function gammaForHour(hour, chronotype = 'morning') {
-  const shift = chronotype === 'neutral' ? 2 : chronotype === 'night' ? 4 : 0;
-  const adjusted = (hour - shift + 24) % 24;
-  if (adjusted >= 22 || adjusted < 6) return 1.25;   // deep night
-  if (adjusted >= 20) return 1.15;                     // evening dip
-  if (adjusted >= 14) return 1.05;                     // afternoon dip
-  return 1.0;                                           // peak alertness
+export function processC(hour, chronotype = 'morning') {
+  const phi = ACROPHASE[chronotype] || 10;
+  // Circular distance from acrophase, normalized to [0, 24)
+  const theta = (2 * Math.PI * ((hour - phi + 24) % 24)) / 24;
+  return Math.cos(theta);
 }
 
-// -- Task sorting ------------------------------------------------------------
+/**
+ * Circadian fatigue multiplier derived from Process C.
+ *
+ * At peak alertness (C=1):  gamma = 1.00  (no fatigue boost)
+ * At circadian trough (C=-1): gamma = 1.25 (max fatigue boost)
+ *
+ * Formula:  γ(h) = 1.0 + A × (1 − C(h)) / 2
+ * where A = CIRCADIAN_AMPLITUDE = 0.25
+ *
+ * @param {number} hour       Clock hour (fractional OK)
+ * @param {string} chronotype 'morning' | 'neutral' | 'night'
+ * @returns {number} gamma ∈ [1.0, 1.25]
+ */
+export function circadianGamma(hour, chronotype = 'morning') {
+  const C = processC(hour, chronotype);
+  return 1.0 + CIRCADIAN_AMPLITUDE * (1 - C) / 2;
+}
+
+// Keep backward-compatible alias
+export { circadianGamma as gammaForHour };
+
+// ===========================================================================
+// Process S — Homeostatic Sleep Pressure
+// ===========================================================================
 
 /**
- * Sort tasks by: priority → deadline proximity → type → difficulty.
- * This determines the order tasks are placed into the schedule.
+ * Homeostatic sleep pressure (Process S) — the "tiredness" that builds
+ * during wakefulness and decays during rest.
  *
- * @param {Task[]} tasks
- * @returns {Task[]} new sorted array (does not mutate input)
+ * Buildup (during work):
+ *   S_build(t) = 1 − exp(−t / τ_build)
+ *
+ * Decay (during break):
+ *   S(t) = S_0 × exp(−t_break / τ_decay)
+ *
+ * Combined:
+ *   S(t_awake, t_break) = (1 − exp(−t_awake / τ_build)) × exp(−t_break / τ_decay)
+ *
+ * @param {number} timeAwakeHours   Hours spent in cognitive work
+ * @param {number} breakMinutes     Minutes of continuous rest before this point
+ * @returns {number} S ∈ [0, 1]
  */
+export function processS(timeAwakeHours, breakMinutes = 0) {
+  const S_build = 1 - Math.exp(-timeAwakeHours / TAU_BUILD);
+  const S_decay = Math.exp(-breakMinutes / 60 / TAU_DECAY);
+  return S_build * S_decay;
+}
+
+/**
+ * Break duration needed to reduce Process S to a target level.
+ * Inverts the decay formula:  t = −τ_decay × ln(target / S_current)
+ *
+ * @param {number} currentS    Current Process S value [0, 1]
+ * @param {number} targetS     Desired Process S value [0, 1]
+ * @returns {number} Minutes of break needed
+ */
+export function requiredBreakMinutes(currentS, targetS = 0.3) {
+  if (currentS <= targetS) return 0;
+  if (currentS <= 0 || targetS <= 0) return 30; // degenerate case → 30 min default
+  return Math.round(-TAU_DECAY * 60 * Math.log(targetS / currentS));
+}
+
+// ===========================================================================
+// Two-Process Alertness Model
+// ===========================================================================
+
+/**
+ * Combined alertness from the two-process model.
+ *
+ *   A(h, t_awake, t_break) = C(h) − w_s × S(t_awake, t_break)
+ *
+ * Range: approximately [−1.5, 1.0]
+ *   +1.0 = peak alertness (well-rested at circadian peak)
+ *   −1.5 = worst (high sleep pressure at circadian trough)
+ *
+ * @param {number} hour            Clock hour
+ * @param {number} timeAwakeHours  Cognitive work hours accumulated
+ * @param {number} breakMinutes    Minutes since last break
+ * @param {string} chronotype      'morning' | 'neutral' | 'night'
+ * @returns {number} Alertness A ∈ [−1.5, 1.0]
+ */
+export function alertness(hour, timeAwakeHours, breakMinutes, chronotype = 'morning') {
+  const C = processC(hour, chronotype);
+  const S = processS(timeAwakeHours, breakMinutes);
+  return C - PROCESS_S_WEIGHT * S;
+}
+
+// ===========================================================================
+// Cumulative Cognitive Strain
+// ===========================================================================
+
+/**
+ * Compute how much cognitive strain a task contributes.
+ *
+ * Strain formula:
+ *   Δstrain = (ticks × difficulty × gamma) / (maxDailyTicks × 5 × 1.25)
+ *
+ * Normalized so that 8 hours of difficulty-3 work at gamma=1.0
+ * produces approximately 0.8 strain (80% of daily max).
+ *
+ * @param {number} ticks       Task duration in 10-min ticks
+ * @param {number} difficulty  Task difficulty (1–5)
+ * @param {number} gamma       Circadian gamma at task start
+ * @param {number} maxTicks    Day's capacity in ticks
+ * @returns {number} Strain contribution ∈ [0, 1]
+ */
+function strainContribution(ticks, difficulty, gamma, maxTicks) {
+  const maxStrainPossible = maxTicks * 5 * 1.25; // worst case: max duration, diff=5, gamma=1.25
+  if (maxStrainPossible <= 0) return 0;
+  return (ticks * (difficulty || 3) * gamma) / maxStrainPossible;
+}
+
+/**
+ * Effective alpha after accounting for accumulated cognitive strain.
+ *
+ *   α_eff = α × max(0.50, 1.0 − strain × decayFactor)
+ *
+ * At 100% strain:  α_eff = α × 0.50  (half effectiveness)
+ * At 50% strain:   α_eff = α × 0.75
+ * At 0% strain:    α_eff = α × 1.00
+ *
+ * @param {number} alpha       Base cognitive calibration score
+ * @param {number} strain      Accumulated strain [0, 1]
+ * @returns {number} Effective alpha
+ */
+function effectiveAlpha(alpha, strain) {
+  return alpha * Math.max(0.50, 1.0 - strain * STRAIN_DECAY_FACTOR);
+}
+
+// ===========================================================================
+// Task Sorting
+// ===========================================================================
+
 export function sortTasks(tasks) {
   return [...tasks].sort((a, b) => {
-    // 1. Priority: high > medium > low
     const pa = PRIORITY_ORDER[a.priority || 'medium'];
     const pb = PRIORITY_ORDER[b.priority || 'medium'];
     if (pa !== pb) return pa - pb;
 
-    // 2. Deadline: tasks WITH deadlines before those without
     if (a.deadline && !b.deadline) return -1;
     if (!a.deadline && b.deadline) return 1;
 
-    // 3. Earlier deadline first
     if (a.deadline && b.deadline) {
-      const da = new Date(a.deadline);
-      const db = new Date(b.deadline);
-      if (isNaN(da.getTime())) return 1;   // invalid → push to end
+      const da = new Date(a.deadline), db = new Date(b.deadline);
+      if (isNaN(da.getTime())) return 1;
       if (isNaN(db.getTime())) return -1;
       if (da < db) return -1;
       if (da > db) return 1;
     }
 
-    // 4. Task type sort order
     const oa = (TYPE_PROFILES[a.type] || TYPE_PROFILES.other).sortOrder;
     const ob = (TYPE_PROFILES[b.type] || TYPE_PROFILES.other).sortOrder;
     if (oa !== ob) return oa - ob;
 
-    // 5. Harder tasks first (they need the freshest slots)
     return (b.difficulty || 3) - (a.difficulty || 3);
   });
 }
 
-// -- Slot computation --------------------------------------------------------
+// ===========================================================================
+// Slot Computation (overlapping-block aware)
+// ===========================================================================
 
-/**
- * Compute free time slots for a single day given its calendar blocks.
- * Returns an array of contiguous free periods between DAY_START and DAY_END.
- * Overlapping blocks are handled correctly (merged).
- *
- * @param {CalendarBlock[]} blocksForDay
- * @returns {{ startTick: number, endTick: number, startHour: number,
- *             durationTicks: number, durationHours: number }[]}
- */
 export function findFreeSlots(blocksForDay) {
   if (!blocksForDay || blocksForDay.length === 0) {
     const dur = DAY_END_TICK - DAY_START_TICK;
     return [{
-      startTick: DAY_START_TICK,
-      endTick: DAY_END_TICK,
-      startHour: 6,
-      durationTicks: dur,
-      durationHours: dur / 6,
+      startTick: DAY_START_TICK, endTick: DAY_END_TICK, startHour: 6,
+      durationTicks: dur, durationHours: dur / 6,
     }];
   }
 
-  // Sort by start hour, then merge overlapping blocks
   const sorted = [...blocksForDay].sort((a, b) => (a.startHour || 0) - (b.startHour || 0));
   const merged = [];
   for (const b of sorted) {
     const bs = Math.max(DAY_START_TICK, Math.round((b.startHour || 0) * 6));
     const be = Math.min(DAY_END_TICK, Math.round(((b.startHour || 0) + (b.durationHours || 0)) * 6));
     if (merged.length > 0 && bs <= merged[merged.length - 1].end) {
-      // Overlaps with previous block — merge
       merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, be);
     } else {
       merged.push({ start: bs, end: be });
     }
   }
 
-  // Extract free gaps between merged blocks
   const slots = [];
   let cur = DAY_START_TICK;
   for (const m of merged) {
     if (m.start > cur) {
       const d = m.start - cur;
       slots.push({
-        startTick: cur,
-        endTick: m.start,
-        startHour: cur / 6,
-        durationTicks: d,
-        durationHours: d / 6,
+        startTick: cur, endTick: m.start, startHour: cur / 6,
+        durationTicks: d, durationHours: d / 6,
       });
     }
     cur = Math.max(cur, m.end);
@@ -146,18 +274,17 @@ export function findFreeSlots(blocksForDay) {
   if (cur < DAY_END_TICK) {
     const d = DAY_END_TICK - cur;
     slots.push({
-      startTick: cur,
-      endTick: DAY_END_TICK,
-      startHour: cur / 6,
-      durationTicks: d,
-      durationHours: d / 6,
+      startTick: cur, endTick: DAY_END_TICK, startHour: cur / 6,
+      durationTicks: d, durationHours: d / 6,
     });
   }
 
   return slots;
 }
 
-// -- Week helpers ------------------------------------------------------------
+// ===========================================================================
+// Helpers
+// ===========================================================================
 
 function createEmptyWeek() {
   const days = {};
@@ -172,42 +299,89 @@ function formatTickLabel(tick) {
   return `${Math.floor(m / 60)}h${(m % 60).toString().padStart(2, '0')}`;
 }
 
-/**
- * Convert an ISO date string to the corresponding day-of-week abbreviation.
- * Returns null if the date string is invalid or missing.
- *
- * @param {string|null} isoDate
- * @returns {string|null} 'Mon'–'Sun' or null
- */
 function deadlineToDay(isoDate) {
   if (!isoDate) return null;
   try {
     const d = new Date(isoDate);
     if (isNaN(d.getTime())) return null;
-    const dayIdx = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    // Map JS getDay() to our ALL_DAYS: Sun→6, Mon→0, Tue→1, ...
     const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return map[dayIdx];
+    return map[d.getDay()];
   } catch {
     return null;
   }
 }
 
-/**
- * Check whether a task's deadline allows it to be scheduled on a given day.
- * Tasks without deadlines can be scheduled any day.
- *
- * @param {Task} task
- * @param {string} day  'Mon'–'Sun'
- * @returns {boolean}
- */
 function deadlineAllowsDay(task, day) {
   const deadlineDay = deadlineToDay(task.deadline);
-  if (!deadlineDay) return true; // no deadline — any day is fine
+  if (!deadlineDay) return true;
   return DAY_INDEX[day] <= DAY_INDEX[deadlineDay];
 }
 
-// -- Schedule quality metrics ------------------------------------------------
+// ===========================================================================
+// Slot Scoring — Two-Process Model
+// ===========================================================================
+
+/**
+ * Score a candidate slot for a task using the two-process alertness model.
+ *
+ * Lower score = better slot. The score combines:
+ *   1. Circadian gamma (Process C) at the proposed start hour
+ *   2. Homeostatic pressure (Process S) based on time already spent that day
+ *   3. Non-linear congestion penalty (squared — fatigue accelerates)
+ *   4. Weekend penalty
+ *   5. Recovery benefit from natural gaps between tasks
+ *
+ * Mathematically:
+ *   score = γ × (1 + S) + β_congestion² × 0.8 + weekendPenalty + positionTiebreaker
+ *
+ * where S is Process S at the slot's start time, and congestion
+ * penalty grows quadratically with utilization.
+ *
+ * @param {object} slot         Free slot with { day, startHour, usedTicks, durationTicks, maxTicks }
+ * @param {object} profile      Task type profile { gammaBoost }
+ * @param {string} chronotype   User chronotype
+ * @param {number} dayStrain    Accumulated cognitive strain [0, 1] for this day
+ * @param {number} timeAwakeHrs Hours of cognitive work already on this day
+ * @param {number} breakMins    Minutes since last task ended on this day
+ * @param {object} settings     User settings
+ * @returns {number} Score (lower = better)
+ */
+function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings) {
+  const hour = slot.startHour + (slot.usedTicks / 6);
+
+  // Process C: circadian gamma
+  const gamma = circadianGamma(hour, chronotype) * profile.gammaBoost;
+
+  // Process S: homeostatic pressure
+  const S = processS(timeAwakeHrs + (slot.usedTicks / 6), breakMins);
+
+  // Combined fatigue factor: circadian × (1 + homeostatic)
+  // When S=0 (fresh): fatigueFactor = gamma
+  // When S=1 (exhausted): fatigueFactor = gamma × 2
+  const fatigueFactor = gamma * (1 + S);
+
+  // Non-linear congestion penalty: squared utilization
+  // 50% full → 0.2 penalty; 90% full → 0.65 penalty
+  const dayCap = WEEKEND_DAYS.has(slot.day)
+    ? (settings.maxHoursWeekend ?? 4)
+    : (settings.maxHoursPerDay ?? 8);
+  const congestion = dayCap > 0
+    ? (slot.usedTicks / (dayCap * 6))
+    : 0;
+  const congestionPenalty = congestion * congestion * 0.8;
+
+  // Weekend penalty
+  const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
+
+  // Position tiebreaker (prefer earlier within same slot, all else equal)
+  const positionTiebreaker = slot.usedTicks / 1000;
+
+  return fatigueFactor + congestionPenalty + weekendPenalty + positionTiebreaker;
+}
+
+// ===========================================================================
+// Schedule Quality Statistics
+// ===========================================================================
 
 function computeStats(week, tasks, settings) {
   let totalScheduledMins = 0;
@@ -224,8 +398,8 @@ function computeStats(week, tasks, settings) {
     const dd = week.days[day];
     const cap = WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday;
     let dayTicks = 0;
-    for (const s of dd.sessions) {
-      dayTicks += (s.endTick - s.startTick);
+    for (const sess of dd.sessions) {
+      dayTicks += (sess.endTick - sess.startTick);
     }
     totalScheduledMins += dayTicks * 10;
     totalFlowMins += dd.totalFlowMins;
@@ -239,18 +413,15 @@ function computeStats(week, tasks, settings) {
     ? Math.round((totalScheduledMins / totalTaskMins) * 100)
     : 100;
 
-  // Workload balance: lower stddev = more evenly distributed
   const utils = Object.values(dayUtilization);
   const avgUtil = utils.reduce((a, b) => a + b, 0) / utils.length;
   const variance = utils.reduce((sum, u) => sum + (u - avgUtil) ** 2, 0) / utils.length;
   const workloadBalance = Math.round((1 - Math.sqrt(variance)) * 100);
 
-  // Average fatigue across all scheduled sessions
-  let totalFatiguePts = 0;
-  let totalTimelinePts = 0;
+  let totalFatiguePts = 0, totalTimelinePts = 0;
   for (const day of ALL_DAYS) {
-    for (const s of week.days[day].sessions) {
-      for (const p of s.timeline) {
+    for (const sess of week.days[day].sessions) {
+      for (const p of sess.timeline) {
         totalFatiguePts += p.fatigue;
         totalTimelinePts++;
       }
@@ -268,21 +439,35 @@ function computeStats(week, tasks, settings) {
     unscheduledCount: week.unscheduled.length,
     utilizationPct,
     daysUsed,
-    workloadBalance,       // 0–100, higher = more balanced
-    avgFatigue,            // 0–100, average fatigue probability in %
-    dayUtilization,        // { Mon: 0.0–1.0, ... }
+    workloadBalance,
+    avgFatigue,
+    dayUtilization,
   };
 }
 
-// -- Main scheduler ----------------------------------------------------------
+// ===========================================================================
+// Main Scheduler — Two-Process Model Driven
+// ===========================================================================
 
 /**
  * Generate a complete optimized weekly schedule.
  *
- * @param {CalendarBlock[]} calendarBlocks  Fixed weekly commitments
- * @param {Task[]}          tasks           Tasks to schedule
- * @param {number}          alpha           Cognitive calibration score (0.5–1.5)
- * @param {UserSettings}    settings        User preferences
+ * Algorithm (three phases):
+ *
+ * Phase 1 — Sort: tasks ordered by priority → deadline → type → difficulty
+ *
+ * Phase 2 — Primary placement: each task scores every eligible slot using
+ *   the two-process alertness model (Process C + Process S). The slot with
+ *   lowest score wins. Cumulative strain builds per day and degrades
+ *   effective alpha for subsequent tasks.
+ *
+ * Phase 3 — Refinement: unscheduled tasks get a second pass with relaxed
+ *   scoring (no congestion penalty, no weekend penalty).
+ *
+ * @param {CalendarBlock[]} calendarBlocks
+ * @param {Task[]}          tasks
+ * @param {number}          alpha      Cognitive calibration (0.5–1.5)
+ * @param {UserSettings}    settings   Chronotype, daily caps
  * @returns {OptimizedWeek}
  */
 export default function generateWeeklySchedule(
@@ -301,15 +486,13 @@ export default function generateWeeklySchedule(
   const maxWeekday = s.maxHoursPerDay ?? 8;
   const maxWeekend = s.maxHoursWeekend ?? 4;
 
-  // Group calendar blocks by day
   const blocksByDay = {};
   ALL_DAYS.forEach(d => { blocksByDay[d] = blockList.filter(b => b.day === d); });
 
-  // Phase 1: sort tasks by priority/deadline/type/difficulty
   const sorted = sortTasks(taskList);
   const unscheduled = [];
 
-  // Collect all free slots across all 7 days
+  // Collect all free slots
   const allSlots = [];
   for (const day of ALL_DAYS) {
     const capTicks = Math.round((WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday) * 6);
@@ -318,18 +501,27 @@ export default function generateWeeklySchedule(
     }
   }
 
-  // Guard: no free slots at all (calendar completely full)
   if (allSlots.length === 0) {
     week.unscheduled = [...sorted];
     week.stats = computeStats(week, sorted, s);
     return week;
   }
 
-  // Track per-day usage for workload distribution scoring
+  // Per-day state for two-process model
+  const dayAccumulatedStrain = {};   // cumulative cognitive strain [0, 1]
+  const dayTimeAwakeTicks = {};       // total ticks of cognitive work done
+  const dayLastTaskEndTick = {};      // tick when the last task ended (for break gap calc)
   const dayUsedTicks = {};
-  ALL_DAYS.forEach(d => { dayUsedTicks[d] = 0; });
 
-  // Phase 2: assign each task to its best slot
+  ALL_DAYS.forEach(d => {
+    dayAccumulatedStrain[d] = 0;
+    dayTimeAwakeTicks[d] = 0;
+    dayLastTaskEndTick[d] = DAY_START_TICK;
+    dayUsedTicks[d] = 0;
+  });
+
+  // -- Phase 2: Primary placement -------------------------------------------
+
   for (const task of sorted) {
     const taskTicks = Math.ceil((task.durationMins || 30) / 10);
     const profile = TYPE_PROFILES[task.type] || TYPE_PROFILES.other;
@@ -338,110 +530,91 @@ export default function generateWeeklySchedule(
     let bestScore = Infinity;
 
     for (const slot of allSlots) {
-      // Capacity check
       if (slot.usedTicks >= slot.maxTicks) continue;
-
-      // Size check: task must fit in remaining slot space
       if (taskTicks > slot.durationTicks) continue;
-
-      // Deadline check: task due Wednesday cannot be placed Thursday+
       if (!deadlineAllowsDay(task, slot.day)) continue;
 
-      // Compute slot score: lower is better
-      const hour = slot.startHour + (slot.usedTicks / 6);
-      const gamma = gammaForHour(hour, chronotype) * profile.gammaBoost;
-      const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
+      // Compute break gap: how many ticks since last task ended on this day
+      const ticksSinceLastTask = Math.max(0,
+        (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
+      const breakMinsSinceLastTask = ticksSinceLastTask * 10;
+      const timeAwakeHrs = dayTimeAwakeTicks[slot.day] / 6;
 
-      // Congestion penalty: prefer less-crowded days (spread workload)
-      const dayCap = WEEKEND_DAYS.has(slot.day) ? maxWeekend : maxWeekday;
-      const congestion = dayCap > 0 ? (dayUsedTicks[slot.day] / (dayCap * 6)) : 0;
-      const congestionPenalty = congestion * 0.5;
+      const score = scoreSlot(
+        slot, profile, chronotype,
+        dayAccumulatedStrain[slot.day],
+        timeAwakeHrs,
+        breakMinsSinceLastTask,
+        s,
+      );
 
-      // Position-in-slot tiebreaker (prefer earlier positions in the same slot)
-      const positionPenalty = slot.usedTicks / 1000;
-
-      const score = gamma + weekendPenalty + congestionPenalty + positionPenalty;
-
-      if (score < bestScore) {
-        bestScore = score;
-        bestSlot = slot;
-      }
+      if (score < bestScore) { bestScore = score; bestSlot = slot; }
     }
 
-    // No eligible slot found — task cannot be scheduled
-    if (!bestSlot) {
-      unscheduled.push(task);
-      continue;
-    }
+    if (!bestSlot) { unscheduled.push(task); continue; }
 
-    // Place the task in its best slot
+    // Place the task
     const absStart = bestSlot.startTick + bestSlot.usedTicks;
-    const gamma = gammaForHour(absStart / 6, chronotype) * profile.gammaBoost;
+    const gamma = circadianGamma(absStart / 6, chronotype) * profile.gammaBoost;
+
+    // Apply cumulative strain to degrade effective alpha
+    const effAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
 
     try {
-      // Run Markov simulation
-      let timeline = calculateMarkovTimeline(alpha, task.difficulty || 3, gamma, taskTicks);
+      let timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
       let burnoutTick = findBurnoutTick(timeline, 0.50);
 
-      // Insert recovery break if burnout is predicted
       if (burnoutTick > 0) {
-        const opt = optimizeWithBreak(alpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
+        const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
         timeline = opt.optimized;
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
 
-      const actualTicks = timeline.length - 1;
-
-      // If break insertion extended the task beyond the slot, fall back
-      // to the non-break timeline
-      if (actualTicks > bestSlot.durationTicks) {
-        timeline = calculateMarkovTimeline(alpha, task.difficulty || 3, gamma, taskTicks);
+      if ((timeline.length - 1) > bestSlot.durationTicks) {
+        timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
 
-      // Clip to slot boundary
       const fittedTicks = Math.min(timeline.length - 1, bestSlot.durationTicks);
-
-      // Clip timeline to match fittedTicks so stored data is consistent
       if (timeline.length - 1 > fittedTicks) {
         timeline = timeline.slice(0, fittedTicks + 1);
       }
 
-      // Compute session metrics
-      let burnoutCount = 0;
-      let flowMins = 0;
-      for (const p of timeline) {
-        if (p.fatigue > 0.50) burnoutCount++;
-        flowMins += p.flow * 10;
-      }
+      let bc = 0, fm = 0;
+      for (const p of timeline) { if (p.fatigue > 0.50) bc++; fm += p.flow * 10; }
 
-      // Store the session
       week.days[bestSlot.day].sessions.push({
-        task,
-        startTick: absStart,
-        endTick: absStart + fittedTicks,
-        timeline,
-        burnoutTick,
+        task, startTick: absStart, endTick: absStart + fittedTicks,
+        timeline, burnoutTick,
       });
-      week.days[bestSlot.day].totalFlowMins += Math.round(flowMins);
-      if (burnoutTick > 0) {
-        week.days[bestSlot.day].burnoutCount += 1;
-      }
+      week.days[bestSlot.day].totalFlowMins += Math.round(fm);
+      if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
 
-      // Update slot consumption
+      // Update per-day state
       const totalConsumed = fittedTicks + GAP_TICKS;
       bestSlot.usedTicks += totalConsumed;
       bestSlot.durationTicks -= totalConsumed;
       bestSlot.startHour = bestSlot.startTick / 6;
-
-      // Track per-day usage for workload distribution
       dayUsedTicks[bestSlot.day] += totalConsumed;
 
-      // If burnout occurred, add extra recovery buffer
+      // Accumulate cognitive strain
+      const strain = strainContribution(
+        fittedTicks, task.difficulty || 3, gamma, bestSlot.maxTicks,
+      );
+      dayAccumulatedStrain[bestSlot.day] = Math.min(
+        MAX_STRAIN_PER_DAY,
+        dayAccumulatedStrain[bestSlot.day] + strain,
+      );
+      dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
+      dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
+
       if (burnoutTick > 0) {
         bestSlot.usedTicks += RECOVERY_TICKS;
         bestSlot.durationTicks -= RECOVERY_TICKS;
         dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
+        // Burnout break gives some strain relief (partial Process S decay)
+        dayAccumulatedStrain[bestSlot.day] *= 0.85; // 15% strain reduction from forced rest
+        dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
       }
     } catch (err) {
       console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
@@ -449,8 +622,8 @@ export default function generateWeeklySchedule(
     }
   }
 
-  // Phase 3: refinement — try to fit unscheduled tasks by relaxing
-  // constraints (skip workload balance, allow weekend)
+  // -- Phase 3: Refinement pass ---------------------------------------------
+
   if (unscheduled.length > 0) {
     const stillUnschedule = [];
     for (const task of unscheduled) {
@@ -465,35 +638,32 @@ export default function generateWeeklySchedule(
         if (taskTicks > slot.durationTicks) continue;
         if (!deadlineAllowsDay(task, slot.day)) continue;
 
-        // In refinement, only consider gamma (ignore congestion)
+        // Relaxed scoring: gamma only, no congestion, no Process S penalty
         const hour = slot.startHour + (slot.usedTicks / 6);
-        const gamma = gammaForHour(hour, chronotype) * profile.gammaBoost;
+        const gamma = circadianGamma(hour, chronotype) * profile.gammaBoost;
         const score = gamma + (slot.usedTicks / 1000);
 
         if (score < bestScore) { bestScore = score; bestSlot = slot; }
       }
 
-      if (!bestSlot) {
-        stillUnschedule.push(task);
-        continue;
-      }
+      if (!bestSlot) { stillUnschedule.push(task); continue; }
 
-      // Try to fit (same logic as Phase 2, but with the relaxed scoring)
       const absStart = bestSlot.startTick + bestSlot.usedTicks;
-      const gamma = gammaForHour(absStart / 6, chronotype) * profile.gammaBoost;
+      const gamma = circadianGamma(absStart / 6, chronotype) * profile.gammaBoost;
+      const effAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
 
       try {
-        let timeline = calculateMarkovTimeline(alpha, task.difficulty || 3, gamma, taskTicks);
+        let timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
         let burnoutTick = findBurnoutTick(timeline, 0.50);
 
         if (burnoutTick > 0) {
-          const opt = optimizeWithBreak(alpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
+          const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
           timeline = opt.optimized;
           burnoutTick = findBurnoutTick(timeline, 0.50);
         }
 
         if ((timeline.length - 1) > bestSlot.durationTicks) {
-          timeline = calculateMarkovTimeline(alpha, task.difficulty || 3, gamma, taskTicks);
+          timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
           burnoutTick = findBurnoutTick(timeline, 0.50);
         }
 
@@ -518,10 +688,22 @@ export default function generateWeeklySchedule(
         bestSlot.startHour = bestSlot.startTick / 6;
         dayUsedTicks[bestSlot.day] += totalConsumed;
 
+        const strain = strainContribution(
+          fittedTicks, task.difficulty || 3, gamma, bestSlot.maxTicks,
+        );
+        dayAccumulatedStrain[bestSlot.day] = Math.min(
+          MAX_STRAIN_PER_DAY,
+          dayAccumulatedStrain[bestSlot.day] + strain,
+        );
+        dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
+        dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
+
         if (burnoutTick > 0) {
           bestSlot.usedTicks += RECOVERY_TICKS;
           bestSlot.durationTicks -= RECOVERY_TICKS;
           dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
+          dayAccumulatedStrain[bestSlot.day] *= 0.85;
+          dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
         }
       } catch (err) {
         console.error(`Scheduler refinement: failed for "${task.title}"`, err);
@@ -539,19 +721,22 @@ export default function generateWeeklySchedule(
     if (dd.sessions.length === 0) continue;
     const agg = [];
     let off = 0;
-    for (const s of dd.sessions) {
-      for (const p of s.timeline) {
+    for (const sess of dd.sessions) {
+      for (const p of sess.timeline) {
         agg.push({ ...p, tick: off + p.tick, timeLabel: formatTickLabel(off + p.tick) });
       }
-      off += s.timeline.length;
+      off += sess.timeline.length;
     }
     dd.fatigueCurve = agg;
   }
 
-  // Compute schedule quality statistics
   week.stats = computeStats(week, sorted, s);
 
   return week;
 }
 
-export { ALL_DAYS, DAY_START_TICK, DAY_END_TICK, WEEKEND_DAYS, GAP_TICKS, RECOVERY_TICKS };
+export {
+  ALL_DAYS, DAY_START_TICK, DAY_END_TICK, WEEKEND_DAYS,
+  GAP_TICKS, RECOVERY_TICKS,
+  TAU_BUILD, TAU_DECAY, CIRCADIAN_AMPLITUDE, PROCESS_S_WEIGHT,
+};

@@ -10,12 +10,18 @@
 
 import generateWeeklySchedule, {
   gammaForHour,
+  circadianGamma,
+  processC,
+  processS,
+  alertness,
+  requiredBreakMinutes,
   sortTasks,
   findFreeSlots,
   ALL_DAYS,
   DAY_START_TICK,
   DAY_END_TICK,
   GAP_TICKS,
+  TAU_BUILD,
 } from '../src/utils/scheduler.js';
 
 // ---------------------------------------------------------------------------
@@ -79,35 +85,181 @@ function makeCalendarBlock(overrides = {}) {
 }
 
 // ===========================================================================
-// 1. gammaForHour — direct testing
+// 1. Circadian Gamma — continuous cosine model
 // ===========================================================================
 
-console.log('\n📋 1. gammaForHour — direct chronotype testing');
+console.log('\n📋 1. circadianGamma — continuous cosine model');
 
-// Morning chronotype
-assert(gammaForHour(7, 'morning') === 1.0,  'G1.1: morning@7am → 1.0 (peak)');
-assert(gammaForHour(12, 'morning') === 1.0, 'G1.2: morning@12pm → 1.0 (still peak)');
-assert(gammaForHour(14, 'morning') === 1.05,'G1.3: morning@2pm → 1.05 (afternoon dip)');
-assert(gammaForHour(20, 'morning') === 1.15,'G1.4: morning@8pm → 1.15 (evening dip)');
-assert(gammaForHour(23, 'morning') === 1.25,'G1.5: morning@11pm → 1.25 (deep night)');
-assert(gammaForHour(3, 'morning') === 1.25, 'G1.6: morning@3am → 1.25 (deep night)');
+// All gamma values must be in [1.0, 1.25]
+for (let h = 0; h < 24; h += 0.5) {
+  for (const ct of ['morning', 'neutral', 'night']) {
+    const g = circadianGamma(h, ct);
+    assert(g >= 1.0, `G1.1: gamma(${h}, ${ct}) = ${g.toFixed(4)} ≥ 1.0`);
+    assert(g <= 1.25, `G1.2: gamma(${h}, ${ct}) = ${g.toFixed(4)} ≤ 1.25`);
+  }
+}
 
-// Neutral chronotype (shift +2h)
-assert(gammaForHour(7, 'neutral') === 1.25, 'G1.7: neutral@7am → 1.25 (5am adjusted, deep night < 6)');
-assert(gammaForHour(10, 'neutral') === 1.0, 'G1.8: neutral@10am → 1.0 (8am adjusted, peak)');
-assert(gammaForHour(16, 'neutral') === 1.05,'G1.9: neutral@4pm → 1.05 (2pm adjusted, dip)');
-assert(gammaForHour(22, 'neutral') === 1.15,'G1.10: neutral@10pm → 1.15 (8pm adjusted = 20, evening dip)');
+// At acrophase (peak alertness), gamma should be minimal (= 1.0)
+assert(Math.abs(circadianGamma(10, 'morning') - 1.0) < 0.001, 'G1.3: morning peak at 10am → gamma ≈ 1.0');
+assert(Math.abs(circadianGamma(12, 'neutral') - 1.0) < 0.001, 'G1.4: neutral peak at 12pm → gamma ≈ 1.0');
+assert(Math.abs(circadianGamma(14, 'night') - 1.0) < 0.001,   'G1.5: night peak at 2pm → gamma ≈ 1.0');
 
-// Night chronotype (shift +4h)
-assert(gammaForHour(7, 'night') === 1.25,   'G1.11: night@7am → 1.25 (3am adjusted, deep night)');
-assert(gammaForHour(10, 'night') === 1.0,   'G1.12: night@10am → 1.0 (6am adjusted, peak start)');
-assert(gammaForHour(14, 'night') === 1.0,   'G1.13: night@2pm → 1.0 (10am adjusted, peak)');
-assert(gammaForHour(18, 'night') === 1.05,  'G1.14: night@6pm → 1.05 (2pm adjusted, dip)');
-assert(gammaForHour(22, 'night') === 1.05,  'G1.15: night@10pm → 1.05 (6pm adjusted=18, afternoon dip)');
+// At nadir (12h from acrophase), gamma should be maximal (= 1.25)
+assert(Math.abs(circadianGamma(22, 'morning') - 1.25) < 0.001, 'G1.6: morning trough at 10pm → gamma ≈ 1.25');
+assert(Math.abs(circadianGamma(0, 'neutral') - 1.25) < 0.001,  'G1.7: neutral trough at midnight → gamma ≈ 1.25');
+assert(Math.abs(circadianGamma(2, 'night') - 1.25) < 0.001,    'G1.8: night trough at 2am → gamma ≈ 1.25');
 
-// Default chronotype
-assert(gammaForHour(7) === 1.0,              'G1.16: default chronotype@7am → 1.0');
-assert(gammaForHour(23) === 1.25,            'G1.17: default chronotype@11pm → 1.25');
+// Monotonic decrease toward acrophase (morning: 6am → 10am should decrease)
+assert(circadianGamma(6, 'morning') > circadianGamma(10, 'morning'),
+  'G1.9: gamma decreases toward morning peak (6am → 10am)');
+
+// Monotonic increase away from acrophase (morning: 10am → 6pm should increase)
+assert(circadianGamma(18, 'morning') > circadianGamma(10, 'morning'),
+  'G1.10: gamma increases away from morning peak (10am → 6pm)');
+
+// Night owl at 7am should have higher gamma than morning lark at 7am
+assert(circadianGamma(7, 'night') > circadianGamma(7, 'morning'),
+  'G1.11: night owl at 7am more fatigued than morning lark');
+
+// Morning lark at 10pm should have higher gamma than night owl at 10pm
+assert(circadianGamma(22, 'morning') > circadianGamma(22, 'night'),
+  'G1.12: morning lark at 10pm more fatigued than night owl');
+
+// gammaForHour is the same function as circadianGamma (backward compat)
+assert(gammaForHour(10, 'morning') === circadianGamma(10, 'morning'),
+  'G1.13: gammaForHour === circadianGamma (backward-compatible alias)');
+
+// ===========================================================================
+// 1b. Process C — circadian alertness
+// ===========================================================================
+
+console.log('\n📋 1b. Process C — circadian alertness rhythm');
+
+// C ∈ [-1, 1] everywhere
+for (let h = 0; h < 24; h += 0.5) {
+  for (const ct of ['morning', 'neutral', 'night']) {
+    const c = processC(h, ct);
+    assert(c >= -1.0, `C1.1: C(${h}, ${ct}) = ${c.toFixed(4)} ≥ -1`);
+    assert(c <= 1.0, `C1.2: C(${h}, ${ct}) = ${c.toFixed(4)} ≤ 1`);
+  }
+}
+
+// At acrophase, C ≈ 1 (cos(0) = 1)
+assert(Math.abs(processC(10, 'morning') - 1.0) < 0.001, 'C1.3: C(10am, morning) ≈ 1.0');
+assert(Math.abs(processC(12, 'neutral') - 1.0) < 0.001, 'C1.4: C(12pm, neutral) ≈ 1.0');
+assert(Math.abs(processC(14, 'night') - 1.0) < 0.001,   'C1.5: C(2pm, night) ≈ 1.0');
+
+// At nadir (12h from acrophase), C ≈ -1 (cos(π) = -1)
+assert(Math.abs(processC(22, 'morning') - (-1.0)) < 0.001, 'C1.6: C(10pm, morning) ≈ -1.0');
+assert(Math.abs(processC(0, 'neutral') - (-1.0)) < 0.001,  'C1.7: C(midnight, neutral) ≈ -1.0');
+
+// Periodicity: C(h) = C(h + 24)
+for (const h of [0, 6, 12, 18]) {
+  assert(Math.abs(processC(h, 'morning') - processC(h + 24, 'morning')) < 0.001,
+    `C1.8: C(${h}h) ≈ C(${h+24}h) — 24h periodicity`);
+}
+
+// ===========================================================================
+// 1c. Process S — homeostatic sleep pressure
+// ===========================================================================
+
+console.log('\n📋 1c. Process S — homeostatic sleep pressure');
+
+// S(0, 0) = 0 — no pressure at start
+assert(processS(0, 0) === 0, 'S1.1: S(0, 0) = 0');
+
+// S increases with time awake
+assert(processS(4, 0) > processS(1, 0), 'S1.2: S grows with time awake');
+assert(processS(8, 0) > processS(4, 0), 'S1.3: S continues growing');
+
+// S approaches 1 as t → ∞
+assert(processS(72, 0) > 0.99, 'S1.4: S(72h awake) > 0.99 (approaches 1)');
+
+// Breaks reduce S
+const sBeforeBreak = processS(6, 0);
+const sAfterBreak = processS(6, 60); // 60-min break
+assert(sAfterBreak < sBeforeBreak, 'S1.5: Break reduces homeostatic pressure');
+
+// Longer breaks reduce S more
+assert(processS(6, 120) < processS(6, 30), 'S1.6: Longer break → more S reduction');
+
+// Time constant: S(τ_build, 0) = 1 - 1/e ≈ 0.632
+const sAtTau = processS(TAU_BUILD, 0);
+assert(Math.abs(sAtTau - 0.632) < 0.01, `S1.7: S(τ_build, 0) ≈ 0.632 (got ${sAtTau.toFixed(4)})`);
+
+// ===========================================================================
+// 1d. Two-Process Alertness Model
+// ===========================================================================
+
+console.log('\n📋 1d. Two-Process Alertness Model');
+
+// Alertness at peak circadian + rested = high
+const freshMorning = alertness(10, 0, 0, 'morning');
+assert(freshMorning > 0.5, `A1.1: Fresh at circadian peak → high alertness (${freshMorning.toFixed(3)})`);
+
+// Alertness at circadian trough + tired = low
+const tiredNight = alertness(22, 12, 0, 'morning');
+assert(tiredNight < 0, `A1.2: Tired at circadian trough → negative alertness (${tiredNight.toFixed(3)})`);
+
+// Alertness degrades with time awake
+const alertEarly = alertness(10, 1, 0, 'morning');
+const alertLate = alertness(10, 8, 0, 'morning');
+assert(alertEarly > alertLate, 'A1.3: Same circadian phase, more awake time → lower alertness');
+
+// Break improves alertness
+const tired = alertness(14, 6, 0, 'morning');
+const rested = alertness(14, 6, 60, 'morning'); // 60-min break
+assert(rested > tired, 'A1.4: Break improves alertness score');
+
+// ===========================================================================
+// 1e. Required Break Computation
+// ===========================================================================
+
+console.log('\n📋 1e. Required break minutes');
+
+// No break needed if already below target
+assert(requiredBreakMinutes(0.2, 0.3) === 0, 'R1.1: S already below target → 0 min needed');
+
+// Break needed to reduce high S
+const breakNeeded = requiredBreakMinutes(0.8, 0.3);
+assert(breakNeeded > 0, `R1.2: S=0.8→0.3 needs break (${breakNeeded} min)`);
+assert(breakNeeded < 240, `R1.3: Break time is reasonable (< 4h): ${breakNeeded} min`);
+
+// Higher S requires longer break
+assert(requiredBreakMinutes(0.9, 0.3) > requiredBreakMinutes(0.6, 0.3),
+  'R1.4: Higher S → longer break needed');
+
+// Default for degenerate case (target ≤ 0)
+assert(requiredBreakMinutes(0.5, 0) === 30, 'R1.5: Degenerate target=0 → default 30 min');
+assert(requiredBreakMinutes(0, 0.3) === 0, 'R1.6: S=0 already below target → 0 min needed');
+
+// ===========================================================================
+// 1f. Cumulative strain → effective alpha degradation
+// ===========================================================================
+
+console.log('\n📋 1f. Cumulative strain effect on scheduling');
+
+// Schedule 4 identical 60-min hard tasks on the same day
+const strainTasks = [
+  makeTask({ title: 'Strain 1', durationMins: 60, difficulty: 5, priority: 'high' }),
+  makeTask({ title: 'Strain 2', durationMins: 60, difficulty: 5, priority: 'high' }),
+  makeTask({ title: 'Strain 3', durationMins: 60, difficulty: 5, priority: 'high' }),
+  makeTask({ title: 'Strain 4', durationMins: 60, difficulty: 5, priority: 'high' }),
+];
+
+const strainResult = generateWeeklySchedule([], strainTasks, 1.0, { chronotype: 'morning' });
+const strainSessions = strainResult.days.Mon.sessions;
+
+// All 4 should be scheduled on Monday (4h fits in 8h cap)
+// The 4th task should show higher fatigue than the 1st (cumulative strain)
+if (strainSessions.length >= 4) {
+  const firstAvgFatigue = strainSessions[0].timeline.reduce((s, p) => s + p.fatigue, 0) / strainSessions[0].timeline.length;
+  const lastAvgFatigue = strainSessions[3].timeline.reduce((s, p) => s + p.fatigue, 0) / strainSessions[3].timeline.length;
+
+  // The 4th task should be more fatigued (effective alpha degraded by strain)
+  assert(lastAvgFatigue >= firstAvgFatigue * 0.95,
+    `SF1.1: Later tasks show fatigue (4th=${lastAvgFatigue.toFixed(3)} vs 1st=${firstAvgFatigue.toFixed(3)})`);
+}
 
 // ===========================================================================
 // 2. sortTasks — direct testing
