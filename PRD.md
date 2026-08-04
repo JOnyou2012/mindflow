@@ -5,6 +5,10 @@
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
 >
+> **2026-08-05 (v3.1 audit):** Deep review of Markov engine v3 + scheduler. 6 bugs fixed
+> (1 critical, 3 high, 2 medium) + 3 feature refinements. All 1,970 tests pass (0
+> failures). See §Audit Log below for details.
+>
 > **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
 > 120-min parasympathetic). Flow deepening with sudden collapse tipping point at ~2h.
 > Cognitive momentum (fatigue acceleration amplifies off-diagonal transitions).
@@ -93,7 +97,7 @@ TOTAL                           26/85   30.6%
 > - `src/utils/scheduler.js`: two-process model, global slot matching, deadline
 >   enforcement, cumulative state propagation, cross-day carryover, task sequencing,
 >   flow-block preference, workload distribution, warnings, pre-flight, explainability
-> - 2,006 tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
+> - 1,970 tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
 > - 6 UI components still to build (steps 27–65)
 >
 > **Next:** Stage 2 continued — create `src/components/WelcomeScreen.jsx` (steps 27–30)
@@ -515,6 +519,61 @@ Both engines (`backend/main.py` and `src/utils/markovEngine.js`) now share:
 - Same multiplier rules (alpha/beta/gamma)
 - Same initial state `[1.0, 0.0, 0.0, 0.0]`
 - Same normalization and safety guards
+
+---
+
+## 🔬 v3.1 Deep Audit (2026-08-05)
+
+Full code review of `markovEngine.js` (v3) and `scheduler.js` (two-process model).
+**6 bugs fixed, 3 feature refinements applied.** All 1,970 tests pass, 0 failures.
+
+### Bugs Fixed
+
+| # | Severity | File | Bug | Fix |
+|---|----------|------|-----|-----|
+| 1 | 🔴 Critical | `markovEngine.js:283` | `applyAttentionResidue` always returned 0 — `computeAttentionResidue(prevType, null)` short-circuited to 0 because of `!newType` guard, making attention residue completely broken | Use `'other'` as fallback new-type; added `clamp()` on output |
+| 2 | 🔴 High | `scheduler.js:977,1000` | Slot `durationTicks` went negative when `totalConsumed` (fittedTicks + GAP_TICKS + RECOVERY_TICKS) exceeded remaining slot capacity | Clamp with `Math.max(0, ...)`, cap `usedTicks` to `maxTicks` |
+| 3 | 🔴 High | `scheduler.js:1048-1105` | Phase 3 refinement pass ignored cumulative state — ran from `[1,0,0,0]`, no carryover propagation, no session quality metrics | Full parity with Phase 2: carryover state, burnout recovery, `sessionQuality`, `dayNextInitialState` |
+| 4 | 🔴 High | `markovEngine.js:113` | `optimizeWithBreak` always started from `[1,0,0,0]` via `validateInitialState(null)`, discarding cumulative fatigue from prior tasks | Added `options.initialState` support; scheduler threads carryover state through |
+| 5 | 🟡 Medium | `scheduler.js:394` | Cross-day carryover used `TAU_DECAY = 2h`: `e^(-8/2) ≈ 0.018` → effective carryover ~0.55%, essentially zero | Changed to `TAU_BUILD = 14.4h`: `e^(-8/14.4) ≈ 0.574` → ~17% effective carryover |
+| 6 | 🟡 Medium | `scheduler.js:851` | Deadline pressure computed `daysUntilDeadline` from Monday, so pressure was constant regardless of which day the task landed on | Refined boost after slot selection relative to the actual scheduled day |
+
+### Feature Refinements
+
+| # | Area | What Changed |
+|---|------|-------------|
+| A | Attention residue threading | `computeNextInitialState` no longer applies generic 8%/5% residue. Instead, `applyAttentionResidueToState()` uses the engine's per-type-pair table (same-type=5%, different-type up to 22%) when both task types are known |
+| B | Recovery state separation | `computeNextInitialState` now returns pure biexponential recovery state without residue; type-specific attention residue is applied separately at point of use |
+| C | Phase 3 parity | Refinement pass now uses `computeOptimalBreakDuration`, produces `sessionQuality` metrics, propagates cumulative state, and applies burnout recovery |
+
+### Test Results
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| `engine-v3.test.js` | ~860 | ✅ 0 failures |
+| `scheduler.test.js` | 110 | ✅ 0 failures |
+| `scheduler-advanced.test.js` | 750 | ✅ 0 failures |
+| `stress.test.js` | 270 | ✅ 0 failures |
+| **Total** | **~1,970** | **✅ All pass** |
+
+### Numerical Verification
+
+- All timeline probability vectors sum to ∈ [0.97, 1.03] across 5 param sets × 19+ ticks
+- 20 random-parameter runs: no NaN, no Infinity, all flow ∈ [0, 1]
+- Sigmoid verified: far-left ≈ 0, center = 0.5, far-right ≈ 1
+- Biexponential recovery: 2min < 15min < 60min < 120min fatigue reduction (monotonic)
+- Flow inertia: flow at 30min sustained > 40% with α=1.3
+- Flow collapse: flow at 4h < 50% with α=0.9, β=3
+- Cognitive momentum: late-session fatigue > early-session fatigue
+- State-dependent gamma: γ ∈ [1.0, 1.25] for all chronotypes at all hours
+
+### Remaining Known Gaps
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| `backend/main.py` stuck on v1 engine math | Backend API returns different results than client | Low (backend is not the primary path) |
+| No unit tests for `applyAttentionResidueToState` helper | New code uncovered | Low (integration-tested via scheduler) |
+| `simulateTrajectoryN` is a redundant alias for `simulateTrajectory` | Dead code, 2 LOC | Trivial |
 
 ---
 

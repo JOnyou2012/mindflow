@@ -103,14 +103,15 @@ export function optimizeWithBreak(
   alpha, beta, gamma, steps = 18, burnoutTick, breakMinutes = 15, options = null
 ) {
   const opts = options || {};
-  const original = calculateMarkovTimeline(alpha, beta, gamma, steps, null, opts);
+  const initialState = opts.initialState || null;
+  const original = calculateMarkovTimeline(alpha, beta, gamma, steps, initialState, opts);
 
   if (!burnoutTick || burnoutTick <= 0) {
     return { original, optimized: original };
   }
 
   const breakInsertTick = Math.max(0, burnoutTick - 1);
-  const v0 = validateInitialState(null);
+  const v0 = validateInitialState(initialState);
 
   const preBreak = simulateTrajectoryN(alpha, beta, gamma, breakInsertTick, [...v0], opts);
 
@@ -277,15 +278,16 @@ export function computeAttentionResidue(prevType, newType) {
  */
 function applyAttentionResidue(state, prevType) {
   // Shifts flow → distracted based on task type switching cost.
-  // Uses the type-pair-specific residue values from computeAttentionResidue.
+  // Uses the type-pair-specific residue values from computeAttentionResidue,
+  // falling back to 'other' when the new task type is unknown.
   // When no prevType specified, uses generic 12% residue.
-  const residue = prevType ? computeAttentionResidue(prevType, null) * 0.8 : 0.12;
+  const residue = prevType ? computeAttentionResidue(prevType, 'other') : 0.12;
   const flowLoss = state[0] * residue;
   return [
-    state[0] - flowLoss,
-    state[1] + flowLoss * 0.7,
-    state[2] + flowLoss * 0.15,
-    state[3] + flowLoss * 0.15,
+    clamp(state[0] - flowLoss),
+    clamp(state[1] + flowLoss * 0.7),
+    clamp(state[2] + flowLoss * 0.15),
+    clamp(state[3] + flowLoss * 0.15),
   ];
 }
 

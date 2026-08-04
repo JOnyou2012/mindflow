@@ -20,6 +20,7 @@ import {
   optimizeWithBreak,
   computeOptimalBreakDuration,
   computeRecoveryState,
+  computeAttentionResidue,
 } from './markovEngine.js';
 
 // -- Constants ---------------------------------------------------------------
@@ -390,8 +391,11 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Weekend penalty
   const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
 
-  // Cross-day carryover: previous day's strain bleeds into today's first slot
-  const carryoverDecay = Math.exp(-OVERNIGHT_RECOVERY_HOURS / TAU_DECAY);
+  // Cross-day carryover: previous day's strain bleeds into today's first slot.
+  // Uses TAU_BUILD for symmetric buildup/decay of cognitive strain
+  // (strain recovers more slowly than acute Process S homeostatic pressure).
+  // After 8h sleep: e^(-8/14.4) ≈ 0.574, so ~57% of strain persists overnight.
+  const carryoverDecay = Math.exp(-OVERNIGHT_RECOVERY_HOURS / TAU_BUILD);
   const crossDayPenalty = prevDayStrain * CROSS_DAY_CARRYOVER * carryoverDecay
     * (1 - congestion); // diminishes as today fills up (strain already accounted)
 
@@ -712,8 +716,10 @@ function generateWarnings(week, tasks, settings) {
  * Compute the initial cognitive state for the next task on the same day,
  * based on the end state of the previous task and the gap/recovery since.
  *
- * Fatigue carries over. Flow partially recovers during gaps.
- * Burnout breaks provide stronger recovery.
+ * Recovery during gaps uses the biexponential model. Burnout breaks
+ * provide stronger recovery. This function does NOT apply attention
+ * residue — that is handled separately using the per-type-pair residue
+ * table when the next task type is known.
  *
  * @param {MarkovTimePoint[]} prevTimeline  Timeline of the previous task
  * @param {number} gapTicks                 Ticks of gap since previous task ended
@@ -731,7 +737,7 @@ function computeNextInitialState(prevTimeline, gapTicks, hadBurnoutBreak) {
     endState.recovery,
   ];
 
-  // Recovery during the gap
+  // Recovery during the gap using biexponential model
   const gapMinutes = gapTicks * 10;
   const recoveredState = computeRecoveryState(currentState, gapMinutes);
 
@@ -740,13 +746,44 @@ function computeNextInitialState(prevTimeline, gapTicks, hadBurnoutBreak) {
     return computeRecoveryState(recoveredState, 20); // extra 20 min recovery
   }
 
-  // Small degradation: carryover isn't perfect (attention residue)
-  return [
-    recoveredState[0] * 0.92,     // 8% flow loss from context switching
-    recoveredState[1] * 1.05,     // 5% more distracted (attention residue)
-    recoveredState[2],            // fatigue carries as-is after recovery
-    recoveredState[3] * 0.95,     // slight recovery decay
+  // Return recovered state without attention residue.
+  // Type-specific residue is applied later when the next task type is known.
+  return recoveredState;
+}
+
+/**
+ * Apply type-specific attention residue to a carryover state based on
+ * the previous and next task types. Uses the detailed per-type-pair
+ * residue table from the Markov engine.
+ *
+ * Same-type transitions (academic→academic): ~5% residue (minimal)
+ * Different-type transitions (academic→sports): up to 22% residue
+ *
+ * @param {number[]} state         [flow, distracted, fatigue, recovery]
+ * @param {string|null} prevType   Previous task type
+ * @param {string|null} nextType   Next task type being scheduled
+ * @returns {number[]} Modified state with attention residue applied
+ */
+function applyAttentionResidueToState(state, prevType, nextType) {
+  if (!prevType || !nextType || !state) return state;
+
+  const residue = computeAttentionResidue(prevType, nextType);
+  if (residue <= 0) return state;
+
+  const flowLoss = state[0] * residue;
+  const sum0 = state[0] + state[1] + state[2] + state[3];
+  const result = [
+    state[0] - flowLoss,
+    state[1] + flowLoss * 0.7,
+    state[2] + flowLoss * 0.15,
+    state[3] + flowLoss * 0.15,
   ];
+  // Renormalize
+  const sum = result.reduce((a, b) => a + b, 0);
+  if (sum > 0 && Number.isFinite(sum)) {
+    return result.map(x => Math.max(0, Math.min(1, x / sum)));
+  }
+  return state;
 }
 
 // ===========================================================================
@@ -840,15 +877,18 @@ export default function generateWeeklySchedule(
     const taskTicks = Math.ceil((task.durationMins || 30) / 10);
     const profile = TYPE_PROFILES[task.type] || TYPE_PROFILES.other;
 
-    // Deadline pressure: alpha boost for tasks due within 2 days
+    // Deadline pressure: alpha boost for tasks due within 2 days.
+    // Computed once per task using a week-relative estimate for scoring;
+    // refined after slot selection with the actual scheduled day.
     let deadlineAlphaBoost = 1.0;
     if (task.deadline) {
       const deadlineDay = deadlineToDay(task.deadline);
       if (deadlineDay) {
-        const daysUntilDeadline = DAY_INDEX[deadlineDay] - DAY_INDEX.Mon; // simplified
-        if (daysUntilDeadline >= 0 && daysUntilDeadline <= DEADLINE_PRESSURE_DAYS) {
+        // Use worst-case (earliest possible scheduling day = Monday) for scoring
+        const worstCaseDaysUntil = DAY_INDEX[deadlineDay] - DAY_INDEX.Mon;
+        if (worstCaseDaysUntil >= 0 && worstCaseDaysUntil <= DEADLINE_PRESSURE_DAYS) {
           deadlineAlphaBoost = 1.0 + DEADLINE_PRESSURE_BOOST
-            * (1 - daysUntilDeadline / DEADLINE_PRESSURE_DAYS);
+            * (1 - worstCaseDaysUntil / DEADLINE_PRESSURE_DAYS);
         }
       }
     }
@@ -892,7 +932,22 @@ export default function generateWeeklySchedule(
 
     // Apply cumulative strain + deadline pressure to effective alpha
     const strainAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
-    const effAlpha = strainAlpha * deadlineAlphaBoost;
+
+    // Refine deadline pressure relative to the actual scheduled day
+    let dayRelativeBoost = deadlineAlphaBoost;
+    if (task.deadline && deadlineAlphaBoost > 1.0) {
+      const deadlineDay = deadlineToDay(task.deadline);
+      if (deadlineDay) {
+        const daysUntil = DAY_INDEX[deadlineDay] - DAY_INDEX[bestSlot.day];
+        if (daysUntil >= 0 && daysUntil <= DEADLINE_PRESSURE_DAYS) {
+          dayRelativeBoost = 1.0 + DEADLINE_PRESSURE_BOOST
+            * (1 - daysUntil / DEADLINE_PRESSURE_DAYS);
+        } else {
+          dayRelativeBoost = 1.0; // scheduled before or after pressure window
+        }
+      }
+    }
+    const effAlpha = strainAlpha * dayRelativeBoost;
 
     // Count valid alternatives for explainability
     let validAlternatives = 0;
@@ -907,21 +962,27 @@ export default function generateWeeklySchedule(
     try {
       // Use carryover state from previous task on this day (cumulative fatigue)
       const carryoverState = dayNextInitialState[bestSlot.day];
+      // Apply type-specific attention residue between the last task type and
+      // this task's type before running the Markov simulation
+      const initialState = carryoverState
+        ? applyAttentionResidueToState(carryoverState, dayLastTaskType[bestSlot.day], task.type)
+        : null;
       let timeline = calculateMarkovTimeline(
-        effAlpha, task.difficulty || 3, gamma, taskTicks, carryoverState
+        effAlpha, task.difficulty || 3, gamma, taskTicks, initialState
       );
       let burnoutTick = findBurnoutTick(timeline, 0.50);
 
       if (burnoutTick > 0) {
         const optimalBreak = computeOptimalBreakDuration(timeline, burnoutTick, 0.30);
         const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks,
-                                       burnoutTick, optimalBreak);
+                                       burnoutTick, optimalBreak, { initialState });
         timeline = opt.optimized;
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
 
       if ((timeline.length - 1) > bestSlot.durationTicks) {
-        timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
+        timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks,
+                                            initialState);
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
 
@@ -951,8 +1012,8 @@ export default function generateWeeklySchedule(
         gamma: Math.round(gamma * 1000) / 1000,
         hourPlaced: Math.round(hourPlaced * 10) / 10,
         alternativeSlots: validAlternatives,
-        carryoverUsed: carryoverState !== null,
-        reason: carryoverState !== null
+        carryoverUsed: initialState !== null,
+        reason: initialState !== null
           ? `Placed at ${formatTickLabel(absStart)} on ${bestSlot.day} (γ=${gamma.toFixed(3)}, cumulative fatigue applied)`
           : `Placed at ${formatTickLabel(absStart)} on ${bestSlot.day} (γ=${gamma.toFixed(3)}, fresh start)`,
       };
@@ -973,8 +1034,8 @@ export default function generateWeeklySchedule(
 
       // Update per-day state
       const totalConsumed = fittedTicks + GAP_TICKS;
-      bestSlot.usedTicks += totalConsumed;
-      bestSlot.durationTicks -= totalConsumed;
+      bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + totalConsumed);
+      bestSlot.durationTicks = Math.max(0, bestSlot.durationTicks - totalConsumed);
       bestSlot.startHour = bestSlot.startTick / 6;
       dayUsedTicks[bestSlot.day] += totalConsumed;
 
@@ -997,8 +1058,8 @@ export default function generateWeeklySchedule(
       );
 
       if (hadBurnout) {
-        bestSlot.usedTicks += RECOVERY_TICKS;
-        bestSlot.durationTicks -= RECOVERY_TICKS;
+        bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + RECOVERY_TICKS);
+        bestSlot.durationTicks = Math.max(0, bestSlot.durationTicks - RECOVERY_TICKS);
         dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
         dayAccumulatedStrain[bestSlot.day] *= 0.85;
         dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
@@ -1046,17 +1107,28 @@ export default function generateWeeklySchedule(
       const effAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
 
       try {
-        let timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
+        // Use carryover state from previous task on this day
+        const carryoverState = dayNextInitialState[bestSlot.day];
+        // Apply type-specific attention residue
+        const initialState = carryoverState
+          ? applyAttentionResidueToState(carryoverState, dayLastTaskType[bestSlot.day], task.type)
+          : null;
+        let timeline = calculateMarkovTimeline(
+          effAlpha, task.difficulty || 3, gamma, taskTicks, initialState
+        );
         let burnoutTick = findBurnoutTick(timeline, 0.50);
 
         if (burnoutTick > 0) {
-          const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks, burnoutTick);
+          const optimalBreak = computeOptimalBreakDuration(timeline, burnoutTick, 0.30);
+          const opt = optimizeWithBreak(effAlpha, task.difficulty || 3, gamma, taskTicks,
+                                         burnoutTick, optimalBreak, { initialState });
           timeline = opt.optimized;
           burnoutTick = findBurnoutTick(timeline, 0.50);
         }
 
         if ((timeline.length - 1) > bestSlot.durationTicks) {
-          timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks);
+          timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks,
+                                              initialState);
           burnoutTick = findBurnoutTick(timeline, 0.50);
         }
 
@@ -1066,18 +1138,35 @@ export default function generateWeeklySchedule(
         }
 
         let bc = 0, fm = 0;
-        for (const p of timeline) { if (p.fatigue > 0.50) bc++; fm += p.flow * 10; }
+        let peakFatigueInSession = 0;
+        for (const p of timeline) {
+          if (p.fatigue > 0.50) bc++;
+          fm += p.flow * 10;
+          if (p.fatigue > peakFatigueInSession) peakFatigueInSession = p.fatigue;
+        }
+
+        // Session quality metrics
+        const avgFlowInSession = timeline.length > 0
+          ? timeline.reduce((s, p) => s + p.flow, 0) / timeline.length
+          : 0;
+        const sessionEfficiency = Math.round(avgFlowInSession * 100);
 
         week.days[bestSlot.day].sessions.push({
           task, startTick: absStart, endTick: absStart + fittedTicks,
           timeline, burnoutTick,
+          sessionQuality: {
+            avgFlow: Math.round(avgFlowInSession * 1000) / 10,
+            peakFatigue: Math.round(peakFatigueInSession * 1000) / 10,
+            flowMinutes: Math.round(fm),
+            efficiency: sessionEfficiency,
+          },
         });
         week.days[bestSlot.day].totalFlowMins += Math.round(fm);
         if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
 
         const totalConsumed = fittedTicks + GAP_TICKS;
-        bestSlot.usedTicks += totalConsumed;
-        bestSlot.durationTicks -= totalConsumed;
+        bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + totalConsumed);
+        bestSlot.durationTicks = Math.max(0, bestSlot.durationTicks - totalConsumed);
         bestSlot.startHour = bestSlot.startTick / 6;
         dayUsedTicks[bestSlot.day] += totalConsumed;
 
@@ -1090,13 +1179,26 @@ export default function generateWeeklySchedule(
         );
         dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
         dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
+        dayLastTaskType[bestSlot.day] = task.type || 'other';
+
+        // Compute carryover state for next task on this day
+        const hadBurnout = burnoutTick > 0;
+        dayNextInitialState[bestSlot.day] = computeNextInitialState(
+          timeline, GAP_TICKS, hadBurnout
+        );
 
         if (burnoutTick > 0) {
-          bestSlot.usedTicks += RECOVERY_TICKS;
-          bestSlot.durationTicks -= RECOVERY_TICKS;
+          bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + RECOVERY_TICKS);
+          bestSlot.durationTicks = Math.max(0, bestSlot.durationTicks - RECOVERY_TICKS);
           dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
           dayAccumulatedStrain[bestSlot.day] *= 0.85;
           dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
+          // Stronger recovery for next task
+          if (dayNextInitialState[bestSlot.day]) {
+            dayNextInitialState[bestSlot.day] = computeRecoveryState(
+              dayNextInitialState[bestSlot.day], RECOVERY_TICKS * 10
+            );
+          }
         }
       } catch (err) {
         console.error(`Scheduler refinement: failed for "${task.title}"`, err);
