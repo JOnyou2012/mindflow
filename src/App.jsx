@@ -41,9 +41,7 @@ function getDateForDay(dayName, weekStart) {
 }
 
 export default function App() {
-  const [weekOffset, setWeekOffset] = useState(0);
-
-  // Compute weekStart based on offset
+  // Compute weekStart for a given offset (0 = this week)
   const getWeekStart = (offset = 0) => {
     const [y, m, d] = getWeekMonday().split('-').map(Number);
     const date = new Date(y, m - 1, d + offset * 7);
@@ -52,17 +50,7 @@ export default function App() {
     const dd = String(date.getDate()).padStart(2, '0');
     return yy + '-' + mm + '-' + dd;
   };
-
-  const weekStart = getWeekStart(weekOffset);
-  const weekEnd = (() => {
-    const [y, m, d] = weekStart.split('-').map(Number);
-    const end = new Date(y, m - 1, d + 6);
-    return end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  })();
-  const weekLabel = (() => {
-    const d = new Date(weekStart + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  })();
+  const weekStart = getWeekStart(0);
   const [calibration, setCalibrationState] = useState(() => loadCalibration());
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
@@ -75,7 +63,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   const dataVersionRef = useRef(0);
-  const currentResult = weekResults[weekStart] || null;
   const isStale = Object.keys(weekResults).length > 0 && (dataVersionRef.current > 0);
 
   const setCalibration = (cal) => { setCalibrationState(cal); saveCalibration(cal); };
@@ -108,7 +95,6 @@ export default function App() {
           w++;
         }
         setWeekResults(results);
-        setWeekOffset(0);
         dataVersionRef.current = 0;
         setIsCalculating(false);
       } catch (err) {
@@ -381,48 +367,86 @@ export default function App() {
           )}
         </div>
 
-        {/* Results */}
+        {/* Results — all weeks side by side, scroll horizontally */}
         {hasResults && (
-          <>
-            {/* Week selector strip */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {Array.from({ length: 8 }, (_, i) => {
-                const ws = getWeekStart(i);
-                const hasData = weekResults[ws];
-                const isCurrent = i === weekOffset;
-                if (!hasData && i > 0) return null; // only show weeks with data + week 0
+          <div className="overflow-x-auto pb-4">
+            <div className="flex gap-6" style={{ minWidth: Object.keys(weekResults).length * 900 + 'px' }}>
+              {Object.keys(weekResults).sort().map(ws => {
+                const result = weekResults[ws];
+                if (!result) return null;
+                const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+                const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
+                const ROW_H = 48;
                 const d = new Date(ws + 'T00:00:00');
-                const end = new Date(d);
-                end.setDate(end.getDate() + 6);
-                const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const end = new Date(d); end.setDate(end.getDate() + 6);
+                const isThisWeek = ws === getWeekStart(0);
+
                 return (
-                  <button
-                    key={i}
-                    onClick={() => setWeekOffset(i)}
-                    className={`shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                      ${isCurrent ? 'bg-mindflow-accent text-white' :
-                        hasData ? 'bg-mindflow-surface border border-mindflow-border text-mindflow-text hover:border-mindflow-accent/50' :
-                        'bg-mindflow-bg text-mindflow-muted/50'}`}
-                  >
-                    {label}
-                    {i === 0 && <span className="block text-[9px] opacity-70">This week</span>}
-                    {hasData && weekResults[ws].stats && (
-                      <span className="block text-[9px] opacity-70">
-                        {weekResults[ws].stats.totalScheduledHours}h
-                      </span>
+                  <div key={ws} className="shrink-0 space-y-3" style={{ width: '860px' }}>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-mindflow-heading">
+                        {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {' – '}
+                        {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </h3>
+                      {isThisWeek && <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-2 py-0.5 rounded-full">This week</span>}
+                      {result.stats && <span className="text-xs text-mindflow-muted">{result.stats.totalScheduledHours}h</span>}
+                    </div>
+
+                    {result.stats && (
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        {[[result.stats.utilizationPct+'%','Capacity'],[result.stats.workloadBalance+'%','Balance'],[(result.stats.avgFatigue||0)+'%','Fatigue'],[result.stats.totalScheduledHours+'h','Hours']].map(([v,l],i)=>(
+                          <div key={i} className="bg-mindflow-surface border border-mindflow-border rounded-lg py-1.5">
+                            <p className="text-sm font-bold text-mindflow-heading">{v}</p><p className="text-[9px] text-mindflow-muted">{l}</p>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </button>
+
+                    <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
+                        {DAYS.map(day => (
+                          <div key={day} className="px-1 py-1.5 text-center border-r border-mindflow-border last:border-r-0">
+                            <span className="text-[10px] font-semibold text-mindflow-heading">{day}</span>
+                            <span className="block text-[8px] text-mindflow-muted">{getDateForDay(day, ws)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7">
+                        {DAYS.map(day => (
+                          <div key={day} className="relative border-r border-mindflow-border last:border-r-0" style={{ height: 17 * ROW_H + 'px' }}>
+                            {HOURS.map((h, i) => (
+                              <div key={h} className="absolute left-0 right-0 border-t border-mindflow-border/30" style={{ top: i * ROW_H + 'px' }}>
+                                {day === 'Mon' && <span className="absolute -left-10 top-0 text-[8px] text-mindflow-muted w-8 text-right pr-1 -translate-y-1/2">{fmtHr(h)}</span>}
+                              </div>
+                            ))}
+                            {calendarBlocks.filter(b => b.day === day).map(b => {
+                              const c = TYPE_COLORS[b.type] || TYPE_COLORS.other;
+                              const top = (b.startHour - 6) * ROW_H, h = b.durationHours * ROW_H;
+                              return <div key={b.id} className="absolute left-1 right-1 rounded px-1 overflow-hidden" style={{ top: top + 1, height: Math.max(h - 2, 14), backgroundColor: c + '1a', borderLeft: '2px solid ' + c, zIndex: 5 }}><p className="text-[8px] font-medium text-white/70 truncate">{b.label}</p></div>;
+                            })}
+                            {(result.days[day]?.sessions || []).map((s, i) => {
+                              const c = TYPE_COLORS[s.task.type] || TYPE_COLORS.other;
+                              const sh = s.startTick / 6, eh = s.endTick / 6;
+                              const top = (sh - 6) * ROW_H, h = (eh - sh) * ROW_H;
+                              return <div key={'s'+i} className="absolute left-2 right-2 rounded px-1 overflow-hidden" style={{ top: top + 2, height: Math.max(h - 4, 12), backgroundColor: c + '44', borderLeft: '3px solid ' + c, zIndex: 10 }}><p className="text-[8px] font-semibold text-white truncate">{s.task.title}</p></div>;
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {result.warnings?.length > 0 && result.warnings.map((w,i) => (
+                      <div key={i} className="text-[10px] text-mindflow-warning bg-mindflow-warning/10 rounded px-2 py-1">⚠ {w.message}</div>
+                    ))}
+                    {result.unscheduled?.length > 0 && (
+                      <div className="text-[10px] text-mindflow-muted">+{result.unscheduled.length} task{result.unscheduled.length!==1?'s':''} rolled to next week</div>
+                    )}
+                  </div>
                 );
               })}
             </div>
-
-            {currentResult ? renderResultCalendar() : (
-              <div className="text-center py-16 text-mindflow-muted text-sm">
-                No tasks scheduled for this week.
-                {weekOffset > 0 && ' All tasks were placed in earlier weeks.'}
-              </div>
-            )}
-          </>
+          </div>
         )}
       </main>
 
