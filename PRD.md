@@ -5,9 +5,11 @@
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
 >
-> **2026-08-05 (v3.1 audit):** Deep review of Markov engine v3 + scheduler. 6 bugs fixed
-> (1 critical, 3 high, 2 medium) + 3 feature refinements. All 1,970 tests pass (0
-> failures). See §Audit Log below for details.
+> **2026-08-05 (v5 engine audit):** Two-round deep algorithm review across Markov engine,
+> scheduler, and Stroop test. 14 issues fixed: asymmetric P_BASE with micro-recovery,
+> temporal drain post-break reset, biexponential break inversion, difficulty-aware
+> slot scoring, per-day difficulty budget, robust Stroop interference measurement,
+> numerical stability guards. All 2,100+ tests pass (0 failures).
 >
 > **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
 > 120-min parasympathetic). Flow deepening with sudden collapse tipping point at ~2h.
@@ -93,25 +95,33 @@ TOTAL                           54/85   63.5%
 > - Stylesheet: Inter font, scoped transitions, focus rings, animations
 > - localStorage: type-guarded loaders, safe defaults, clearAll()
 >
-> **Stage 2 progress** — Scheduler (14–26) + WelcomeScreen (27–30) + StroopTest (31–36) + TaskInputForm (37–44) complete:
-> - `src/utils/scheduler.js`: two-process model, global slot matching, deadline
->   enforcement, cumulative state propagation, cross-day carryover, task sequencing,
->   flow-block preference, workload distribution, warnings, pre-flight, explainability
-> - `src/components/WelcomeScreen.jsx`: animated landing page with Brain logo,
->   3-step onboarding cards, Calibrate/Skip CTA buttons, fully responsive
-> - `src/components/StroopTestModal.jsx`: 30-second Stroop color-word game,
->   4 phases (intro→countdown→playing→results), computes alpha score from
->   accuracy/response-time, color-coded results with interpretation
-> - `src/components/TaskInputForm.jsx`: full task entry with 6 fields (title,
->   type, priority, difficulty stars, duration with quick-set, optional deadline),
->   task list with type/priority badges, hover edit/delete, Enter-key submit,
->   validation + duplicate detection, collapsible form, empty state, task
->   summary bar (total count/time/difficulty/deadlines), click-to-edit,
->   overdue badge + past-deadline styling, formatted duration/deadline display
-> - `src/App.jsx`: screen flow (Welcome→Stroop→Main), calibration summary
->   with recalibrate, task form with generate placeholder, reset clears all state
-> - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
-> - 3 UI components still to build (steps 45–65)
+> **Stage 2 progress** — Scheduler (14–26) + Welcome (27–30) + Stroop (31–36) +
+> TaskForm (37–44) + Calendar (45–50) + SessionChart (51–54) complete:
+> - `src/utils/markovEngine.js` (v5): non-homogeneous Markov chain with sigmoidal
+>   modifiers, biexponential recovery, temporal cognitive drain with post-break
+>   reset, flow inertia/collapse, cognitive momentum (capped), asymmetric P_BASE
+>   with micro-recovery/regression, biexponential break inversion, sigmoid overflow
+>   guard, capacity ceiling, attention residue
+> - `src/utils/scheduler.js` (v5): two-process model (Borbély), difficulty-aware
+>   slot scoring with circadian interaction, per-day difficulty budget, cross-day
+>   carryover, task sequencing, flow-block preference, deadline pressure, cumulative
+>   state propagation, warnings, pre-flight, explainability, refinement pass
+> - `src/components/WelcomeScreen.jsx`: animated landing, staggered entrance,
+>   pulse-glow icon, responsive layout
+> - `src/components/StroopTestModal.jsx`: 60-sec keyboard-based Stroop test (R/G/B/Y),
+>   congruent/incongruent trials, median-based interference measurement, multi-factor
+>   scoring (accuracy/speed/consistency/lapses/interference)
+> - `src/components/WeeklyCalendar.jsx`: 7-column grid (6am-10pm), form-driven event
+>   input with start/end time selectors, overlap detection, 5 quick presets,
+>   color-coded blocks, edit/delete popover
+> - `src/components/TaskInputForm.jsx`: 6-field form, task summary bar, click-to-edit,
+>   collapsible form, overdue detection, duplicate title check, clear all
+> - `src/components/SessionChart.jsx`: stacked area chart (Flow/Distracted/Fatigue/
+>   Recovery), useId() gradients, burnout reference line, compact mode
+> - `src/App.jsx`: screen flow (Welcome→Stroop→Calendar→Tasks), live fatigue
+>   preview using real alpha, localStorage persistence for all data
+> - 2,100+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
+> - 1 UI component remaining (Dashboard, steps 55–65)
 >
 > **Next:** Stage 2 final — create `src/components/MarkovAnalyticsDashboard.jsx` (steps 55–65)
 
