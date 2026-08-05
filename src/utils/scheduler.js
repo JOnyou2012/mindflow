@@ -39,7 +39,7 @@ const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKEND_DAYS = new Set(['Sat', 'Sun']);
 const DAY_INDEX = Object.fromEntries(ALL_DAYS.map((d, i) => [d, i]));
 
-const GAP_TICKS = 1;             // 10-minute break between consecutive sessions
+const GAP_TICKS = 3;             // 30-minute gap between consecutive sessions
 const RECOVERY_TICKS = 2;        // 20-minute forced rest after burnout
 
 // Cross-day fatigue carryover
@@ -419,9 +419,9 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     : 0;
   const congestionPenalty = congestion * congestion * 3.0;
 
-  // Fresh day bonus: reward placing first task on an empty day
-  // Pulls tasks toward unused days instead of bunching on Monday
-  const freshDayBonus = slot.usedTicks === 0 ? -0.15 : 0;
+  // Spread incentives: prefer empty days, but allow 2 tasks/day at different times
+  const freshDayBonus = slot.usedTicks === 0 ? -0.25 : 0;
+  const sameDayPenalty = slot.usedTicks > 0 ? 0.12 : 0;
 
   // v5: Per-day difficulty budget — spread hard tasks across days
   const difficultyCongestion = MAX_DIFFICULTY_PER_DAY > 0
@@ -491,21 +491,23 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     flowBlockScore = -FLOW_BLOCK_BONUS * Math.min(extraHours, 3);
   }
 
-  // Time-of-day preference: nobody studies at 6am. Realistic human hours.
-  // 9am-4pm = best, early morning and late night = penalty.
+  // Time-of-day preference: realistic human study hours.
+  // Morning peak (9-11am), afternoon dip (1-3pm), evening decline.
   const slotHour = slot.startHour + slot.usedTicks / 6;
   let timeOfDayScore = 0;
-  if (slotHour < 7) timeOfDayScore = 1.5;        // 6-7am: heavy penalty
-  else if (slotHour < 8) timeOfDayScore = 0.6;    // 7-8am: moderate penalty
-  else if (slotHour < 16) timeOfDayScore = -0.2;  // 8am-4pm: bonus (preferred)
-  else if (slotHour < 19) timeOfDayScore = 0;     // 4-7pm: neutral
-  else if (slotHour < 21) timeOfDayScore = 0.1;   // 7-9pm: slight penalty
-  else timeOfDayScore = 0.8;                       // 9-10pm: significant penalty
+  if (slotHour < 8) timeOfDayScore = 1.0;          // before 8am: blocked by clamp anyway
+  else if (slotHour < 9) timeOfDayScore = -0.05;    // 8-9am: OK
+  else if (slotHour < 12) timeOfDayScore = -0.25;   // 9am-12pm: best (morning peak)
+  else if (slotHour < 14) timeOfDayScore = -0.10;   // 12-2pm: lunch dip
+  else if (slotHour < 17) timeOfDayScore = -0.20;   // 2-5pm: good (afternoon)
+  else if (slotHour < 19) timeOfDayScore = -0.05;   // 5-7pm: OK
+  else if (slotHour < 21) timeOfDayScore = 0.10;    // 7-9pm: slight penalty
+  else timeOfDayScore = 0.8;                         // after 9pm: blocked by clamp
 
   // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
-  return fatigueFactor + congestionPenalty + freshDayBonus
+  return fatigueFactor + congestionPenalty + freshDayBonus + sameDayPenalty
        + difficultySpreadPenalty + weekendPenalty + crossDayPenalty
        + sequencingScore + flowBlockScore + positionTiebreaker
        + deadlineWeekScore + timeOfDayScore;
