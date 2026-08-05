@@ -6,11 +6,12 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 0/11 = 0%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
-> **2026-08-05 (v5 engine audit):** Two-round deep algorithm review across Markov engine,
-> scheduler, and Stroop test. 14 issues fixed: asymmetric P_BASE with micro-recovery,
-> temporal drain post-break reset, biexponential break inversion, difficulty-aware
-> slot scoring, per-day difficulty budget, robust Stroop interference measurement,
-> numerical stability guards. All 2,100+ tests pass (0 failures).
+> **2026-08-05 (v6 scheduler):** Major UX-driven scheduler overhaul. Multi-week cascade
+> with deadline-based week targeting, realistic study hours (8am-9pm with time-of-day
+> preference curve), 30-min gaps between tasks, spread incentives (fresh day bonus +
+> same-day penalty), multiple candidate start times per free window, date+time deadlines,
+> past-day blocking with today highlight, auto-split large/difficult tasks, horizontal
+> scroll showing all 4 weeks side by side. All 2,100+ tests pass (0 failures).
 >
 > **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
 > 120-min parasympathetic). Flow deepening with sudden collapse tipping point at ~2h.
@@ -104,10 +105,13 @@ TOTAL                           74/85   87.1%
 >   reset, flow inertia/collapse, cognitive momentum (capped), asymmetric P_BASE
 >   with micro-recovery/regression, biexponential break inversion, sigmoid overflow
 >   guard, capacity ceiling, attention residue
-> - `src/utils/scheduler.js` (v5): two-process model (Borbély), difficulty-aware
->   slot scoring with circadian interaction, per-day difficulty budget, cross-day
->   carryover, task sequencing, flow-block preference, deadline pressure, cumulative
->   state propagation, warnings, pre-flight, explainability, refinement pass
+> - `src/utils/scheduler.js` (v6): two-process model (Borbély), realistic study
+>   hours (8am-9pm with time-of-day preference curve), 30-min gaps, spread incentives
+>   (fresh day bonus + same-day penalty), multiple candidate start times per window,
+>   date+time deadline checking, past-day blocking, multi-week cascade with
+>   deadline-based week targeting, auto-split large/difficult tasks, difficulty-aware
+>   scoring, per-day difficulty budget, cross-day carryover, task sequencing,
+>   warnings, pre-flight, explainability
 > - `src/components/WelcomeScreen.jsx`: animated landing, staggered entrance,
 >   pulse-glow icon, responsive layout
 > - `src/components/StroopTestModal.jsx`: 60-sec keyboard-based Stroop test (R/G/B/Y),
