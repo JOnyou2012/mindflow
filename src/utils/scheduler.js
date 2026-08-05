@@ -861,11 +861,35 @@ export default function generateWeeklySchedule(
   const wsDate = weekStartDate || (() => {
     const now = new Date();
     const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day; // Monday offset
+    const diff = day === 0 ? -6 : 1 - day;
     const mon = new Date(now);
     mon.setDate(mon.getDate() + diff);
     return mon.toISOString().split('T')[0];
   })();
+
+  // Today's date for blocking past days (only when real dates are in play)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
+
+  // Only enforce past-day blocking when caller passes real week dates
+  const enforceRealDates = !!weekStartDate;
+
+  // Compute actual date for a day name
+  const dateForDay = (dayName) => {
+    const idx = DAY_INDEX[dayName];
+    const d = new Date(wsDate + 'T00:00:00');
+    d.setDate(d.getDate() + idx);
+    return d.toISOString().split('T')[0];
+  };
+
+  // Check if a day is in the past (before today) — only when using real dates
+  const isPastDay = (dayName) =>
+    enforceRealDates && dateForDay(dayName) < todayStr;
+
+  // Check if it's today
+  const isToday = (dayName) =>
+    enforceRealDates && dateForDay(dayName) === todayStr;
+
   const week = createEmptyWeek();
   const s = settings || {};
   const taskList = (tasks || []).filter(t => t && t.durationMins > 0);
@@ -887,12 +911,28 @@ export default function generateWeeklySchedule(
   const sorted = sortTasks(taskList);
   const unscheduled = [];
 
-  // Collect all free slots
+  // Collect all free slots — skip past days, adjust today to current time
   const allSlots = [];
   for (const day of ALL_DAYS) {
+    // Past days: cannot schedule anything
+    if (isPastDay(day)) continue;
+
     const capTicks = Math.round((WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday) * 6);
     for (const slot of findFreeSlots(blocksByDay[day])) {
-      allSlots.push({ ...slot, day, maxTicks: capTicks, usedTicks: 0 });
+      // For today: clamp start to current time (rounded up to nearest tick)
+      let adjustedSlot = { ...slot };
+      if (isToday(day)) {
+        const nowTick = Math.ceil(nowHour * 6); // current time in ticks, rounded up
+        if (nowTick > adjustedSlot.endTick) continue; // slot already over
+        if (nowTick > adjustedSlot.startTick) {
+          adjustedSlot.startTick = nowTick;
+          adjustedSlot.startHour = nowTick / 6;
+          adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - nowTick);
+          adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
+        }
+        if (adjustedSlot.durationTicks <= 0) continue; // no time left
+      }
+      allSlots.push({ ...adjustedSlot, day, maxTicks: capTicks, usedTicks: 0 });
     }
   }
 
