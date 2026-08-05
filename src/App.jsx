@@ -1,9 +1,12 @@
 import { useState, useEffect, Component } from 'react';
 import { Brain, AlertTriangle, Zap } from 'lucide-react';
+import { useMemo } from 'react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
+import SessionChart from './components/SessionChart.jsx';
+import { calculateMarkovTimeline, findBurnoutTick } from './utils/markovEngine.js';
 import { loadCalibration, saveCalibration, loadCalendar, saveCalendar, loadTasks, saveTasks } from './utils/storage.js';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +63,40 @@ function isValidCalibration(cal) {
 }
 
 const DEFAULT_CALIBRATION = { stroopAccuracy: 0.75, avgResponseTimeMs: 750, alphaScore: 1.0 };
+
+// ---------------------------------------------------------------------------
+// Live fatigue preview (demo of Markov engine output with user's alpha)
+// ---------------------------------------------------------------------------
+
+function FatiguePreview({ calibration }) {
+  const timeline = useMemo(() => {
+    return calculateMarkovTimeline(calibration.alphaScore, 3, 1.0, 18);
+  }, [calibration.alphaScore]);
+
+  const burnoutTick = useMemo(() => {
+    return findBurnoutTick(timeline, 0.50);
+  }, [timeline]);
+
+  if (!timeline || timeline.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium text-mindflow-heading">
+          Your Fatigue Prediction
+        </h3>
+        <span className="text-xs text-mindflow-muted">
+          (3-hour study session at medium difficulty)
+        </span>
+      </div>
+      <SessionChart
+        timeline={timeline}
+        burnoutTick={burnoutTick}
+        height={220}
+      />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // MindFlow App
@@ -158,6 +195,11 @@ function App() {
           Recalibrate
         </button>
       </div>
+
+      {/* Live fatigue prediction */}
+      {isValidCalibration(calibration) && (
+        <FatiguePreview calibration={calibration} />
+      )}
 
       {/* Task input form */}
       <TaskInputForm tasks={tasks} onChange={setTasks} />

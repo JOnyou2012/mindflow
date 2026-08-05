@@ -1,6 +1,6 @@
 # MindFlow — Master PRD
 
-> **Progress: 50 / 85 steps complete — 58.8%**
+> **Progress: 54 / 85 steps complete — 63.5%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
@@ -49,7 +49,7 @@
 | **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ✅ 8/8 — production-quality | 100% |
 | **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ✅ 6/6 — production-quality | 100% |
-| **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 | 0% |
+| **51–54** | Chart | `src/components/SessionChart.jsx` — create | ✅ 4/4 — production-quality | 100% |
 | **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 | 0% |
 | **66–74** | App Shell | `src/App.jsx` — rewrite | 🟡 0/9 (prototype hardened) | 0%* |
 | **75–85** | Integration | Manual walkthrough | ❌ 0/11 | 0% |
@@ -70,12 +70,12 @@ Steps 27–30 Welcome Screen      ███████████████�
 Steps 31–36 Stroop Test         ████████████████████████ 6/6   100%
 Steps 37–44 Task Form           ████████████████████████ 8/8   100%
 Steps 45–50 Calendar            ████████████████████████ 6/6   100%
-Steps 51–54 Session Chart       ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
+Steps 51–54 Session Chart       ████████████████████████ 4/4   100%
 Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           50/85   58.8%
+TOTAL                           54/85   63.5%
 ```
 
 ### Stage Completion
@@ -113,7 +113,7 @@ TOTAL                           50/85   58.8%
 > - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
 > - 3 UI components still to build (steps 45–65)
 >
-> **Next:** Stage 2 continued — create `src/components/SessionChart.jsx` (steps 51–54)
+> **Next:** Stage 2 final — create `src/components/MarkovAnalyticsDashboard.jsx` (steps 55–65)
 
 ---
 
