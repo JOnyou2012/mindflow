@@ -491,13 +491,24 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     flowBlockScore = -FLOW_BLOCK_BONUS * Math.min(extraHours, 3);
   }
 
+  // Time-of-day preference: nobody studies at 6am. Realistic human hours.
+  // 9am-4pm = best, early morning and late night = penalty.
+  const slotHour = slot.startHour + slot.usedTicks / 6;
+  let timeOfDayScore = 0;
+  if (slotHour < 7) timeOfDayScore = 1.5;        // 6-7am: heavy penalty
+  else if (slotHour < 8) timeOfDayScore = 0.6;    // 7-8am: moderate penalty
+  else if (slotHour < 16) timeOfDayScore = -0.2;  // 8am-4pm: bonus (preferred)
+  else if (slotHour < 19) timeOfDayScore = 0;     // 4-7pm: neutral
+  else if (slotHour < 21) timeOfDayScore = 0.1;   // 7-9pm: slight penalty
+  else timeOfDayScore = 0.8;                       // 9-10pm: significant penalty
+
   // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
   return fatigueFactor + congestionPenalty + freshDayBonus
        + difficultySpreadPenalty + weekendPenalty + crossDayPenalty
        + sequencingScore + flowBlockScore + positionTiebreaker
-       + deadlineWeekScore;
+       + deadlineWeekScore + timeOfDayScore;
 }
 
 // ===========================================================================
@@ -970,28 +981,47 @@ export default function generateWeeklySchedule(
   const sorted = sortTasks(taskList);
   const unscheduled = [];
 
-  // Collect all free slots — skip past days, adjust today to current time
+  // Collect all free slots — skip past days, adjust today to current time,
+  // and clip unrealistic early-morning starts
   const allSlots = [];
   for (const day of ALL_DAYS) {
-    // Past days: cannot schedule anything
     if (isPastDay(day)) continue;
 
     const capTicks = Math.round((WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday) * 6);
     for (const slot of findFreeSlots(blocksByDay[day])) {
-      // For today: clamp start to current time (rounded up to nearest tick)
       let adjustedSlot = { ...slot };
+
+      // Clamp start time: no studying before 8am or after 9pm by default
+      const STUDY_START_TICK = 48;  // 8:00 AM
+      const STUDY_END_TICK = 126;   // 9:00 PM
+      if (adjustedSlot.startTick < STUDY_START_TICK) {
+        adjustedSlot.startTick = STUDY_START_TICK;
+        adjustedSlot.startHour = STUDY_START_TICK / 6;
+        adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - STUDY_START_TICK);
+        adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
+      }
+      if (adjustedSlot.endTick > STUDY_END_TICK) {
+        adjustedSlot.endTick = STUDY_END_TICK;
+        adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - adjustedSlot.startTick);
+        adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
+      }
+
+      // For today: clamp start to current time (rounded up)
       if (isToday(day)) {
-        const nowTick = Math.ceil(nowHour * 6); // current time in ticks, rounded up
-        if (nowTick > adjustedSlot.endTick) continue; // slot already over
+        const nowTick = Math.ceil(nowHour * 6);
+        if (nowTick > adjustedSlot.endTick) continue;
         if (nowTick > adjustedSlot.startTick) {
           adjustedSlot.startTick = nowTick;
           adjustedSlot.startHour = nowTick / 6;
           adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - nowTick);
           adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
         }
-        if (adjustedSlot.durationTicks <= 0) continue; // no time left
+        if (adjustedSlot.durationTicks <= 0) continue;
       }
-      allSlots.push({ ...adjustedSlot, day, maxTicks: capTicks, usedTicks: 0 });
+
+      if (adjustedSlot.durationTicks > 0) {
+        allSlots.push({ ...adjustedSlot, day, maxTicks: capTicks, usedTicks: 0 });
+      }
     }
   }
 
