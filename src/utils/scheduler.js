@@ -1117,9 +1117,15 @@ export default function generateWeeklySchedule(
         if (!deadlineAllowsDay(task, slot.day)) continue;
 
         // Relaxed scoring: gamma only, no congestion, no Process S penalty
+        // v5: difficulty still matters even in refinement — hard tasks get
+        // preference for better circadian times
         const hour = slot.startHour + (slot.usedTicks / 6);
         const gamma = circadianGamma(hour, chronotype) * profile.gammaBoost;
-        const score = gamma + (slot.usedTicks / 1000);
+        const diffFactor = 1 + ((task.difficulty || 3) - 1) * DIFFICULTY_CIRCADIAN_WEIGHT;
+        const difficultySpreadPenalty = (dayDifficultyLoad[slot.day] || 0) > MAX_DIFFICULTY_PER_DAY
+          ? ((dayDifficultyLoad[slot.day] - MAX_DIFFICULTY_PER_DAY) / MAX_DIFFICULTY_PER_DAY) * 0.5
+          : 0;
+        const score = gamma * diffFactor + difficultySpreadPenalty + (slot.usedTicks / 1000);
 
         if (score < bestScore) { bestScore = score; bestSlot = slot; }
       }
