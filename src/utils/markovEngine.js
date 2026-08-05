@@ -1,5 +1,5 @@
 /**
- * MindFlow Markov Chain Engine v4
+ * MindFlow Markov Chain Engine v5
  *
  * Non-homogeneous discrete-time Markov chain simulation of cognitive state
  * transitions during a study session. The transition matrix itself evolves
@@ -9,7 +9,7 @@
  * States: 0=Flow 1=Distracted 2=Fatigue 3=Recovery
  * Time step Δt = 10 minutes.
  *
- * Mathematical features (v4):
+ * Mathematical features (v5):
  *   - Sigmoidal transition modifiers (logistic, not linear)
  *   - State-dependent circadian sensitivity
  *   - Flow-entry warmup (attention ramp-up)
@@ -26,11 +26,15 @@
  */
 
 // -- Base transition matrix --------------------------------------------------
+// v5: asymmetric transitions + micro-recovery + micro-regression
+// - Falling into fatigue (0.06) easier than climbing out (0.03)
+// - Fatigue→Recovery: small spontaneous micro-recovery (0.03)
+// - Recovery→Fatigue: tiny chance of regression from interrupted rest (0.02)
 const P_BASE = [
   [0.80, 0.15, 0.05, 0.00], // From Flow
   [0.20, 0.60, 0.20, 0.00], // From Distracted
-  [0.05, 0.15, 0.80, 0.00], // From Fatigued
-  [0.70, 0.10, 0.00, 0.20], // From Recovery
+  [0.04, 0.15, 0.78, 0.03], // From Fatigued  (v5: micro-recovery)
+  [0.65, 0.10, 0.02, 0.23], // From Recovery (v5: micro-regression)
 ];
 
 // -- Physiological constants -------------------------------------------------
@@ -153,14 +157,38 @@ export function optimizeWithBreak(
 // -- Optimal break computation (biexponential) -------------------------------
 
 /**
- * Compute optimal break duration using the biexponential recovery model.
+ * Biexponential decay: R(t) = w_fast·e^(−t/τ_fast) + w_slow·e^(−t/τ_slow)
+ * Returns fraction of fatigue remaining after t minutes of recovery.
+ */
+function biexponentialDecay(t) {
+  return RECOVERY_WEIGHT_FAST * Math.exp(-t / RECOVERY_TAU_FAST)
+       + RECOVERY_WEIGHT_SLOW * Math.exp(-t / RECOVERY_TAU_SLOW);
+}
+
+/**
+ * Invert the biexponential decay: find t such that decay(t) = ratio.
+ * Uses binary search (20 iterations) — more accurate than slow-only
+ * approximation, especially for short breaks where fast component matters.
+ */
+function invertBiexponentialDecay(ratio) {
+  let lo = 0, hi = 120;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (biexponentialDecay(mid) > ratio) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Compute optimal break duration using full biexponential recovery model.
  *
- * Recovery: R(t) = w_fast·e^(−t/τ_fast) + w_slow·e^(−t/τ_slow)
+ * Inverts the actual recovery curve R(t) = w_fast·e^(−t/τ_fast) + w_slow·e^(−t/τ_slow)
+ * rather than using only the slow component. This gives more accurate results
+ * for short breaks (5-15 min) where the fast sympathetic component contributes
+ * significantly.
  *
- * For inversion, we use the dominant slow component for t > 5 min:
- *   t_break = −τ_slow × ln(target / current)
- *
- * Then scale by intervention sensitivity:
+ * Then scaled by intervention sensitivity:
  *   effectiveness = 1 − σ(fatigue − 0.40, 10)
  *   t_adjusted = t_raw / effectiveness
  *
@@ -182,8 +210,8 @@ export function computeOptimalBreakDuration(timeline, burnoutTick, targetFatigue
   const ratio = targetFatigue / currentFatigue;
   if (ratio <= 0 || ratio >= 1) return 15;
 
-  // Use slow component for longer breaks
-  const rawMinutes = -RECOVERY_TAU_SLOW * Math.log(ratio);
+  // Invert the full biexponential decay (v5: was slow-only approximation)
+  const rawMinutes = invertBiexponentialDecay(ratio);
 
   // Intervention sensitivity: breaks are less effective at higher fatigue
   const effectiveness = 1.0 - sigmoid(currentFatigue, INTERVENTION_MIDPOINT, INTERVENTION_STEEPNESS);
@@ -441,9 +469,10 @@ function buildDynamicMatrix(
   P[2][2] *= gammaMod * capacityFactor * fatigueGravityFactor;
   P[2][3] *= alphaRecoveryMod * recoveryResistanceFactor;
 
-  // Row 3 — Recovery: harder to bounce back to flow as session progresses
+  // Row 3 — Recovery: harder to bounce back to flow, easier to slip to fatigue
   P[3][0] *= alphaRecoveryMod * recoveryResistanceFactor;
   P[3][1] *= (1.5 - alphaFlowMod * 0.5);
+  P[3][2] *= gammaMod * fatigueGravityFactor;  // v5: micro-regression into fatigue
   P[3][3] *= alphaFlowMod;
 
   // Normalise

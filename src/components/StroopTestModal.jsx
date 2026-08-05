@@ -148,6 +148,14 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
   // -- Scoring (research-backed multi-factor) ---------------------------------
 
+  // Helper: median of sorted array (robust to outliers with small samples)
+  const median = (arr) => {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  };
+
   const computeResults = () => {
     const trials = trialsRef.current;
     if (trials.length === 0) {
@@ -170,27 +178,30 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     const lapses = trials.filter(t => t.rt > 1500).length;
 
     // Stroop interference: incongruent RT minus congruent RT
+    // Uses median instead of mean — robust to outliers with small congruent samples
     const congruent = trials.filter(t => t.trialType === TRIAL_TYPES.CONGRUENT);
     const incongruent = trials.filter(t => t.trialType === TRIAL_TYPES.INCONGRUENT);
-    const congruentRT = congruent.length > 0
-      ? congruent.reduce((s, t) => s + t.rt, 0) / congruent.length
-      : meanRT;
+    const congruentRT = congruent.length >= 3
+      ? median(congruent.map(t => t.rt))
+      : median(trials.map(t => t.rt));   // fallback: median of all trials
     const incongruentRT = incongruent.length > 0
-      ? incongruent.reduce((s, t) => s + t.rt, 0) / incongruent.length
+      ? median(incongruent.map(t => t.rt))
       : meanRT;
-    const interference = Math.max(0, incongruentRT - congruentRT);
+    const interference = congruent.length >= 3
+      ? Math.max(0, incongruentRT - congruentRT)
+      : 0;  // insufficient congruent trials → don't penalize
 
     // Multi-factor composite score (each factor contributes to 0-100 scale)
     const accuracyScore = accuracy * 30;                                     // max 30
     const speedScore = Math.max(0, 25 - (meanRT - 400) / 40);               // 400ms→25, 1400ms→0
     const consistencyScore = Math.max(0, 25 - rtSD / 16);                   // SD 0→25, SD 400→0
     const lapsePenalty = Math.min(20, lapses * 4);                           // each lapse costs 4
-    const interferencePenalty = Math.min(20, interference / 10);            // 0ms→0, 200ms→20
+    const interferencePenalty = Math.min(15, interference / 12);            // v5: /12 (was /10), max 15 (was 20)
 
     const total = accuracyScore + speedScore + consistencyScore
                 - lapsePenalty - interferencePenalty;
 
-    // Map to 0.5–1.5 range (total is roughly 0-100, so divide by ~66)
+    // Map to 0.5–1.5 range (total is roughly 0-100, so divide by ~55)
     const alphaScore = Math.max(0.5, Math.min(1.5, total / 55));
 
     setResults({

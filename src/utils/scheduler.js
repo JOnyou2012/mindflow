@@ -55,6 +55,11 @@ const FLOW_BLOCK_BONUS = 0.10;    // score reduction per additional hour of cont
 const DEADLINE_PRESSURE_BOOST = 0.20; // max 20% alpha boost near deadline
 const DEADLINE_PRESSURE_DAYS = 2;     // pressure kicks in within 2 days of deadline
 
+// Difficulty-aware slot scoring (v5)
+const DIFFICULTY_CIRCADIAN_WEIGHT = 0.12; // how much difficulty amplifies circadian effect
+const MAX_DIFFICULTY_PER_DAY = 18;        // max cumulative difficulty before heavy penalty
+const DIFFICULTY_SPREAD_WEIGHT = 0.60;    // penalty strength for overloading one day
+
 // Two-Process Model parameters (Borbély, 1982)
 const TAU_BUILD = 14.4;          // hours — homeostatic buildup time constant
 const TAU_DECAY = 2.0;           // hours — recovery decay time constant
@@ -367,7 +372,8 @@ function deadlineAllowsDay(task, day) {
  * @returns {number} Score (lower = better)
  */
 function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings,
-                    lastTaskType = null, prevDayStrain = 0) {
+                    lastTaskType = null, prevDayStrain = 0, difficulty = 3,
+                    dayDifficultyLoad = 0) {
   const hour = slot.startHour + (slot.usedTicks / 6);
 
   // Process C: circadian gamma
@@ -377,7 +383,10 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   const S = processS(timeAwakeHrs + (slot.usedTicks / 6), breakMins);
 
   // Combined fatigue factor: circadian × (1 + homeostatic)
-  const fatigueFactor = gamma * (1 + S);
+  // v5: difficulty amplifies the circadian effect — hard tasks at bad times
+  // are much worse than easy tasks at the same time
+  const difficultyFactor = 1 + (difficulty - 1) * DIFFICULTY_CIRCADIAN_WEIGHT;
+  const fatigueFactor = gamma * (1 + S) * difficultyFactor;
 
   // Non-linear congestion penalty: squared utilization
   const dayCap = WEEKEND_DAYS.has(slot.day)
@@ -387,6 +396,15 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     ? (slot.usedTicks / (dayCap * 6))
     : 0;
   const congestionPenalty = congestion * congestion * 0.8;
+
+  // v5: Per-day difficulty budget — spread hard tasks across days
+  // Prevents all difficulty-5 tasks from clustering on Monday
+  const difficultyCongestion = MAX_DIFFICULTY_PER_DAY > 0
+    ? (dayDifficultyLoad + difficulty) / MAX_DIFFICULTY_PER_DAY
+    : 0;
+  const difficultySpreadPenalty = difficultyCongestion > 1
+    ? (difficultyCongestion - 1) * (difficultyCongestion - 1) * DIFFICULTY_SPREAD_WEIGHT
+    : 0;
 
   // Weekend penalty
   const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
@@ -420,7 +438,8 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
-  return fatigueFactor + congestionPenalty + weekendPenalty + crossDayPenalty
+  return fatigueFactor + congestionPenalty + difficultySpreadPenalty
+       + weekendPenalty + crossDayPenalty
        + sequencingScore + flowBlockScore + positionTiebreaker;
 }
 
@@ -860,6 +879,7 @@ export default function generateWeeklySchedule(
   const dayLastTaskType = {};         // last task type on each day (for sequencing)
   const dayNextInitialState = {};     // carryover cognitive state for next task on this day
   const dayHadBurnout = {};           // whether the last task on this day had burnout
+  const dayDifficultyLoad = {};       // v5: cumulative difficulty sum (for spread penalty)
 
   ALL_DAYS.forEach(d => {
     dayAccumulatedStrain[d] = 0;
@@ -869,6 +889,7 @@ export default function generateWeeklySchedule(
     dayLastTaskType[d] = null;
     dayNextInitialState[d] = null;   // null = fresh start [1,0,0,0]
     dayHadBurnout[d] = false;
+    dayDifficultyLoad[d] = 0;
   });
 
   // -- Phase 2: Primary placement -------------------------------------------
@@ -919,6 +940,8 @@ export default function generateWeeklySchedule(
         s,
         dayLastTaskType[slot.day],
         prevDayStrainVal,
+        task.difficulty || 3,
+        dayDifficultyLoad[slot.day] || 0,
       );
 
       if (score < bestScore) { bestScore = score; bestSlot = slot; }
@@ -1047,6 +1070,7 @@ export default function generateWeeklySchedule(
         MAX_STRAIN_PER_DAY,
         dayAccumulatedStrain[bestSlot.day] + strain,
       );
+      dayDifficultyLoad[bestSlot.day] += (task.difficulty || 3);
       dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
       dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
       dayLastTaskType[bestSlot.day] = task.type || 'other';
@@ -1177,6 +1201,7 @@ export default function generateWeeklySchedule(
           MAX_STRAIN_PER_DAY,
           dayAccumulatedStrain[bestSlot.day] + strain,
         );
+        dayDifficultyLoad[bestSlot.day] += (task.difficulty || 3);
         dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
         dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
         dayLastTaskType[bestSlot.day] = task.type || 'other';
