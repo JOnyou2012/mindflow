@@ -390,7 +390,7 @@ export default function App() {
                 const result = weekResults[ws];
                 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
                 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
-                const ROW_H = 48;
+                const ROW_H = 60;
                 const d = new Date(ws + 'T00:00:00');
                 const end = new Date(d); end.setDate(end.getDate() + 6);
                 const isThisWeek = weekNum === 0;
@@ -412,8 +412,8 @@ export default function App() {
                       <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
                         {DAYS.map(day => (
                           <div key={day} className="px-1 py-1.5 text-center border-r border-mindflow-border last:border-r-0">
-                            <span className="text-[10px] font-semibold text-mindflow-heading">{day}</span>
-                            <span className="block text-[8px] text-mindflow-muted">{getDateForDay(day, ws)}</span>
+                            <span className="text-[11px] font-semibold text-mindflow-heading">{day}</span>
+                            <span className="block text-[9px] text-mindflow-muted">{getDateForDay(day, ws)}</span>
                           </div>
                         ))}
                       </div>
@@ -426,19 +426,26 @@ export default function App() {
                           <div key={day} className={`relative border-r border-mindflow-border last:border-r-0 ${isTodayCol ? 'bg-mindflow-accent/5' : ''}`} style={{ height: 17 * ROW_H + 'px' }}>
                             {HOURS.map((h, i) => (
                               <div key={h} className="absolute left-0 right-0 border-t border-mindflow-border/30" style={{ top: i * ROW_H + 'px' }}>
-                                {day === 'Mon' && <span className="absolute -left-10 top-0 text-[8px] text-mindflow-muted w-8 text-right pr-1 -translate-y-1/2">{fmtHr(h)}</span>}
+                                {day === 'Mon' && <span className="absolute -left-12 top-0 text-[9px] text-mindflow-muted w-10 text-right pr-1 -translate-y-1/2">{fmtHr(h)}</span>}
                               </div>
                             ))}
                             {calendarBlocks.filter(b => b.day === day).map(b => {
                               const c = TYPE_COLORS[b.type] || TYPE_COLORS.other;
-                              const top = (b.startHour - 6) * ROW_H, h = b.durationHours * ROW_H;
-                              return <div key={b.id} className="absolute left-1 right-1 rounded px-1 overflow-hidden" style={{ top: top + 1, height: Math.max(h - 2, 14), backgroundColor: c + '1a', borderLeft: '2px solid ' + c, zIndex: 5 }}><p className="text-[8px] font-medium text-white/70 truncate">{b.label}</p></div>;
+                              const top = (b.startHour - 6) * ROW_H, bh = b.durationHours * ROW_H;
+                              return <div key={b.id} className="absolute left-1 right-1 rounded px-1.5 py-0.5 overflow-hidden" style={{ top: top + 1, height: Math.max(bh - 2, 18), backgroundColor: c + '1a', borderLeft: '2px solid ' + c, zIndex: 5 }}>
+                                <p className="text-[10px] font-medium text-white/80 truncate">{b.label}</p>
+                                {bh >= 36 && <p className="text-[9px] text-white/50">{fmtHr(b.startHour)}–{fmtHr(b.startHour + b.durationHours)}</p>}
+                              </div>;
                             })}
                             {(result?.days?.[day]?.sessions || []).map((s, i) => {
                               const c = TYPE_COLORS[s.task.type] || TYPE_COLORS.other;
                               const sh = s.startTick / 6, eh = s.endTick / 6;
-                              const top = (sh - 6) * ROW_H, h = (eh - sh) * ROW_H;
-                              return <div key={'s'+i} className="absolute left-2 right-2 rounded px-1 overflow-hidden" style={{ top: top + 2, height: Math.max(h - 4, 12), backgroundColor: c + '44', borderLeft: '3px solid ' + c, zIndex: 10 }}><p className="text-[8px] font-semibold text-white truncate">{s.task.title}</p></div>;
+                              const top = (sh - 6) * ROW_H, bh = (eh - sh) * ROW_H;
+                              const startLabel = fmtHr(sh), endLabel = fmtHr(eh);
+                              return <div key={'s'+i} className="absolute left-2 right-2 rounded px-1.5 py-0.5 overflow-hidden" style={{ top: top + 2, height: Math.max(bh - 4, 16), backgroundColor: c + '44', borderLeft: '3px solid ' + c, zIndex: 10 }}>
+                                <p className="text-[10px] font-semibold text-white truncate">{s.task.title}</p>
+                                <p className="text-[9px] text-white/70">{startLabel}–{endLabel}</p>
+                              </div>;
                             })}
                           </div>
                           );
