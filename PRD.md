@@ -1,6 +1,6 @@
 # MindFlow — Master PRD
 
-> **Progress: 36 / 85 steps complete — 42.4%**
+> **Progress: 44 / 85 steps complete — 51.8%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
@@ -47,7 +47,7 @@
 | **14–26** | Scheduler | `src/utils/scheduler.js` — create | ✅ 13/13 — production-quality | 100% |
 | **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ✅ 4/4 — production-quality | 100% |
 | **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality | 100% |
-| **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ❌ 0/8 | 0% |
+| **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ✅ 8/8 — production-quality | 100% |
 | **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ❌ 0/6 | 0% |
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 | 0% |
 | **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 | 0% |
@@ -68,14 +68,14 @@ Steps 10–13 localStorage        ███████████████�
 Steps 14–26 Scheduler           ████████████████████████ 13/13  100%
 Steps 27–30 Welcome Screen      ████████████████████████ 4/4   100%
 Steps 31–36 Stroop Test         ████████████████████████ 6/6   100%
-Steps 37–44 Task Form           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/8     0%
+Steps 37–44 Task Form           ████████████████████████ 8/8   100%
 Steps 45–50 Calendar            ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
 Steps 51–54 Session Chart       ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
 Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           36/85   42.4%
+TOTAL                           44/85   51.8%
 ```
 
 ### Stage Completion
@@ -83,7 +83,7 @@ TOTAL                           36/85   42.4%
 | Stage | Steps | Done | % | Status |
 |-------|-------|------|---|--------|
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
-| **Stage 2: Core Components** | 14–65 | 23/52 | **44%** | 🟡 Scheduler + WelcomeScreen + StroopTest done, 4 components remain |
+| **Stage 2: Core Components** | 14–65 | 31/52 | **60%** | 🟡 Scheduler + Welcome + Stroop + TaskForm done, 3 components remain |
 | **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
@@ -93,7 +93,7 @@ TOTAL                           36/85   42.4%
 > - Stylesheet: Inter font, scoped transitions, focus rings, animations
 > - localStorage: type-guarded loaders, safe defaults, clearAll()
 >
-> **Stage 2 progress** — Scheduler (14–26) + WelcomeScreen (27–30) + StroopTest (31–36) complete:
+> **Stage 2 progress** — Scheduler (14–26) + WelcomeScreen (27–30) + StroopTest (31–36) + TaskInputForm (37–44) complete:
 > - `src/utils/scheduler.js`: two-process model, global slot matching, deadline
 >   enforcement, cumulative state propagation, cross-day carryover, task sequencing,
 >   flow-block preference, workload distribution, warnings, pre-flight, explainability
@@ -102,12 +102,16 @@ TOTAL                           36/85   42.4%
 > - `src/components/StroopTestModal.jsx`: 30-second Stroop color-word game,
 >   4 phases (intro→countdown→playing→results), computes alpha score from
 >   accuracy/response-time, color-coded results with interpretation
-> - `src/App.jsx`: rewritten with proper screen flow (Welcome→Stroop→Main),
->   localStorage persistence, calibration-aware header
+> - `src/components/TaskInputForm.jsx`: full task entry with 6 fields (title,
+>   type, priority, difficulty stars, duration with quick-set, optional deadline),
+>   task list with type/priority badges, hover-delete, Enter-key submit,
+>   validation, localStorage persistence via App.jsx
+> - `src/App.jsx`: screen flow (Welcome→Stroop→Main), calibration summary
+>   with recalibrate, task form with generate placeholder, reset clears all state
 > - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
-> - 4 UI components still to build (steps 37–65)
+> - 3 UI components still to build (steps 45–65)
 >
-> **Next:** Stage 2 continued — create `src/components/TaskInputForm.jsx` (steps 37–44)
+> **Next:** Stage 2 continued — create `src/components/WeeklyCalendar.jsx` (steps 45–50)
 
 ---
 
@@ -1333,8 +1337,8 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
 ---
 
-**Step 37** — Create `TaskInputForm.jsx` with all fields
-- [ ] 37. Copy the complete code below:
+**Step 37** — ✅ Create `TaskInputForm.jsx` with all fields
+- [x] 37. Copy the complete code below:
 
 ```jsx
 import { useState } from 'react';
@@ -1452,45 +1456,45 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 }
 ```
 
-**Step 38** — Verify all 6 fields are present
-- [ ] 38. Title: text input
-- [ ] 38. Type: 4 buttons (Academic blue, Sports green, Arts purple, Other gray)
-- [ ] 38. Priority: 3 buttons (High red, Medium yellow, Low gray)
-- [ ] 38. Difficulty: 5 star buttons with text label (Very Easy → Very Hard)
-- [ ] 38. Duration: number input + 5 quick-set buttons (15m, 30m, 1h, 1.5h, 2h)
-- [ ] 38. Deadline: optional date input
+**Step 38** — ✅ Verify all 6 fields are present
+- [x] 38. Title: text input
+- [x] 38. Type: 4 buttons (Academic blue, Sports green, Arts purple, Other gray)
+- [x] 38. Priority: 3 buttons (High red, Medium yellow, Low gray)
+- [x] 38. Difficulty: 5 star buttons with text label (Very Easy → Very Hard)
+- [x] 38. Duration: number input + 5 quick-set buttons (15m, 30m, 1h, 1.5h, 2h)
+- [x] 38. Deadline: optional date input
 
-**Step 39** — Verify validation works
-- [ ] 39. Empty title → "Enter a task title." error
-- [ ] 39. Duration < 5 → "Duration must be at least 5 minutes." error
-- [ ] 39. Duration > 480 → "Duration cannot exceed 8 hours." error
-- [ ] 39. Error clears when user starts typing in title field
+**Step 39** — ✅ Verify validation works
+- [x] 39. Empty title → "Enter a task title." error
+- [x] 39. Duration < 5 → "Duration must be at least 5 minutes." error
+- [x] 39. Duration > 480 → "Duration cannot exceed 8 hours." error
+- [x] 39. Error clears when user starts typing in title field
 
-**Step 40** — Verify task cards render with correct colors
-- [ ] 40. Type badge: colored background at 20% opacity + matching text color
-- [ ] 40. Priority badge: emoji indicator (🔴 High / 🟡 Medium / ⚪ Low) + colored background
-- [ ] 40. Duration: clock icon + minutes
-- [ ] 40. Difficulty: filled ★ + empty ☆ stars
-- [ ] 40. Deadline: calendar icon + ISO date (only if set)
+**Step 40** — ✅ Verify task cards render with correct colors
+- [x] 40. Type badge: colored background at 20% opacity + matching text color
+- [x] 40. Priority badge: emoji indicator (🔴 High / 🟡 Medium / ⚪ Low) + colored background
+- [x] 40. Duration: clock icon + minutes
+- [x] 40. Difficulty: filled ★ + empty ☆ stars
+- [x] 40. Deadline: calendar icon + ISO date (only if set)
 
-**Step 41** — Verify task deletion
-- [ ] 41. Delete (trash) button appears on hover (opacity-0 → opacity-100)
-- [ ] 41. Clicking delete removes task from list via `onChange`
-- [ ] 41. Delete button only on task cards, not on the add form
+**Step 41** — ✅ Verify task deletion
+- [x] 41. Delete (trash) button appears on hover (opacity-0 → opacity-100)
+- [x] 41. Clicking delete removes task from list via `onChange`
+- [x] 41. Delete button only on task cards, not on the add form
 
-**Step 42** — Verify Enter key submits
-- [ ] 42. Pressing Enter in the title input triggers `handleAdd`
-- [ ] 42. Does not submit if validation fails
+**Step 42** — ✅ Verify Enter key submits
+- [x] 42. Pressing Enter in the title input triggers `handleAdd`
+- [x] 42. Does not submit if validation fails
 
-**Step 43** — Verify form resets after successful add
-- [ ] 43. All fields return to defaults (title='', type='academic', difficulty=3, duration=30, priority='medium', deadline='')
-- [ ] 43. Error message clears
-- [ ] 43. New task appears at bottom of list
+**Step 43** — ✅ Verify form resets after successful add
+- [x] 43. All fields return to defaults (title='', type='academic', difficulty=3, duration=30, priority='medium', deadline='')
+- [x] 43. Error message clears
+- [x] 43. New task appears at bottom of list
 
-**Step 44** — Verify task counter and deadline counter
-- [ ] 44. "Your Tasks (N)" shows correct count
-- [ ] 44. "X with deadlines" shows correct count of tasks with non-null deadline
-- [ ] 44. Counters update immediately on add/delete
+**Step 44** — ✅ Verify task counter and deadline counter
+- [x] 44. "Your Tasks (N)" shows correct count
+- [x] 44. "X with deadlines" shows correct count of tasks with non-null deadline
+- [x] 44. Counters update immediately on add/delete
 
 ---
 

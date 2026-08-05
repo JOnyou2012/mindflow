@@ -2,7 +2,8 @@ import { useState, useEffect, Component } from 'react';
 import { Brain, AlertTriangle, Zap } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
-import { loadCalibration, saveCalibration } from './utils/storage.js';
+import TaskInputForm from './components/TaskInputForm.jsx';
+import { loadCalibration, saveCalibration, loadTasks, saveTasks } from './utils/storage.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -72,11 +73,15 @@ function App() {
     const existing = loadCalibration();
     return isValidCalibration(existing) ? existing : null;
   });
+  const [tasks, setTasks] = useState(() => loadTasks());
 
-  // Persist calibration whenever it changes
+  // Persist calibration + tasks whenever they change
   useEffect(() => {
     if (calibration) saveCalibration(calibration);
   }, [calibration]);
+  useEffect(() => {
+    saveTasks(tasks);
+  }, [tasks]);
 
   const handleWelcomeStart = () => setScreen(SCREEN.STROOP);
   const handleWelcomeSkip = () => {
@@ -122,31 +127,67 @@ function App() {
     </header>
   );
 
-  // ── Main placeholder (will be replaced by Dashboard in steps 55–65) ──
+  // ── Main screen (will expand with Calendar + Dashboard in steps 45–65) ──
   const mainScreen = (
-    <div className="flex flex-col items-center gap-6 py-16 animate-fade-in">
-      <div className="bg-mindflow-accent/15 p-5 rounded-full">
-        <Zap className="w-16 h-16 text-mindflow-accent" />
+    <div className="space-y-8 animate-fade-in">
+      {/* Calibration summary */}
+      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-mindflow-accent/15 p-3 rounded-full">
+          <Zap className="w-6 h-6 text-mindflow-accent" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-mindflow-heading">
+            Focus Score: {isValidCalibration(calibration) ? calibration.alphaScore.toFixed(2) : '1.00'}
+          </p>
+          <p className="text-xs text-mindflow-muted">
+            {calibration?.alphaScore >= 1.2 ? 'Excellent — you\'ll stay in Flow longer.' :
+             calibration?.alphaScore >= 0.9 ? 'Good — standard fatigue patterns apply.' :
+             calibration?.alphaScore >= 0.7 ? 'Moderate — schedule hard tasks early.' :
+             'Default calibration — retake the Stroop test for better accuracy.'}
+          </p>
+        </div>
+        <button
+          onClick={() => setScreen(SCREEN.STROOP)}
+          className="ml-auto text-xs text-mindflow-accent hover:underline shrink-0"
+        >
+          Recalibrate
+        </button>
       </div>
-      <div className="text-center space-y-2 max-w-lg">
-        <h2 className="text-2xl font-bold text-mindflow-heading">You're all set!</h2>
-        <p className="text-mindflow-text">
-          Your focus score is <span className="font-semibold text-mindflow-accent">{isValidCalibration(calibration) ? calibration.alphaScore.toFixed(2) : '1.00'}</span>.
-        </p>
-        <p className="text-sm text-mindflow-muted">
-          Task input, calendar, and the weekly schedule dashboard are coming next.
-        </p>
+
+      {/* Task input form */}
+      <TaskInputForm tasks={tasks} onChange={setTasks} />
+
+      {/* Generate button (wired to scheduler in steps 55–65) */}
+      {tasks.length > 0 && (
+        <div className="text-center">
+          <button
+            className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
+                       hover:opacity-90 shadow-lg shadow-mindflow-accent/25 opacity-50 cursor-not-allowed"
+            disabled
+            title="Calendar + Dashboard coming soon"
+          >
+            Generate Schedule ({tasks.length} task{tasks.length !== 1 ? 's' : ''})
+          </button>
+          <p className="text-xs text-mindflow-muted mt-2">
+            Calendar input and schedule dashboard coming in next updates
+          </p>
+        </div>
+      )}
+
+      {/* Reset */}
+      <div className="text-center pt-4 border-t border-mindflow-border">
+        <button
+          onClick={() => {
+            try { localStorage.removeItem('mindflow_calibration'); localStorage.removeItem('mindflow_tasks'); } catch {}
+            setCalibration(null);
+            setTasks([]);
+            setScreen(SCREEN.WELCOME);
+          }}
+          className="border border-mindflow-border text-mindflow-text px-4 py-2 rounded-lg text-sm hover:bg-mindflow-surface transition-colors"
+        >
+          Reset & Start Over
+        </button>
       </div>
-      <button
-        onClick={() => {
-          try { localStorage.removeItem('mindflow_calibration'); } catch {}
-          setCalibration(null);
-          setScreen(SCREEN.WELCOME);
-        }}
-        className="border border-mindflow-border text-mindflow-text px-4 py-2 rounded-lg text-sm hover:bg-mindflow-surface transition-colors"
-      >
-        Reset & Start Over
-      </button>
     </div>
   );
 
