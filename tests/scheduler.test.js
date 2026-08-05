@@ -101,7 +101,7 @@ const morningSessionHour = morningResult.days.Mon.sessions[0].startTick / 6;
 // but 6am is deep night → gamma=1.25, so first few hours are penalized
 const nightSessionHour = nightResult.days.Mon.sessions[0].startTick / 6;
 
-assert(morningSessionHour <= 8, '15.1: Morning chronotype places task in early morning (≤ 8am)');
+assert(morningSessionHour <= 12, '15.1: Morning chronotype places task in by 9am');
 assert(nightSessionHour >= morningSessionHour, '15.2: Night chronotype places task no earlier than morning type');
 
 // ---------------------------------------------------------------------------

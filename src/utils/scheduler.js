@@ -993,36 +993,45 @@ export default function generateWeeklySchedule(
     for (const slot of findFreeSlots(blocksByDay[day])) {
       let adjustedSlot = { ...slot };
 
-      // Clamp start time: no studying before 8am or after 9pm by default
+      // Clamp boundaries: no studying before 8am or after 9pm
       const STUDY_START_TICK = 48;  // 8:00 AM
       const STUDY_END_TICK = 126;   // 9:00 PM
-      if (adjustedSlot.startTick < STUDY_START_TICK) {
-        adjustedSlot.startTick = STUDY_START_TICK;
-        adjustedSlot.startHour = STUDY_START_TICK / 6;
-        adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - STUDY_START_TICK);
-        adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
-      }
-      if (adjustedSlot.endTick > STUDY_END_TICK) {
-        adjustedSlot.endTick = STUDY_END_TICK;
-        adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - adjustedSlot.startTick);
-        adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
-      }
+      const rawStart = Math.max(adjustedSlot.startTick, STUDY_START_TICK);
+      const rawEnd = Math.min(adjustedSlot.endTick, STUDY_END_TICK);
 
-      // For today: clamp start to current time (rounded up)
+      // For today: clamp start to current time
+      let effectiveStart = rawStart;
       if (isToday(day)) {
         const nowTick = Math.ceil(nowHour * 6);
-        if (nowTick > adjustedSlot.endTick) continue;
-        if (nowTick > adjustedSlot.startTick) {
-          adjustedSlot.startTick = nowTick;
-          adjustedSlot.startHour = nowTick / 6;
-          adjustedSlot.durationTicks = Math.max(0, adjustedSlot.endTick - nowTick);
-          adjustedSlot.durationHours = adjustedSlot.durationTicks / 6;
-        }
-        if (adjustedSlot.durationTicks <= 0) continue;
+        effectiveStart = Math.max(effectiveStart, nowTick);
       }
 
-      if (adjustedSlot.durationTicks > 0) {
-        allSlots.push({ ...adjustedSlot, day, maxTicks: capTicks, usedTicks: 0 });
+      if (effectiveStart >= rawEnd) continue;
+
+      // Create multiple candidate start times within the free window
+      // so tasks can be placed at morning, afternoon, or evening — not just 8am.
+      const candidateStarts = [];
+      for (let tick = effectiveStart; tick < rawEnd; tick += 6) { // every hour
+        candidateStarts.push(tick);
+      }
+      // Always include the earliest possible start
+      if (!candidateStarts.includes(effectiveStart)) {
+        candidateStarts.unshift(effectiveStart);
+      }
+
+      for (const startTick of candidateStarts) {
+        const durationTicks = Math.max(0, rawEnd - startTick);
+        if (durationTicks <= 0) continue;
+        allSlots.push({
+          startTick,
+          endTick: rawEnd,
+          startHour: startTick / 6,
+          durationTicks,
+          durationHours: durationTicks / 6,
+          day,
+          maxTicks: capTicks,
+          usedTicks: 0,
+        });
       }
     }
   }
