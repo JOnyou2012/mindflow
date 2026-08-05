@@ -35,12 +35,17 @@ export default function MarkovAnalyticsDashboard({ optimizedWeek, isCalculating,
         <Brain className="w-12 h-12 text-mindflow-muted" />
       </div>
       <p className="text-mindflow-heading text-lg font-medium">No schedule generated yet</p>
-      <p className="text-mindflow-muted text-sm text-center max-w-md">To see your optimized week:</p>
-      <div className="flex items-center gap-4 mt-2 text-xs text-mindflow-muted">
-        <span className="bg-mindflow-surface border border-mindflow-border rounded-lg px-3 py-2">1. 🧪 Calibrate</span><span>→</span>
-        <span className="bg-mindflow-surface border border-mindflow-border rounded-lg px-3 py-2">2. 📅 Add schedule + tasks</span><span>→</span>
-        <span className="bg-mindflow-surface border border-mindflow-border rounded-lg px-3 py-2">3. ⚡ Generate</span>
-      </div>
+      <p className="text-mindflow-muted text-sm text-center max-w-md">
+        Go to the Schedule tab, add your fixed events and study tasks, then click Generate.
+      </p>
+      {onRegenerate && (
+        <button
+          onClick={onRegenerate}
+          className="bg-mindflow-accent text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:opacity-90"
+        >
+          Generate Now
+        </button>
+      )}
     </div>
   );
 

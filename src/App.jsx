@@ -36,7 +36,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   // ── Stale detection ───────────────────────────────────────────────
-  const lastGeneratedRef = useRef(null);
   const dataVersionRef = useRef(0);
   const isStale = optimizedWeek && (dataVersionRef.current > 0);
 
@@ -48,8 +47,9 @@ export default function App() {
 
   // ── Generate schedule ─────────────────────────────────────────────
   const handleGenerate = useCallback(() => {
+    if (isCalculating) return; // guard against double-click
     setScheduleError(null);
-    if (!calibration) {
+    if (!calibration || typeof calibration.alphaScore !== 'number') {
       setScheduleError('Complete the calibration test first (or skip it).');
       setActiveTab('calibrate');
       return;
@@ -60,14 +60,12 @@ export default function App() {
       return;
     }
     setIsCalculating(true);
-    // Small delay so the loading state renders before the heavy computation
     setTimeout(() => {
       try {
         const result = generateWeeklySchedule(
           calendarBlocks, tasks, calibration.alphaScore, settings
         );
         setOptimizedWeek(result);
-        lastGeneratedRef.current = Date.now();
         dataVersionRef.current = 0;
         setIsCalculating(false);
         setActiveTab('dashboard');
@@ -77,7 +75,7 @@ export default function App() {
         setIsCalculating(false);
       }
     }, 150);
-  }, [calibration, calendarBlocks, tasks, settings]);
+  }, [calibration, calendarBlocks, tasks, settings, isCalculating]);
 
   // ── Handlers ──────────────────────────────────────────────────────
   const handleCalibrationComplete = (cal) => { setCalibration(cal); setShowWelcome(false); };
@@ -268,7 +266,6 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <MarkovAnalyticsDashboard
             optimizedWeek={optimizedWeek}
-            alpha={calibration?.alphaScore || 1.0}
             isCalculating={isCalculating}
             isStale={isStale}
             onRegenerate={handleGenerate}
