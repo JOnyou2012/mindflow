@@ -370,22 +370,22 @@ export default function App() {
           )}
         </div>
 
-        {/* Results — all weeks side by side, scroll horizontally */}
+        {/* Results — ALWAYS show 4 weeks, scroll horizontally */}
         {hasResults && (
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-6" style={{ minWidth: Object.keys(weekResults).length * 900 + 'px' }}>
-              {Object.keys(weekResults).sort().map(ws => {
+          <div className="overflow-x-auto pb-4 -mx-4 px-4" style={{ scrollSnapType: 'x mandatory' }}>
+            <div className="flex gap-6" style={{ minWidth: '3500px' }}>
+              {[0, 1, 2, 3].map(weekNum => {
+                const ws = getWeekStart(weekNum);
                 const result = weekResults[ws];
-                if (!result) return null;
                 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
                 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
                 const ROW_H = 48;
                 const d = new Date(ws + 'T00:00:00');
                 const end = new Date(d); end.setDate(end.getDate() + 6);
-                const isThisWeek = ws === getWeekStart(0);
+                const isThisWeek = weekNum === 0;
 
                 return (
-                  <div key={ws} className="shrink-0 space-y-3" style={{ width: '860px' }}>
+                  <div key={ws} className="shrink-0 space-y-3 snap-start" style={{ width: '860px' }}>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-mindflow-heading">
                         {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -393,10 +393,11 @@ export default function App() {
                         {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </h3>
                       {isThisWeek && <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-2 py-0.5 rounded-full">This week</span>}
-                      {result.stats && <span className="text-xs text-mindflow-muted">{result.stats.totalScheduledHours}h</span>}
+                      {result?.stats && <span className="text-xs text-mindflow-muted">{result.stats.totalScheduledHours}h scheduled</span>}
+                      {!result && <span className="text-xs text-mindflow-muted">(empty)</span>}
                     </div>
 
-                    {result.stats && (
+                    {result?.stats && (
                       <div className="grid grid-cols-4 gap-2 text-center">
                         {[[result.stats.utilizationPct+'%','Capacity'],[result.stats.workloadBalance+'%','Balance'],[(result.stats.avgFatigue||0)+'%','Fatigue'],[result.stats.totalScheduledHours+'h','Hours']].map(([v,l],i)=>(
                           <div key={i} className="bg-mindflow-surface border border-mindflow-border rounded-lg py-1.5">
@@ -428,7 +429,7 @@ export default function App() {
                               const top = (b.startHour - 6) * ROW_H, h = b.durationHours * ROW_H;
                               return <div key={b.id} className="absolute left-1 right-1 rounded px-1 overflow-hidden" style={{ top: top + 1, height: Math.max(h - 2, 14), backgroundColor: c + '1a', borderLeft: '2px solid ' + c, zIndex: 5 }}><p className="text-[8px] font-medium text-white/70 truncate">{b.label}</p></div>;
                             })}
-                            {(result.days[day]?.sessions || []).map((s, i) => {
+                            {(result?.days?.[day]?.sessions || []).map((s, i) => {
                               const c = TYPE_COLORS[s.task.type] || TYPE_COLORS.other;
                               const sh = s.startTick / 6, eh = s.endTick / 6;
                               const top = (sh - 6) * ROW_H, h = (eh - sh) * ROW_H;
@@ -439,10 +440,10 @@ export default function App() {
                       </div>
                     </div>
 
-                    {result.warnings?.length > 0 && result.warnings.map((w,i) => (
+                    {result?.warnings?.length > 0 && result.warnings.map((w,i) => (
                       <div key={i} className="text-[10px] text-mindflow-warning bg-mindflow-warning/10 rounded px-2 py-1">⚠ {w.message}</div>
                     ))}
-                    {result.unscheduled?.length > 0 && (
+                    {result?.unscheduled?.length > 0 && (
                       <div className="text-[10px] text-mindflow-muted">+{result.unscheduled.length} task{result.unscheduled.length!==1?'s':''} rolled to next week</div>
                     )}
                   </div>
