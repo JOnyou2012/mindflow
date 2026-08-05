@@ -2,8 +2,9 @@ import { useState, useEffect, Component } from 'react';
 import { Brain, AlertTriangle, Zap } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
+import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
-import { loadCalibration, saveCalibration, loadTasks, saveTasks } from './utils/storage.js';
+import { loadCalibration, saveCalibration, loadCalendar, saveCalendar, loadTasks, saveTasks } from './utils/storage.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -45,7 +46,7 @@ class ErrorBoundary extends Component {
 // Screen constants
 // ---------------------------------------------------------------------------
 
-const SCREEN = { WELCOME: 'welcome', STROOP: 'stroop', MAIN: 'main' };
+const SCREEN = { WELCOME: 'welcome', STROOP: 'stroop', CALENDAR: 'calendar', MAIN: 'main' };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,12 +74,16 @@ function App() {
     const existing = loadCalibration();
     return isValidCalibration(existing) ? existing : null;
   });
+  const [calendarBlocks, setCalendarBlocks] = useState(() => loadCalendar());
   const [tasks, setTasks] = useState(() => loadTasks());
 
-  // Persist calibration + tasks whenever they change
+  // Persist calibration + calendar + tasks whenever they change
   useEffect(() => {
     if (calibration) saveCalibration(calibration);
   }, [calibration]);
+  useEffect(() => {
+    saveCalendar(calendarBlocks);
+  }, [calendarBlocks]);
   useEffect(() => {
     saveTasks(tasks);
   }, [tasks]);
@@ -95,12 +100,12 @@ function App() {
     } else {
       setCalibration(DEFAULT_CALIBRATION);
     }
-    setScreen(SCREEN.MAIN);
+    setScreen(SCREEN.CALENDAR);
   };
 
   const handleStroopSkip = () => {
     setCalibration(DEFAULT_CALIBRATION);
-    setScreen(SCREEN.MAIN);
+    setScreen(SCREEN.CALENDAR);
   };
 
   // ── Header ──
@@ -178,8 +183,9 @@ function App() {
       <div className="text-center pt-4 border-t border-mindflow-border">
         <button
           onClick={() => {
-            try { localStorage.removeItem('mindflow_calibration'); localStorage.removeItem('mindflow_tasks'); } catch {}
+            try { localStorage.removeItem('mindflow_calibration'); localStorage.removeItem('mindflow_calendar'); localStorage.removeItem('mindflow_tasks'); } catch {}
             setCalibration(null);
+            setCalendarBlocks([]);
             setTasks([]);
             setScreen(SCREEN.WELCOME);
           }}
@@ -204,6 +210,34 @@ function App() {
             onSkip={handleStroopSkip}
             existingCalibration={calibration}
           />
+        )}
+        {screen === SCREEN.CALENDAR && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-mindflow-heading">Your Weekly Schedule</h2>
+              <p className="text-sm text-mindflow-muted max-w-lg mx-auto">
+                Add your fixed commitments — classes, work, sports practice. The scheduler
+                will fit your study tasks into the gaps.
+              </p>
+            </div>
+            <WeeklyCalendar blocks={calendarBlocks} onChange={setCalendarBlocks} />
+            <div className="flex justify-center gap-3 pt-4">
+              <button
+                onClick={() => setScreen(SCREEN.MAIN)}
+                className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
+                           hover:opacity-90 shadow-lg shadow-mindflow-accent/25"
+              >
+                Continue to Tasks
+              </button>
+              <button
+                onClick={() => setScreen(SCREEN.MAIN)}
+                className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl
+                           text-sm hover:bg-mindflow-surface transition-colors"
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
         )}
         {screen === SCREEN.MAIN && mainScreen}
       </main>

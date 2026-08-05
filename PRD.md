@@ -1,6 +1,6 @@
 # MindFlow — Master PRD
 
-> **Progress: 44 / 85 steps complete — 51.8%**
+> **Progress: 50 / 85 steps complete — 58.8%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
@@ -48,7 +48,7 @@
 | **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ✅ 4/4 — production-quality | 100% |
 | **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ✅ 8/8 — production-quality | 100% |
-| **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ❌ 0/6 | 0% |
+| **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 | 0% |
 | **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 | 0% |
 | **66–74** | App Shell | `src/App.jsx` — rewrite | 🟡 0/9 (prototype hardened) | 0%* |
@@ -69,13 +69,13 @@ Steps 14–26 Scheduler           ███████████████�
 Steps 27–30 Welcome Screen      ████████████████████████ 4/4   100%
 Steps 31–36 Stroop Test         ████████████████████████ 6/6   100%
 Steps 37–44 Task Form           ████████████████████████ 8/8   100%
-Steps 45–50 Calendar            ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
+Steps 45–50 Calendar            ████████████████████████ 6/6   100%
 Steps 51–54 Session Chart       ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
 Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           44/85   51.8%
+TOTAL                           50/85   58.8%
 ```
 
 ### Stage Completion
@@ -83,7 +83,7 @@ TOTAL                           44/85   51.8%
 | Stage | Steps | Done | % | Status |
 |-------|-------|------|---|--------|
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
-| **Stage 2: Core Components** | 14–65 | 31/52 | **60%** | 🟡 Scheduler + Welcome + Stroop + TaskForm done, 3 components remain |
+| **Stage 2: Core Components** | 14–65 | 37/52 | **71%** | 🟡 Scheduler + 4 UI components done, 2 remain |
 | **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
@@ -113,7 +113,7 @@ TOTAL                           44/85   51.8%
 > - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
 > - 3 UI components still to build (steps 45–65)
 >
-> **Next:** Stage 2 continued — create `src/components/WeeklyCalendar.jsx` (steps 45–50)
+> **Next:** Stage 2 continued — create `src/components/SessionChart.jsx` (steps 51–54)
 
 ---
 
@@ -1506,8 +1506,8 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 
 ---
 
-**Step 45** — Create `WeeklyCalendar.jsx` with grid and quick-adds
-- [ ] 45. Copy the complete code below:
+**Step 45** — ✅ Create `WeeklyCalendar.jsx` with grid and quick-adds
+- [x] 45. Copy the complete code below:
 
 ```jsx
 import { useState } from 'react';
@@ -1613,35 +1613,35 @@ export default function WeeklyCalendar({ blocks = [], onChange }) {
 }
 ```
 
-**Step 46** — Verify quick-add presets
-- [ ] 46. 4 quick-add buttons: School Day (Mon–Fri, 8am–3pm), Half Day (Mon–Fri, 8am–12pm), Sports (Mon/Wed/Fri, 3pm–5pm), Art Class (Tue/Thu, 2pm–3:30pm)
-- [ ] 46. Each button colored by type with matching icon
-- [ ] 46. Clicking a preset adds blocks to all specified days at once
+**Step 46** — ✅ Verify quick-add presets
+- [x] 46. 4 quick-add buttons: School Day (Mon–Fri, 8am–3pm), Half Day (Mon–Fri, 8am–12pm), Sports (Mon/Wed/Fri, 3pm–5pm), Art Class (Tue/Thu, 2pm–3:30pm)
+- [x] 46. Each button colored by type with matching icon
+- [x] 46. Clicking a preset adds blocks to all specified days at once
 
-**Step 47** — Verify 7×16 grid renders correctly
-- [ ] 47. 7 columns (Mon–Sun), 16 rows (6am–10pm)
-- [ ] 47. Day headers show day name + block count per day
-- [ ] 47. Time labels on left side of Monday column (6am, 7am... 9pm)
-- [ ] 47. Grid has `calendar-grid` class for custom scrollbar styling
+**Step 47** — ✅ Verify 7×16 grid renders correctly
+- [x] 47. 7 columns (Mon–Sun), 16 rows (6am–10pm)
+- [x] 47. Day headers show day name + block count per day
+- [x] 47. Time labels on left side of Monday column (6am, 7am... 9pm)
+- [x] 47. Grid has `calendar-grid` class for custom scrollbar styling
 
-**Step 48** — Verify color-coded blocks
-- [ ] 48. Academic blocks: blue left border + blue tinted background
-- [ ] 48. Sports blocks: green left border + green tint
-- [ ] 48. Arts blocks: purple left border + purple tint
-- [ ] 48. Other blocks: gray left border + gray tint
-- [ ] 48. Block height proportional to duration (ROW_H = 48px per hour)
+**Step 48** — ✅ Verify color-coded blocks
+- [x] 48. Academic blocks: blue left border + blue tinted background
+- [x] 48. Sports blocks: green left border + green tint
+- [x] 48. Arts blocks: purple left border + purple tint
+- [x] 48. Other blocks: gray left border + gray tint
+- [x] 48. Block height proportional to duration (ROW_H = 48px per hour)
 
-**Step 49** — Verify click interactions
-- [ ] 49. Click empty space → add popover opens with day/time pre-filled
-- [ ] 49. Click existing block → edit popover opens with all fields pre-filled
-- [ ] 49. Popover backdrop click closes without saving
-- [ ] 49. Popover has: day/time display, label input, duration buttons, type buttons, save button
-- [ ] 49. Edit mode additionally shows delete (trash) button
+**Step 49** — ✅ Verify click interactions
+- [x] 49. Click empty space → add popover opens with day/time pre-filled
+- [x] 49. Click existing block → edit popover opens with all fields pre-filled
+- [x] 49. Popover backdrop click closes without saving
+- [x] 49. Popover has: day/time display, label input, duration buttons, type buttons, save button
+- [x] 49. Edit mode additionally shows delete (trash) button
 
-**Step 50** — Verify mobile responsiveness
-- [ ] 50. Grid has `overflow-x-auto` for horizontal scroll on narrow screens
-- [ ] 50. `min-width: 840px` on grid ensures columns don't collapse below readability
-- [ ] 50. Quick-add buttons wrap with `flex-wrap`
+**Step 50** — ✅ Verify mobile responsiveness
+- [x] 50. Grid has `overflow-x-auto` for horizontal scroll on narrow screens
+- [x] 50. `min-width: 840px` on grid ensures columns don't collapse below readability
+- [x] 50. Quick-add buttons wrap with `flex-wrap`
 
 ---
 
