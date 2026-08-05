@@ -84,14 +84,17 @@ export default function App() {
         const results = {};
         let remaining = [...tasks];
         let w = 0;
-        // Cascade: fill week 0, roll unscheduled to week 1, etc.
+        // Cascade with per-week capacity limit. Don't fill any week
+        // beyond 70% — forces tasks to spread into future weeks when
+        // deadlines allow it. Later weeks use higher limits.
         while (remaining.length > 0 && w < 8) {
           const ws = getWeekStart(w);
-          const result = generateWeeklySchedule(calendarBlocks, remaining, calibration.alphaScore, settings, ws);
+          // Week 0: 60% max, week 1: 70%, week 2+: 80%
+          const weekCap = 0.60 + Math.min(w * 0.10, 0.20);
+          const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
+          const result = generateWeeklySchedule(calendarBlocks, remaining, calibration.alphaScore, cappedSettings, ws);
           results[ws] = result;
           remaining = result.unscheduled || [];
-          // For subsequent weeks, clear calendar blocks (school schedule is weekly)
-          // and pass the unscheduled tasks as the only tasks for that week
           w++;
         }
         setWeekResults(results);
