@@ -45,13 +45,13 @@ const QUICK_PRESETS = [
 ];
 
 export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null }) {
-  // Compute dates for day headers
+  // Compute dates for day headers (timezone-safe)
   const getDayDate = (dayName) => {
     if (!weekStart) return '';
+    const [y, m, d] = weekStart.split('-').map(Number);
     const idx = DAYS.indexOf(dayName);
-    const d = new Date(weekStart + 'T00:00:00');
-    d.setDate(d.getDate() + idx);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const date = new Date(y, m - 1, d + idx);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
   // -- Form state --
   const [label, setLabel] = useState('');

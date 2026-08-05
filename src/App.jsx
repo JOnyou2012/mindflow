@@ -21,23 +21,23 @@ function fmtHr(h) {
   return `${d}${p}`;
 }
 
-// Compute this week's Monday as ISO date string
+// Compute this week's Monday as ISO date string (timezone-safe)
 function getWeekMonday() {
   const now = new Date();
   const day = now.getDay();
   const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(now);
-  mon.setDate(mon.getDate() + diff);
-  return mon.toISOString().split('T')[0];
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  const y = mon.getFullYear(), m = String(mon.getMonth() + 1).padStart(2, '0'), d = String(mon.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
 }
 
 function getDateForDay(dayName, weekStart) {
   const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const idx = DAYS.indexOf(dayName);
   if (idx < 0) return '';
-  const d = new Date(weekStart + 'T00:00:00');
-  d.setDate(d.getDate() + idx);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const [y, m, d] = weekStart.split('-').map(Number);
+  const date = new Date(y, m - 1, d + idx);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function App() {

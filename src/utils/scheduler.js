@@ -884,12 +884,15 @@ export default function generateWeeklySchedule(
   // Only enforce past-day blocking when caller passes real week dates
   const enforceRealDates = !!weekStartDate;
 
-  // Compute actual date for a day name
+  // Compute actual date for a day name (timezone-safe: use local date parts)
   const dateForDay = (dayName) => {
+    const [y, m, d] = wsDate.split('-').map(Number);
     const idx = DAY_INDEX[dayName];
-    const d = new Date(wsDate + 'T00:00:00');
-    d.setDate(d.getDate() + idx);
-    return d.toISOString().split('T')[0];
+    const date = new Date(y, m - 1, d + idx);
+    const yy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return yy + '-' + mm + '-' + dd;
   };
 
   // Check if a day is in the past (before today) — only when using real dates
