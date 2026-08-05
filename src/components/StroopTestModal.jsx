@@ -1,52 +1,137 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Brain, Zap, Clock, RefreshCw, Target } from 'lucide-react';
+import { Brain, Zap, Clock, RefreshCw, Target, Keyboard } from 'lucide-react';
 
+// 4 colors mapped to 4 keyboard keys — user must learn this mapping
 const COLORS = [
-  { name: 'Red', hex: '#ef4444' }, { name: 'Blue', hex: '#3b82f6' },
-  { name: 'Green', hex: '#22c55e' }, { name: 'Yellow', hex: '#eab308' },
-  { name: 'Purple', hex: '#8b5cf6' },
+  { name: 'Red',    hex: '#ef4444', key: 'r' },
+  { name: 'Green',  hex: '#22c55e', key: 'g' },
+  { name: 'Blue',   hex: '#3b82f6', key: 'b' },
+  { name: 'Yellow', hex: '#eab308', key: 'y' },
 ];
-const GAME_MS = 30000, CD_START = 3;
+const COLOR_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c]));
+const COLOR_BY_NAME = Object.fromEntries(COLORS.map(c => [c.name.toLowerCase(), c]));
+
+const GAME_SECS = 60;
+const GAME_MS = GAME_SECS * 1000;
+const CD_START = 3;
+
+// Trial types for research-validated Stroop interference measurement
+const TRIAL_TYPES = {
+  INCONGRUENT: 'incongruent',   // word ≠ ink color — the Stroop conflict
+  CONGRUENT: 'congruent',       // word = ink color — baseline (no conflict)
+};
 
 export default function StroopTestModal({ onComplete, onSkip, existingCalibration }) {
   const [phase, setPhase] = useState('intro');
   const [countdown, setCountdown] = useState(CD_START);
-  const [currentWord, setCurrentWord] = useState(null);
-  const [answerOptions, setAnswerOptions] = useState([]);
+  const [currentWord, setCurrentWord] = useState(null);      // { name, hex, trialType }
   const [trialId, setTrialId] = useState(0);
   const [results, setResults] = useState(null);
   const [timeLeft, setTimeLeft] = useState(GAME_MS);
+  const [lastFeedback, setLastFeedback] = useState(null);    // 'correct' | 'wrong' | 'lapse' | null
 
-  const gameStartRef = useRef(0), totalTrialsRef = useRef(0), correctTrialsRef = useRef(0);
-  const totalTimeRef = useRef(0), trialStartRef = useRef(0), timerRef = useRef(null);
-  const correctHexRef = useRef(null);  // avoids stale-closure race with currentWord state
+  // Refs for performance (no re-render on every trial)
+  const gameStartRef = useRef(0);
+  const trialStartRef = useRef(0);
+  const timerRef = useRef(null);
+  const feedbackTimerRef = useRef(null);
+
+  // Trial data stored in refs for scoring — avoids state update overhead
+  const trialsRef = useRef([]);          // [{ rt, correct, trialType, inkColor }]
+
+  const correctInkRef = useRef(null);    // hex of correct answer for current trial
+
+  // -- Trial generation -------------------------------------------------------
 
   const generateTrial = useCallback(() => {
-    const word = COLORS[Math.floor(Math.random() * COLORS.length)];
-    let display;
-    do { display = COLORS[Math.floor(Math.random() * COLORS.length)]; } while (display.name === word.name);
-    correctHexRef.current = display.hex;
-    setCurrentWord({ name: word.name, hex: display.hex });
-    const wrong = COLORS.filter(c => c.hex !== display.hex).sort(() => Math.random() - 0.5).slice(0, 3);
-    setAnswerOptions([display, ...wrong].sort(() => Math.random() - 0.5));
+    // ~25% congruent (word = ink), ~75% incongruent (word ≠ ink)
+    const isCongruent = Math.random() < 0.25;
+
+    let wordColor, inkColor;
+    if (isCongruent) {
+      inkColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+      wordColor = inkColor;
+    } else {
+      inkColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+      do {
+        wordColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+      } while (wordColor.name === inkColor.name);
+    }
+
+    correctInkRef.current = inkColor.hex;
+    setCurrentWord({
+      name: wordColor.name,
+      hex: inkColor.hex,
+      trialType: isCongruent ? TRIAL_TYPES.CONGRUENT : TRIAL_TYPES.INCONGRUENT,
+    });
     trialStartRef.current = performance.now();
   }, []);
 
-  const handleAnswer = useCallback((color) => {
-    totalTrialsRef.current++;
-    totalTimeRef.current += performance.now() - trialStartRef.current;
-    if (color.hex === correctHexRef.current) correctTrialsRef.current++;
-    setTrialId(id => id + 1);
-  }, []);
+  // -- Keyboard handler -------------------------------------------------------
 
-  useEffect(() => { if (phase === 'playing') generateTrial(); }, [trialId, phase, generateTrial]);
+  const handleKeyDown = useCallback((e) => {
+    if (phase !== 'playing') return;
+
+    const key = e.key.toLowerCase();
+    const color = COLOR_BY_KEY[key];
+    if (!color) return; // ignore non-color keys
+
+    e.preventDefault();
+
+    const rt = performance.now() - trialStartRef.current;
+    const correct = color.hex === correctInkRef.current;
+
+    trialsRef.current.push({
+      rt: Math.round(rt),
+      correct,
+      trialType: currentWord?.trialType || TRIAL_TYPES.INCONGRUENT,
+      inkColor: currentWord?.hex || '',
+    });
+
+    // Show brief feedback
+    if (rt > 1500) {
+      setLastFeedback('lapse');
+    } else if (correct) {
+      setLastFeedback('correct');
+    } else {
+      setLastFeedback('wrong');
+    }
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => setLastFeedback(null), 250);
+
+    setTrialId(id => id + 1);
+  }, [phase, currentWord]);
+
+  // Listen for keyboard
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    };
+  }, [handleKeyDown]);
+
+  // Generate new trial when trialId changes
+  useEffect(() => {
+    if (phase === 'playing') generateTrial();
+  }, [trialId, phase, generateTrial]);
+
+  // -- Countdown --------------------------------------------------------------
 
   useEffect(() => {
     if (phase !== 'countdown') return;
-    if (countdown <= 0) { setPhase('playing'); gameStartRef.current = performance.now(); setTrialId(0); setTimeLeft(GAME_MS); return; }
+    if (countdown <= 0) {
+      setPhase('playing');
+      gameStartRef.current = performance.now();
+      setTrialId(0);
+      setTimeLeft(GAME_MS);
+      return;
+    }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [phase, countdown]);
+
+  // -- Game timer -------------------------------------------------------------
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -55,18 +140,84 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       setTimeLeft(remaining);
       if (remaining <= 0) {
         clearInterval(timerRef.current);
-        const acc = totalTrialsRef.current > 0 ? correctTrialsRef.current / totalTrialsRef.current : 0;
-        const avg = totalTrialsRef.current > 0 ? totalTimeRef.current / totalTrialsRef.current : 0;
-        const raw = avg > 0 ? acc / (avg / 1000) : 0;
-        setResults({ accuracy: acc, avgResponseTimeMs: Math.round(avg), alphaScore: Math.max(0.5, Math.min(1.5, raw)) });
-        setPhase('results');
+        computeResults();
       }
     }, 50);
     return () => clearInterval(timerRef.current);
   }, [phase]);
 
-  const start = () => { totalTrialsRef.current = 0; correctTrialsRef.current = 0; totalTimeRef.current = 0; setCountdown(CD_START); setPhase('countdown'); };
-  const alphaColor = (a) => a >= 1.2 ? 'text-mindflow-success' : a >= 0.9 ? 'text-mindflow-accent' : a >= 0.7 ? 'text-mindflow-warning' : 'text-mindflow-danger';
+  // -- Scoring (research-backed multi-factor) ---------------------------------
+
+  const computeResults = () => {
+    const trials = trialsRef.current;
+    if (trials.length === 0) {
+      setResults({ accuracy: 0, avgResponseTimeMs: 0, alphaScore: 0.5, trialCount: 0 });
+      setPhase('results');
+      return;
+    }
+
+    const correct = trials.filter(t => t.correct);
+    const accuracy = correct.length / trials.length;
+
+    const rts = trials.map(t => t.rt);
+    const meanRT = rts.reduce((a, b) => a + b, 0) / rts.length;
+
+    // RT variability (standard deviation) — higher = poorer sustained attention
+    const variance = rts.reduce((s, rt) => s + (rt - meanRT) ** 2, 0) / rts.length;
+    const rtSD = Math.sqrt(variance);
+
+    // Lapses — attention failures (RT > 1500ms)
+    const lapses = trials.filter(t => t.rt > 1500).length;
+
+    // Stroop interference: incongruent RT minus congruent RT
+    const congruent = trials.filter(t => t.trialType === TRIAL_TYPES.CONGRUENT);
+    const incongruent = trials.filter(t => t.trialType === TRIAL_TYPES.INCONGRUENT);
+    const congruentRT = congruent.length > 0
+      ? congruent.reduce((s, t) => s + t.rt, 0) / congruent.length
+      : meanRT;
+    const incongruentRT = incongruent.length > 0
+      ? incongruent.reduce((s, t) => s + t.rt, 0) / incongruent.length
+      : meanRT;
+    const interference = Math.max(0, incongruentRT - congruentRT);
+
+    // Multi-factor composite score (each factor contributes to 0-100 scale)
+    const accuracyScore = accuracy * 30;                                     // max 30
+    const speedScore = Math.max(0, 25 - (meanRT - 400) / 40);               // 400ms→25, 1400ms→0
+    const consistencyScore = Math.max(0, 25 - rtSD / 16);                   // SD 0→25, SD 400→0
+    const lapsePenalty = Math.min(20, lapses * 4);                           // each lapse costs 4
+    const interferencePenalty = Math.min(20, interference / 10);            // 0ms→0, 200ms→20
+
+    const total = accuracyScore + speedScore + consistencyScore
+                - lapsePenalty - interferencePenalty;
+
+    // Map to 0.5–1.5 range (total is roughly 0-100, so divide by ~66)
+    const alphaScore = Math.max(0.5, Math.min(1.5, total / 55));
+
+    setResults({
+      accuracy,
+      avgResponseTimeMs: Math.round(meanRT),
+      rtVariabilityMs: Math.round(rtSD),
+      lapses,
+      interferenceMs: Math.round(interference),
+      alphaScore: Math.round(alphaScore * 100) / 100,
+      trialCount: trials.length,
+    });
+    setPhase('results');
+  };
+
+  // -- Actions ----------------------------------------------------------------
+
+  const start = () => {
+    trialsRef.current = [];
+    setCountdown(CD_START);
+    setPhase('countdown');
+    setLastFeedback(null);
+  };
+
+  const alphaColor = (a) =>
+    a >= 1.2 ? 'text-mindflow-success' :
+    a >= 0.9 ? 'text-mindflow-accent' :
+    a >= 0.7 ? 'text-mindflow-warning' : 'text-mindflow-danger';
 
   const handleSkip = () => {
     if (onSkip) {
@@ -76,93 +227,268 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     }
   };
 
-  // ── INTRO ──
+  // ===========================================================================
+  // INTRO
+  // ===========================================================================
   if (phase === 'intro') return (
     <div className="flex flex-col items-center gap-6 py-12 animate-fade-in">
       <div className="bg-mindflow-surface p-5 rounded-full border border-mindflow-border">
         <Brain className="w-16 h-16 text-mindflow-accent" />
       </div>
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-mindflow-heading">Cognitive Baseline Test</h2>
-        <p className="text-mindflow-text max-w-lg">Words appear in <strong>mismatched colors</strong>. Click the <strong>font color</strong>, not the word text. Answer fast for 30 seconds.</p>
+
+      <div className="text-center space-y-2 max-w-lg">
+        <h2 className="text-2xl font-bold text-mindflow-heading">Concentration Baseline Test</h2>
+        <p className="text-mindflow-text">
+          Words appear in <strong>mismatched colors</strong>. Press the key for the{' '}
+          <strong>ink color</strong>, not the word. <strong>{GAME_SECS} seconds</strong>.
+        </p>
       </div>
+
+      {/* Key mapping */}
+      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-5 w-full max-w-sm">
+        <p className="text-xs text-mindflow-muted uppercase tracking-wide text-center mb-3">Key Mapping — Memorize These</p>
+        <div className="grid grid-cols-4 gap-2">
+          {COLORS.map(c => (
+            <div key={c.key} className="text-center space-y-1">
+              <div className="w-10 h-10 rounded-lg mx-auto border-2 border-white/20" style={{ backgroundColor: c.hex }} />
+              <p className="text-[10px] text-mindflow-muted">{c.name}</p>
+              <p className="text-lg font-bold text-mindflow-heading">{c.key.toUpperCase()}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Example */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-6 text-center space-y-3 max-w-sm">
         <p className="text-xs text-mindflow-muted uppercase tracking-wide">Example</p>
-        <p className="text-4xl font-bold" style={{ color: '#22c55e' }}>Red</p>
-        <p className="text-xs text-mindflow-muted">Word says <span className="text-red-400">Red</span>, color is <span className="text-green-400">Green</span> → click <span className="text-green-400 font-bold">Green</span></p>
+        <p className="text-4xl font-bold" style={{ color: '#22c55e' }}>BLUE</p>
+        <p className="text-xs text-mindflow-muted">
+          Word says <span className="text-blue-400">BLUE</span>, ink is{' '}
+          <span className="text-green-400 font-bold">Green</span> → press{' '}
+          <kbd className="px-1.5 py-0.5 rounded bg-mindflow-bg border border-mindflow-border text-mindflow-heading text-xs font-bold">G</kbd>
+        </p>
       </div>
+
       {existingCalibration && (
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl px-4 py-3 flex items-center gap-3">
           <Target className="w-5 h-5 text-mindflow-muted" />
           <span className="text-sm text-mindflow-text">Previous score:</span>
-          <span className={`text-sm font-bold ${alphaColor(existingCalibration.alphaScore)}`}>{existingCalibration.alphaScore.toFixed(2)}</span>
+          <span className={`text-sm font-bold ${alphaColor(existingCalibration.alphaScore)}`}>
+            {existingCalibration.alphaScore.toFixed(2)}
+          </span>
         </div>
       )}
-      <button onClick={start} className="bg-mindflow-accent text-white px-10 py-3.5 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25">Start Test</button>
-      <button onClick={handleSkip} className="text-mindflow-muted hover:text-mindflow-text text-sm underline underline-offset-4 transition-colors">Skip for now (use default focus score)</button>
-      <p className="text-xs text-mindflow-muted">30 seconds · No preparation needed</p>
+
+      <button onClick={start} className="bg-mindflow-accent text-white px-10 py-3.5 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25">
+        Start Test ({GAME_SECS}s)
+      </button>
+      <button onClick={handleSkip} className="text-mindflow-muted hover:text-mindflow-text text-sm underline underline-offset-4 transition-colors">
+        Skip for now (use default focus score)
+      </button>
+      <p className="text-xs text-mindflow-muted">
+        {GAME_SECS} seconds · Keep your fingers on R, G, B, Y
+      </p>
     </div>
   );
 
-  // ── COUNTDOWN ──
+  // ===========================================================================
+  // COUNTDOWN
+  // ===========================================================================
   if (phase === 'countdown') return (
     <div className="flex items-center justify-center py-32">
       <div className="text-center space-y-4">
         <p className="text-mindflow-muted text-sm uppercase tracking-widest">Get Ready</p>
         <span className="text-8xl font-black text-mindflow-accent animate-pulse">{countdown}</span>
+        <p className="text-xs text-mindflow-muted">Fingers on <kbd className="px-1 py-0.5 rounded bg-mindflow-bg border border-mindflow-border text-xs font-bold">R G B Y</kbd></p>
       </div>
     </div>
   );
 
-  // ── PLAYING ──
+  // ===========================================================================
+  // PLAYING
+  // ===========================================================================
   if (phase === 'playing') {
     if (!currentWord) {
-      // Brief guard: wait for first trial to generate before painting game UI
       return (
         <div className="flex items-center justify-center py-32">
           <p className="text-mindflow-muted text-sm animate-pulse">Starting...</p>
         </div>
       );
     }
+
     const pct = (timeLeft / GAME_MS) * 100;
     const barColor = pct > 50 ? 'bg-mindflow-success' : pct > 25 ? 'bg-mindflow-warning' : 'bg-mindflow-danger';
+
     return (
-      <div className="flex flex-col items-center gap-8 py-8">
+      <div className="flex flex-col items-center gap-6 py-8 select-none">
+        {/* Timer + progress */}
         <div className="w-full max-w-md space-y-1">
-          <div className="flex justify-between text-xs text-mindflow-muted"><span>{(timeLeft/1000).toFixed(0)}s</span><span>{totalTrialsRef.current} trials</span></div>
-          <div className="w-full h-2.5 bg-mindflow-bg rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-100 ${barColor}`} style={{ width: pct + '%' }} /></div>
+          <div className="flex justify-between text-xs text-mindflow-muted">
+            <span>{(timeLeft / 1000).toFixed(0)}s</span>
+            <span>{trialsRef.current.length} trials</span>
+          </div>
+          <div className="w-full h-2 bg-mindflow-bg rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-100 ${barColor}`}
+              style={{ width: pct + '%' }} />
+          </div>
         </div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-2xl px-16 py-12"><p className="text-6xl font-black select-none tracking-tight" style={{ color: currentWord.hex }}>{currentWord.name}</p></div>
-        <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
-          {answerOptions.map((c) => (
-            <button key={c.hex} onClick={() => handleAnswer(c)} className="px-4 py-3.5 rounded-xl text-white font-semibold text-sm hover:scale-105 active:scale-95 transition-transform shadow-lg" style={{ backgroundColor: c.hex }}>{c.name}</button>
+
+        {/* The word — shown in ink color, user presses key for ink color */}
+        <div className="relative">
+          <div
+            className={`bg-mindflow-surface border-2 rounded-2xl px-20 py-14 transition-colors duration-150
+              ${lastFeedback === 'correct' ? 'border-mindflow-success shadow-lg shadow-mindflow-success/20' :
+                lastFeedback === 'wrong' ? 'border-mindflow-danger shadow-lg shadow-mindflow-danger/20' :
+                lastFeedback === 'lapse' ? 'border-mindflow-warning shadow-lg shadow-mindflow-warning/20' :
+                'border-mindflow-border'}`}
+          >
+            <p
+              className="text-7xl font-black tracking-tight text-center"
+              style={{ color: currentWord.hex }}
+            >
+              {currentWord.name.toUpperCase()}
+            </p>
+          </div>
+
+          {/* Feedback flash */}
+          {lastFeedback && (
+            <div className={`absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-xs font-bold
+              ${lastFeedback === 'correct' ? 'bg-mindflow-success text-white' :
+                lastFeedback === 'wrong' ? 'bg-mindflow-danger text-white' :
+                'bg-mindflow-warning text-black'}`}>
+              {lastFeedback === 'correct' ? '✓' : lastFeedback === 'wrong' ? '✗' : 'SLOW'}
+            </div>
+          )}
+        </div>
+
+        {/* Key hints */}
+        <div className="flex gap-3">
+          {COLORS.map(c => (
+            <div key={c.key} className="flex flex-col items-center gap-1">
+              <kbd className="px-3 py-2 rounded-lg bg-mindflow-bg border border-mindflow-border
+                               text-mindflow-heading font-bold text-lg min-w-[2.5rem] text-center">
+                {c.key.toUpperCase()}
+              </kbd>
+              <span className="text-[10px] text-mindflow-muted">{c.name}</span>
+            </div>
           ))}
         </div>
-        <p className="text-xs text-mindflow-muted">Click the <strong>font color</strong>, not the word</p>
+
+        <p className="text-xs text-mindflow-muted">
+          Press the key for the <strong>ink color</strong>, not the word
+        </p>
       </div>
     );
   }
 
-  // ── RESULTS ──
+  // ===========================================================================
+  // RESULTS
+  // ===========================================================================
   if (phase === 'results' && results) return (
     <div className="flex flex-col items-center gap-6 py-12 animate-fade-in">
-      <div className="bg-mindflow-accent/15 p-5 rounded-full"><Zap className="w-16 h-16 text-mindflow-accent" /></div>
-      <div className="text-center"><h2 className="text-2xl font-bold text-mindflow-heading">Your Results</h2><p className="text-sm text-mindflow-muted mt-1">{totalTrialsRef.current} trials in 30 seconds</p></div>
-      <div className="grid grid-cols-3 gap-4 w-full max-w-lg">
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center"><Target className="w-5 h-5 text-mindflow-accent mx-auto mb-2" /><p className="text-2xl font-bold text-mindflow-heading">{(results.accuracy*100).toFixed(0)}%</p><p className="text-xs text-mindflow-muted">Accuracy</p></div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center"><Clock className="w-5 h-5 text-mindflow-warning mx-auto mb-2" /><p className="text-2xl font-bold text-mindflow-heading">{results.avgResponseTimeMs}</p><p className="text-xs text-mindflow-muted">Avg Speed (ms)</p></div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center"><Zap className={`w-5 h-5 mx-auto mb-2 ${alphaColor(results.alphaScore)}`} /><p className={`text-2xl font-bold ${alphaColor(results.alphaScore)}`}>{results.alphaScore.toFixed(2)}</p><p className="text-xs text-mindflow-muted">Alpha Score</p></div>
+      <div className="bg-mindflow-accent/15 p-5 rounded-full">
+        <Zap className="w-16 h-16 text-mindflow-accent" />
       </div>
+
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-mindflow-heading">Your Results</h2>
+        <p className="text-sm text-mindflow-muted mt-1">
+          {results.trialCount} trials in {GAME_SECS} seconds
+        </p>
+      </div>
+
+      {/* Main metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-lg">
+        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
+          <Target className="w-5 h-5 text-mindflow-accent mx-auto mb-2" />
+          <p className="text-2xl font-bold text-mindflow-heading">
+            {(results.accuracy * 100).toFixed(0)}%
+          </p>
+          <p className="text-xs text-mindflow-muted">Accuracy</p>
+        </div>
+        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
+          <Clock className="w-5 h-5 text-mindflow-warning mx-auto mb-2" />
+          <p className="text-2xl font-bold text-mindflow-heading">{results.avgResponseTimeMs}</p>
+          <p className="text-xs text-mindflow-muted">Avg Speed (ms)</p>
+        </div>
+        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
+          <Keyboard className="w-5 h-5 text-mindflow-accent mx-auto mb-2" />
+          <p className="text-2xl font-bold text-mindflow-heading">{results.rtVariabilityMs}</p>
+          <p className="text-xs text-mindflow-muted">Consistency (SD)</p>
+        </div>
+        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
+          <Zap className={`w-5 h-5 mx-auto mb-2 ${alphaColor(results.alphaScore)}`} />
+          <p className={`text-2xl font-bold ${alphaColor(results.alphaScore)}`}>{results.alphaScore.toFixed(2)}</p>
+          <p className="text-xs text-mindflow-muted">Focus Score</p>
+        </div>
+      </div>
+
+      {/* Detailed breakdown */}
+      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg w-full space-y-2 text-sm">
+        <p className="font-medium text-mindflow-heading text-xs uppercase tracking-wide">Score Breakdown</p>
+
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="text-mindflow-muted">Accuracy ({((results.accuracy * 100).toFixed(0))}%)</span>
+            <span className="text-mindflow-heading">{(results.accuracy * 30).toFixed(1)} / 30</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-mindflow-muted">Speed ({results.avgResponseTimeMs}ms avg)</span>
+            <span className="text-mindflow-heading">{Math.max(0, (25 - (results.avgResponseTimeMs - 400) / 40)).toFixed(1)} / 25</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-mindflow-muted">Consistency (SD {results.rtVariabilityMs}ms)</span>
+            <span className="text-mindflow-heading">{Math.max(0, (25 - results.rtVariabilityMs / 16)).toFixed(1)} / 25</span>
+          </div>
+          {results.lapses > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-mindflow-warning">Lapses ({results.lapses} × &gt;1.5s)</span>
+              <span className="text-mindflow-warning">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
+            </div>
+          )}
+          {results.interferenceMs > 30 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-mindflow-muted">Stroop Interference ({results.interferenceMs}ms)</span>
+              <span className="text-mindflow-warning">−{Math.min(20, results.interferenceMs / 10).toFixed(0)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Interpretation */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg text-sm text-mindflow-text">
         <p className="font-medium text-mindflow-heading mb-1">What this means</p>
-        {results.alphaScore >= 1.2 && <p>Excellent focus control. You'll stay in Flow longer during study sessions.</p>}
-        {results.alphaScore >= 0.9 && results.alphaScore < 1.2 && <p>Good focus control. Standard fatigue patterns apply. Take breaks every 90 minutes.</p>}
-        {results.alphaScore >= 0.7 && results.alphaScore < 0.9 && <p>Moderate focus. Schedule harder tasks early in the day. Take breaks every 60 minutes.</p>}
-        {results.alphaScore < 0.7 && <p>Focus needs support. Try studying in 25-minute blocks with 5-minute breaks. Avoid late-night sessions.</p>}
+        {results.alphaScore >= 1.2 && (
+          <p>Excellent sustained attention and cognitive control. You resist interference well and maintain speed. You'll stay in Flow longer — schedule 90+ minute deep-work blocks.</p>
+        )}
+        {results.alphaScore >= 0.9 && results.alphaScore < 1.2 && (
+          <p>Good cognitive control with mild interference effects. Standard fatigue patterns apply. Take breaks every 75–90 minutes for optimal performance.</p>
+        )}
+        {results.alphaScore >= 0.7 && results.alphaScore < 0.9 && (
+          <p>Moderate attention control. {results.lapses > 2 ? `You had ${results.lapses} attention lapses — ` : ''}Schedule harder tasks when you're freshest. Use 45–60 minute blocks with real breaks.</p>
+        )}
+        {results.alphaScore < 0.7 && (
+          <p>Your attention shows significant variability. {results.lapses > 3 ? `${results.lapses} attention lapses detected — ` : ''}Try 25-minute Pomodoro blocks. Avoid late-night study sessions. Retake this test when well-rested for comparison.</p>
+        )}
       </div>
+
       <div className="flex gap-3">
-        <button onClick={() => onComplete({ stroopAccuracy: results.accuracy, avgResponseTimeMs: results.avgResponseTimeMs, alphaScore: results.alphaScore })} className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25">Save & Continue</button>
-        <button onClick={() => { setResults(null); setPhase('intro'); }} className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl text-sm hover:bg-mindflow-surface transition-colors flex items-center gap-2"><RefreshCw className="w-4 h-4" />Retake</button>
+        <button
+          onClick={() => onComplete({
+            stroopAccuracy: results.accuracy,
+            avgResponseTimeMs: results.avgResponseTimeMs,
+            alphaScore: results.alphaScore,
+          })}
+          className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25"
+        >
+          Save & Continue
+        </button>
+        <button
+          onClick={() => { setResults(null); trialsRef.current = []; setPhase('intro'); }}
+          className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl text-sm hover:bg-mindflow-surface transition-colors flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />Retake
+        </button>
       </div>
     </div>
   );
