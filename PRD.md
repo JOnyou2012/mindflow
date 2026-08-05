@@ -1,6 +1,6 @@
 # MindFlow — Master PRD
 
-> **Progress: 26 / 85 steps complete — 30.6%**
+> **Progress: 36 / 85 steps complete — 42.4%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
 > **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
@@ -45,8 +45,8 @@
 | **7–9** | Stylesheet | `src/index.css` — append 6 style blocks | ✅ 3/3 — production-quality | 100% |
 | **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality | 100% |
 | **14–26** | Scheduler | `src/utils/scheduler.js` — create | ✅ 13/13 — production-quality | 100% |
-| **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ❌ 0/4 | 0% |
-| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ❌ 0/6 | 0% |
+| **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ✅ 4/4 — production-quality | 100% |
+| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ❌ 0/8 | 0% |
 | **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ❌ 0/6 | 0% |
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ❌ 0/4 | 0% |
@@ -66,8 +66,8 @@ Steps 1–6   Markov Engine      ███████████████�
 Steps 7–9   Stylesheet         ████████████████████████ 3/3   100%
 Steps 10–13 localStorage        ████████████████████████ 4/4   100%
 Steps 14–26 Scheduler           ████████████████████████ 13/13  100%
-Steps 27–30 Welcome Screen      ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
-Steps 31–36 Stroop Test         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
+Steps 27–30 Welcome Screen      ████████████████████████ 4/4   100%
+Steps 31–36 Stroop Test         ████████████████████████ 6/6   100%
 Steps 37–44 Task Form           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/8     0%
 Steps 45–50 Calendar            ░░░░░░░░░░░░░░░░░░░░░░░░ 0/6     0%
 Steps 51–54 Session Chart       ░░░░░░░░░░░░░░░░░░░░░░░░ 0/4     0%
@@ -75,7 +75,7 @@ Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░�
 Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           26/85   30.6%
+TOTAL                           36/85   42.4%
 ```
 
 ### Stage Completion
@@ -83,7 +83,7 @@ TOTAL                           26/85   30.6%
 | Stage | Steps | Done | % | Status |
 |-------|-------|------|---|--------|
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
-| **Stage 2: Core Components** | 14–65 | 13/52 | **25%** | 🟡 Scheduler done, 6 components remain |
+| **Stage 2: Core Components** | 14–65 | 23/52 | **44%** | 🟡 Scheduler + WelcomeScreen + StroopTest done, 4 components remain |
 | **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
@@ -93,14 +93,21 @@ TOTAL                           26/85   30.6%
 > - Stylesheet: Inter font, scoped transitions, focus rings, animations
 > - localStorage: type-guarded loaders, safe defaults, clearAll()
 >
-> **Stage 2 progress** — Scheduler (steps 14–26) complete:
+> **Stage 2 progress** — Scheduler (14–26) + WelcomeScreen (27–30) + StroopTest (31–36) complete:
 > - `src/utils/scheduler.js`: two-process model, global slot matching, deadline
 >   enforcement, cumulative state propagation, cross-day carryover, task sequencing,
 >   flow-block preference, workload distribution, warnings, pre-flight, explainability
-> - 1,970 tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
-> - 6 UI components still to build (steps 27–65)
+> - `src/components/WelcomeScreen.jsx`: animated landing page with Brain logo,
+>   3-step onboarding cards, Calibrate/Skip CTA buttons, fully responsive
+> - `src/components/StroopTestModal.jsx`: 30-second Stroop color-word game,
+>   4 phases (intro→countdown→playing→results), computes alpha score from
+>   accuracy/response-time, color-coded results with interpretation
+> - `src/App.jsx`: rewritten with proper screen flow (Welcome→Stroop→Main),
+>   localStorage persistence, calibration-aware header
+> - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
+> - 4 UI components still to build (steps 37–65)
 >
-> **Next:** Stage 2 continued — create `src/components/WelcomeScreen.jsx` (steps 27–30)
+> **Next:** Stage 2 continued — create `src/components/TaskInputForm.jsx` (steps 37–44)
 
 ---
 
@@ -1039,11 +1046,11 @@ export default function generateWeeklySchedule(
 
 ---
 
-**Step 27** — Create `src/components/` directory
-- [ ] 27. `mkdir -p src/components`
+**Step 27** — ✅ Create `src/components/` directory
+- [x] 27. `mkdir -p src/components`
 
-**Step 28** — Create `WelcomeScreen.jsx` with complete component
-- [ ] 28. Copy this exact code:
+**Step 28** — ✅ Create `WelcomeScreen.jsx` with complete component
+- [x] 28. Copy this exact code:
 
 ```jsx
 import { Brain, ArrowRight } from 'lucide-react';
@@ -1102,17 +1109,17 @@ export default function WelcomeScreen({ onStart, onSkip }) {
 }
 ```
 
-**Step 29** — Verify component renders correctly
-- [ ] 29. Shows Brain logo, headline "Study smarter, not longer", description paragraph
-- [ ] 29. Shows 3 step cards: Calibrate, Schedule, Optimize
-- [ ] 29. "Take Calibration Test" button calls `onStart` prop
-- [ ] 29. "Skip for now" button calls `onSkip` prop
-- [ ] 29. Entrance animation: `animate-slide-up` class applied
+**Step 29** — ✅ Verify component renders correctly
+- [x] 29. Shows Brain logo, headline "Study smarter, not longer", description paragraph
+- [x] 29. Shows 3 step cards: Calibrate, Schedule, Optimize
+- [x] 29. "Take Calibration Test" button calls `onStart` prop
+- [x] 29. "Skip for now" button calls `onSkip` prop
+- [x] 29. Entrance animation: `animate-slide-up` class applied
 
-**Step 30** — Verify dark theme styling
-- [ ] 30. All colors use mindflow design tokens
-- [ ] 30. No hardcoded colors outside the design system
-- [ ] 30. Responsive: stacks vertically on mobile, horizontal button row on desktop
+**Step 30** — ✅ Verify dark theme styling
+- [x] 30. All colors use mindflow design tokens
+- [x] 30. No hardcoded colors outside the design system
+- [x] 30. Responsive: stacks vertically on mobile, horizontal button row on desktop
 
 ---
 
