@@ -394,15 +394,16 @@ export default function TaskInputForm({ tasks = [], onChange }) {
             {/* Deadline */}
             <div>
               <p className="text-xs text-mindflow-muted mb-2 font-medium">
-                Deadline <span className="opacity-60">(optional)</span>
+                Deadline <span className="opacity-60">(optional — date + time)</span>
               </p>
               <div className="flex gap-2">
                 <input
                   type="date"
                   value={deadline ? deadline.split('T')[0] : ''}
                   onChange={e => {
-                    const time = deadline ? deadline.split('T')[1] || '23:59' : '23:59';
-                    setDeadline(e.target.value ? e.target.value + 'T' + time : '');
+                    const d = e.target.value;
+                    const t = (deadline && deadline.includes('T')) ? deadline.split('T')[1] : '23:59';
+                    setDeadline(d ? d + 'T' + t : '');
                   }}
                   className="flex-1 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
                              text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none
@@ -410,20 +411,16 @@ export default function TaskInputForm({ tasks = [], onChange }) {
                 />
                 <input
                   type="time"
-                  value={deadline ? deadline.split('T')[1] || '23:59' : '23:59'}
+                  value={(deadline && deadline.includes('T')) ? deadline.split('T')[1] : '23:59'}
                   onChange={e => {
-                    const date = deadline ? deadline.split('T')[0] : '';
-                    if (date) setDeadline(date + 'T' + e.target.value);
+                    const d = (deadline && deadline.includes('T')) ? deadline.split('T')[0] : new Date().toISOString().split('T')[0];
+                    setDeadline(d + 'T' + e.target.value);
                   }}
-                  disabled={!deadline || !deadline.split('T')[0]}
-                  className="w-28 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
+                  className="w-32 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
                              text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none
-                             [color-scheme:dark] disabled:opacity-30"
+                             [color-scheme:dark]"
                 />
               </div>
-              <p className="text-[10px] text-mindflow-muted mt-1">
-                Pick date + time. Defaults to 11:59 PM if no time set.
-              </p>
             </div>
 
             {/* Error */}
