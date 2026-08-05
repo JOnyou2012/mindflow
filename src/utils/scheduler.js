@@ -348,18 +348,40 @@ function deadlineToDay(isoDate) {
 function deadlineAllowsDay(task, day, weekStartDate) {
   if (!task.deadline) return true;
 
-  const deadlineDate = new Date(task.deadline + 'T00:00:00');
-  if (isNaN(deadlineDate.getTime())) return true;
+  // Parse deadline — may include time (e.g. '2026-08-15T15:00')
+  const dlStr = task.deadline.includes('T') ? task.deadline : task.deadline + 'T23:59';
+  const deadlineDt = new Date(dlStr);
+  if (isNaN(deadlineDt.getTime())) return true;
 
-  // Compute the actual date for this day name relative to the week start
-  const weekStart = new Date(weekStartDate + 'T00:00:00');
-  if (isNaN(weekStart.getTime())) return true;
+  // Compute this day's date
+  const [y, m, d] = weekStartDate.split('-').map(Number);
+  const dayIdx = DAY_INDEX[day];
+  const dayDate = new Date(y, m - 1, d + dayIdx);
+  dayDate.setHours(23, 59, 59, 999); // end of this day
 
-  const dayIndex = DAY_INDEX[day];
-  const dayDate = new Date(weekStart);
-  dayDate.setDate(dayDate.getDate() + dayIndex);
+  // Task can be on this day if the day is before or on the deadline date.
+  // Note: time-of-day check happens during slot scoring (slot must end before deadline time).
+  return dayDate <= deadlineDt;
+}
 
-  return dayDate <= deadlineDate;
+/**
+ * Check if a slot ends before the task's deadline time.
+ * Returns true if the slot is valid (ends before deadline), false if slot is too late.
+ */
+function slotBeforeDeadline(slotEndTick, task, day, weekStartDate) {
+  if (!task.deadline) return true;
+  if (!task.deadline.includes('T')) return true; // date-only deadline, time doesn't matter
+
+  const dlStr = task.deadline;
+  const deadlineDt = new Date(dlStr);
+  if (isNaN(deadlineDt.getTime())) return true;
+
+  const [y, m, d] = weekStartDate.split('-').map(Number);
+  const dayIdx = DAY_INDEX[day];
+  const slotEndHour = slotEndTick / 6;
+  const slotEndDt = new Date(y, m - 1, d + dayIdx, Math.floor(slotEndHour), Math.round((slotEndHour % 1) * 60));
+
+  return slotEndDt <= deadlineDt;
 }
 
 // ===========================================================================
@@ -1094,6 +1116,8 @@ export default function generateWeeklySchedule(
       if (slot.usedTicks >= slot.maxTicks) continue;
       if (taskTicks > slot.durationTicks) continue;
       if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
+      // Check deadline time: slot must end before the specific deadline hour
+      if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
 
       const ticksSinceLastTask = Math.max(0,
         (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
@@ -1290,6 +1314,7 @@ export default function generateWeeklySchedule(
         if (slot.usedTicks >= slot.maxTicks) continue;
         if (taskTicks > slot.durationTicks) continue;
         if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
+        if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
 
         // Relaxed scoring: gamma only, no congestion, no Process S penalty
         // v5: difficulty still matters even in refinement — hard tasks get

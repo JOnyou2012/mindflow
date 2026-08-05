@@ -394,20 +394,35 @@ export default function TaskInputForm({ tasks = [], onChange }) {
             {/* Deadline */}
             <div>
               <p className="text-xs text-mindflow-muted mb-2 font-medium">
-                Deadline <span className="opacity-60">(optional — type or pick a date)</span>
+                Deadline <span className="opacity-60">(optional)</span>
               </p>
-              <input
-                type="date"
-                value={deadline}
-                onChange={e => setDeadline(e.target.value)}
-                placeholder="YYYY-MM-DD"
-                className="w-full bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
-                           text-mindflow-text placeholder-mindflow-muted text-sm
-                           focus:border-mindflow-accent focus:outline-none
-                           [color-scheme:dark]"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={deadline ? deadline.split('T')[0] : ''}
+                  onChange={e => {
+                    const time = deadline ? deadline.split('T')[1] || '23:59' : '23:59';
+                    setDeadline(e.target.value ? e.target.value + 'T' + time : '');
+                  }}
+                  className="flex-1 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
+                             text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none
+                             [color-scheme:dark]"
+                />
+                <input
+                  type="time"
+                  value={deadline ? deadline.split('T')[1] || '23:59' : '23:59'}
+                  onChange={e => {
+                    const date = deadline ? deadline.split('T')[0] : '';
+                    if (date) setDeadline(date + 'T' + e.target.value);
+                  }}
+                  disabled={!deadline || !deadline.split('T')[0]}
+                  className="w-28 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
+                             text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none
+                             [color-scheme:dark] disabled:opacity-30"
+                />
+              </div>
               <p className="text-[10px] text-mindflow-muted mt-1">
-                Click to open calendar picker, or type as YYYY-MM-DD (e.g. 2026-08-15)
+                Pick date + time. Defaults to 11:59 PM if no time set.
               </p>
             </div>
 
