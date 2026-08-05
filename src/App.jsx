@@ -237,6 +237,9 @@ export default function App() {
         <div className="flex items-center gap-3">
           <Brain className="w-6 h-6 text-mindflow-accent" />
           <h1 className="text-lg font-bold text-mindflow-heading">MindFlow</h1>
+          <span className="text-[11px] text-mindflow-muted">
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
           {calibration && (
             <span className="text-xs bg-mindflow-accent/10 text-mindflow-accent px-2 py-0.5 rounded-full">
               α {calibration.alphaScore.toFixed(2)}
@@ -315,7 +318,7 @@ export default function App() {
             Fixed Weekly Schedule
             {calendarBlocks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
-          <WeeklyCalendar blocks={calendarBlocks} onChange={setCalendarBlocks} />
+          <WeeklyCalendar blocks={calendarBlocks} onChange={setCalendarBlocks} weekStart={weekStart} />
         </section>
 
         {/* Tasks */}

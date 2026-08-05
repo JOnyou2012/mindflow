@@ -44,7 +44,15 @@ const QUICK_PRESETS = [
   { label: 'Sports Practice', type: 'sports', start: 15, end: 17, days: ['Mon','Wed','Fri'] },
 ];
 
-export default function WeeklyCalendar({ blocks = [], onChange }) {
+export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null }) {
+  // Compute dates for day headers
+  const getDayDate = (dayName) => {
+    if (!weekStart) return '';
+    const idx = DAYS.indexOf(dayName);
+    const d = new Date(weekStart + 'T00:00:00');
+    d.setDate(d.getDate() + idx);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
   // -- Form state --
   const [label, setLabel] = useState('');
   const [type, setType] = useState('academic');
@@ -319,7 +327,7 @@ export default function WeeklyCalendar({ blocks = [], onChange }) {
             return (
               <div key={d} className="px-2 py-2.5 text-center border-r border-mindflow-border last:border-r-0">
                 <span className="text-xs font-semibold text-mindflow-heading">{d}</span>
-                <span className="block text-[10px] text-mindflow-muted">{n > 0 ? `${n} · ${hrs}h` : 'Free'}</span>
+                <span className="block text-[9px] text-mindflow-muted">{getDayDate(d) || (n > 0 ? `${n} · ${hrs}h` : 'Free')}</span>
               </div>
             );
           })}
