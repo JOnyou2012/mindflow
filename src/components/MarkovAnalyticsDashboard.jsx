@@ -10,7 +10,7 @@ function getToday() {
   return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][idx];
 }
 
-export default function MarkovAnalyticsDashboard({ optimizedWeek, alpha, isCalculating, isStale, onRegenerate, calendarBlocks = [] }) {
+export default function MarkovAnalyticsDashboard({ optimizedWeek, isCalculating, isStale, onRegenerate, calendarBlocks = [] }) {
   const [selectedDay, setSelectedDay] = useState(() => getToday());
   const [expanded, setExpanded] = useState({});
 
@@ -126,6 +126,49 @@ export default function MarkovAnalyticsDashboard({ optimizedWeek, alpha, isCalcu
           </div>
         </div>
       </div>
+
+      {/* ── Week-level stats ── */}
+      {optimizedWeek.stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-mindflow-heading">{optimizedWeek.stats.daysUsed || activeDays}</p>
+            <p className="text-[10px] text-mindflow-muted">Active Days</p>
+          </div>
+          <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-mindflow-heading">{optimizedWeek.stats.utilizationPct || 0}%</p>
+            <p className="text-[10px] text-mindflow-muted">Capacity Used</p>
+          </div>
+          <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-mindflow-heading">{optimizedWeek.stats.workloadBalance || 0}%</p>
+            <p className="text-[10px] text-mindflow-muted">Workload Balance</p>
+          </div>
+          <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-3 text-center">
+            <p className={`text-lg font-bold ${(optimizedWeek.stats.avgFatigue || 0) > 30 ? 'text-mindflow-warning' : 'text-mindflow-heading'}`}>
+              {optimizedWeek.stats.avgFatigue || 0}%
+            </p>
+            <p className="text-[10px] text-mindflow-muted">Avg Fatigue</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Schedule warnings ── */}
+      {optimizedWeek.warnings && optimizedWeek.warnings.length > 0 && (
+        <div className="space-y-2">
+          {optimizedWeek.warnings.map((w, i) => (
+            <div key={i} className={`flex items-start gap-2 text-sm rounded-lg px-4 py-3 ${
+              w.severity === 'high' ? 'bg-mindflow-danger/10 text-mindflow-danger border border-mindflow-danger/20' :
+              w.severity === 'medium' ? 'bg-mindflow-warning/10 text-mindflow-warning border border-mindflow-warning/20' :
+              'bg-mindflow-bg text-mindflow-muted border border-mindflow-border'
+            }`}>
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-xs">{w.message}</p>
+                {w.detail && <p className="text-[11px] opacity-70 mt-0.5">{w.detail}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Gantt timeline (sessions + calendar blocks) ── */}
       {((sessions.length > 0) || (dayBlocks.length > 0)) && (

@@ -9,7 +9,6 @@ const COLORS = [
   { name: 'Yellow', hex: '#eab308', key: 'y' },
 ];
 const COLOR_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c]));
-const COLOR_BY_NAME = Object.fromEntries(COLORS.map(c => [c.name.toLowerCase(), c]));
 
 const GAME_SECS = 60;
 const GAME_MS = GAME_SECS * 1000;

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, School, Dumbbell, Palette, Ellipsis, Trash2, Clock, AlertCircle, Utensils, Moon, Plus } from 'lucide-react';
+import { X, School, Dumbbell, Palette, Ellipsis, Trash2, Clock, AlertCircle, Plus } from 'lucide-react';
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri'];
@@ -291,7 +291,6 @@ export default function WeeklyCalendar({ blocks = [], onChange }) {
         <span className="text-[10px] text-mindflow-muted uppercase tracking-wide mr-1">Quick:</span>
         {QUICK_PRESETS.map((p, i) => {
           const c = TYPE_CFG[p.type];
-          const dur = p.end - p.start;
           return (
             <button
               key={i}

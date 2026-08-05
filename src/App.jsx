@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Brain, Calendar, BarChart3, Zap, Play, AlertCircle, Settings, RefreshCw, Trash2 } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
@@ -19,8 +19,6 @@ const TABS = [
   { id: 'tasks', label: 'Schedule', icon: Calendar },
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
 ];
-
-const DEFAULT_SETTINGS = { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
 
 export default function App() {
   // ── Persistent state (init from localStorage) ────────────────────
