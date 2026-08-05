@@ -89,12 +89,23 @@ export default function App() {
         // deadlines allow it. Later weeks use higher limits.
         while (remaining.length > 0 && w < 8) {
           const ws = getWeekStart(w);
-          // Week 0: 60% max, week 1: 70%, week 2+: 80%
-          const weekCap = 0.60 + Math.min(w * 0.10, 0.20);
+          // Filter: only pass tasks whose deadline is within range of this week.
+          // Tasks due > 10 days after this week's end wait for a later week.
+          const weekEndDate = new Date(ws + 'T00:00:00');
+          weekEndDate.setDate(weekEndDate.getDate() + 6);
+          const eligible = remaining.filter(t => {
+            if (!t.deadline) return true; // no deadline = can go any week
+            const dl = new Date(t.deadline + 'T00:00:00');
+            return !isNaN(dl.getTime()) && dl <= new Date(weekEndDate.getTime() + 10 * 86400000);
+          });
+          const deferred = remaining.filter(t => !eligible.includes(t));
+          // Light capacity cap
+          const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
           const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
-          const result = generateWeeklySchedule(calendarBlocks, remaining, calibration.alphaScore, cappedSettings, ws);
+          const result = generateWeeklySchedule(calendarBlocks, eligible, calibration.alphaScore, cappedSettings, ws);
+          // Combine: deferred tasks + any unscheduled from this week
+          remaining = [...(result.unscheduled || []), ...deferred];
           results[ws] = result;
-          remaining = result.unscheduled || [];
           w++;
         }
         setWeekResults(results);
@@ -417,8 +428,12 @@ export default function App() {
                         ))}
                       </div>
                       <div className="grid grid-cols-7">
-                        {DAYS.map(day => (
-                          <div key={day} className="relative border-r border-mindflow-border last:border-r-0" style={{ height: 17 * ROW_H + 'px' }}>
+                        {DAYS.map(day => {
+                          const dayDate = getDateForDay(day, ws);
+                          const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                          const isTodayCol = dayDate === todayStr;
+                          return (
+                          <div key={day} className={`relative border-r border-mindflow-border last:border-r-0 ${isTodayCol ? 'bg-mindflow-accent/5' : ''}`} style={{ height: 17 * ROW_H + 'px' }}>
                             {HOURS.map((h, i) => (
                               <div key={h} className="absolute left-0 right-0 border-t border-mindflow-border/30" style={{ top: i * ROW_H + 'px' }}>
                                 {day === 'Mon' && <span className="absolute -left-10 top-0 text-[8px] text-mindflow-muted w-8 text-right pr-1 -translate-y-1/2">{fmtHr(h)}</span>}
@@ -436,7 +451,8 @@ export default function App() {
                               return <div key={'s'+i} className="absolute left-2 right-2 rounded px-1 overflow-hidden" style={{ top: top + 2, height: Math.max(h - 4, 12), backgroundColor: c + '44', borderLeft: '3px solid ' + c, zIndex: 10 }}><p className="text-[8px] font-semibold text-white truncate">{s.task.title}</p></div>;
                             })}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
 

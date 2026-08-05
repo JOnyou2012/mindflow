@@ -393,7 +393,7 @@ function deadlineAllowsDay(task, day, weekStartDate) {
  */
 function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings,
                     lastTaskType = null, prevDayStrain = 0, difficulty = 3,
-                    dayDifficultyLoad = 0) {
+                    dayDifficultyLoad = 0, task = null, weekStartDate = null) {
   const hour = slot.startHour + (slot.usedTicks / 6);
 
   // Process C: circadian gamma
@@ -430,6 +430,28 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   const difficultySpreadPenalty = difficultyCongestion > 1
     ? (difficultyCongestion - 1) * (difficultyCongestion - 1) * DIFFICULTY_SPREAD_WEIGHT
     : 0;
+
+  // v6: Deadline proximity — prefer weeks closer to the task's deadline.
+  // Tasks due far in the future get penalized for being scheduled too early.
+  let deadlineWeekScore = 0;
+  if (task.deadline && weekStartDate) {
+    const dl = new Date(task.deadline + 'T00:00:00');
+    if (!isNaN(dl.getTime())) {
+      const slotDate = new Date(weekStartDate + 'T00:00:00');
+      slotDate.setDate(slotDate.getDate() + DAY_INDEX[slot.day]);
+      const daysUntilDeadline = (dl - slotDate) / 86400000;
+      if (daysUntilDeadline > 7) {
+        // Task is scheduled too early — penalize proportionally
+        deadlineWeekScore = (daysUntilDeadline / 7) * 0.3;
+      } else if (daysUntilDeadline < 0) {
+        // Past deadline — heavy penalty, effectively blocks this slot
+        deadlineWeekScore = 10;
+      } else if (daysUntilDeadline <= 2) {
+        // Due soon — bonus for scheduling now
+        deadlineWeekScore = -(2 - daysUntilDeadline) * 0.15;
+      }
+    }
+  }
 
   // Weekend penalty: proportional to utilization, not flat.
   // Empty weekends are free to use. Penalty only kicks in when
@@ -474,7 +496,8 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
 
   return fatigueFactor + congestionPenalty + freshDayBonus
        + difficultySpreadPenalty + weekendPenalty + crossDayPenalty
-       + sequencingScore + flowBlockScore + positionTiebreaker;
+       + sequencingScore + flowBlockScore + positionTiebreaker
+       + deadlineWeekScore;
 }
 
 // ===========================================================================
@@ -1051,6 +1074,8 @@ export default function generateWeeklySchedule(
         prevDayStrainVal,
         task.difficulty || 3,
         dayDifficultyLoad[slot.day] || 0,
+        task,
+        wsDate,
       );
 
       if (score < bestScore) { bestScore = score; bestSlot = slot; }
