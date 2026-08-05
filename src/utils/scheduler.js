@@ -431,8 +431,18 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     ? (difficultyCongestion - 1) * (difficultyCongestion - 1) * DIFFICULTY_SPREAD_WEIGHT
     : 0;
 
-  // Weekend penalty
-  const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
+  // Weekend penalty: proportional to utilization, not flat.
+  // Empty weekends are free to use. Penalty only kicks in when
+  // weekend capacity is exceeded — same logic as congestion.
+  const weekendCap = WEEKEND_DAYS.has(slot.day)
+    ? (settings.maxHoursWeekend ?? 4) * 6
+    : Infinity;
+  const weekendUtilization = WEEKEND_DAYS.has(slot.day) && weekendCap > 0
+    ? slot.usedTicks / weekendCap
+    : 0;
+  const weekendPenalty = weekendUtilization > 0.5
+    ? (weekendUtilization - 0.5) * (weekendUtilization - 0.5) * 2.0
+    : 0;
 
   // Cross-day carryover
   const carryoverDecay = Math.exp(-OVERNIGHT_RECOVERY_HOURS / TAU_BUILD);
