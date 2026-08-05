@@ -132,7 +132,7 @@ export function optimizeWithBreak(
   const breakInsertTick = Math.max(0, burnoutTick - 1);
   const v0 = validateInitialState(initialState);
 
-  const preBreak = simulateTrajectoryN(alpha, beta, gamma, breakInsertTick, [...v0], opts);
+  const preBreak = simulateTrajectory(alpha, beta, gamma, breakInsertTick, [...v0], opts);
 
   const preBreakState = [
     preBreak[preBreak.length - 1].flow,
@@ -171,7 +171,9 @@ function biexponentialDecay(t) {
  * approximation, especially for short breaks where fast component matters.
  */
 function invertBiexponentialDecay(ratio) {
-  let lo = 0, hi = 120;
+  // lo=1: meaningful minimum break. At t=0, decay=1.0 which would
+  // prevent the binary search from converging for ratio close to 1.
+  let lo = 1, hi = 120;
   for (let i = 0; i < 20; i++) {
     const mid = (lo + hi) / 2;
     if (biexponentialDecay(mid) > ratio) lo = mid;
@@ -422,8 +424,11 @@ function buildDynamicMatrix(
   const fatigueDelta = prevFatigue !== null
     ? Math.max(0, currentFatigue - prevFatigue)
     : 0;
-  const momentumAmplify = 1.0 + fatigueDelta * MOMENTUM_AMPLIFY * (1 / 0.05);
+  const momentumAmplify = Math.min(2.0,
+    1.0 + fatigueDelta * MOMENTUM_AMPLIFY * (1 / 0.05)
+  );
   // Normalized: at Δfatigue=0.05 (5% per tick), amplify by 15%
+  // Capped at 2.0 to prevent extreme values from runaway feedback
 
   // -- Capacity ceiling (v3) --------------------------------------------------
   // Beyond capacity, all fatigue transitions are amplified
@@ -453,14 +458,14 @@ function buildDynamicMatrix(
   // -- Build matrix -----------------------------------------------------------
   const P = P_BASE.map((row) => [...row]);
 
-  // Row 0 — Flow: retention weakened by drain, exit-to-fatigue amplified
+  // Row 0 — Flow: retention weakened by drain, exits to both distracted + fatigue amplified
   P[0][0] *= alphaFlowMod * flowAnchorMod * flowErosionFactor;
-  P[0][1] *= (1 + betaDistractMod) * momentumAmplify;
+  P[0][1] *= (1 + betaDistractMod) * momentumAmplify * (1 + drain * 0.25);
   P[0][2] *= (1 + betaFatigueMod) * gammaMod * momentumAmplify * capacityFactor * fatigueGravityFactor;
 
-  // Row 1 — Distracted: return-to-flow harder, fall-to-fatigue easier
+  // Row 1 — Distracted: return-to-flow harder, fall-to-fatigue easier, stay-distracted more likely
   P[1][0] *= alphaFlowMod * flowErosionFactor;
-  P[1][1] *= (2 - alphaFlowMod);
+  P[1][1] *= (2 - alphaFlowMod) * (1 + drain * 0.15);
   P[1][2] *= gammaMod * momentumAmplify * capacityFactor * fatigueGravityFactor;
 
   // Row 2 — Fatigued: harder to escape fatigue spontaneously
@@ -539,10 +544,6 @@ function simulateTrajectory(alpha, beta, gamma, steps, v0, opts = {}) {
   return timeline;
 }
 
-function simulateTrajectoryN(alpha, beta, gamma, steps, v0, opts = {}) {
-  return simulateTrajectory(alpha, beta, gamma, steps, v0, opts);
-}
-
 function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts = {}) {
   const timeline = [];
   let v = [...v0];
@@ -551,6 +552,15 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
   const cumulativeLoad = opts.cumulativeLoad || 0;
   const totalSteps = startTick + steps; // total session length including pre-break portion
 
+  // v5: Post-break drain reset — a break partially restores cognitive resources.
+  // The temporal drain is reduced proportional to fatigue recovery.
+  // At post-break fatigue 0.25: 50% drain reset. At fatigue 0.50: 0% reset.
+  const postBreakFatigue = v0[2];
+  const drainRetention = Math.min(1.0, postBreakFatigue / 0.50);
+  // This gives the effective tick offset for drain calculation:
+  // drainTick = startTick * drainRetention + t (instead of startTick + t)
+  // A 50% drain reset means the drain at the break point is halved.
+
   for (let t = 0; t <= steps; t++) {
     timeline.push(makeTick(startTick + t, v));
 
@@ -558,8 +568,10 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
     if (v[0] > 0.3) { flowStreak++; }
     else { flowStreak = Math.max(0, flowStreak - 2); }
 
+    // Drain-effective tick: reduced by drainRetention after a break
+    const drainTick = startTick * drainRetention + t;
     const P = buildDynamicMatrix(
-      alpha, beta, gamma, startTick + t, currentFatigue, prevFatigue, flowStreak,
+      alpha, beta, gamma, drainTick, currentFatigue, prevFatigue, flowStreak,
       cumulativeLoad + (startTick + t) * (beta / 5) * gamma, totalSteps
     );
 
@@ -584,7 +596,11 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
 // -- Helpers -----------------------------------------------------------------
 
 function sigmoid(x, center, steepness) {
-  return 1 / (1 + Math.exp(-steepness * (x - center)));
+  // Guard against overflow: exp(>709) = Infinity in IEEE 754
+  const z = -steepness * (x - center);
+  if (z > 700) return 1.0;  // effectively 1/(1+0) = 1
+  if (z < -700) return 0.0; // effectively 1/(1+∞) = 0
+  return 1 / (1 + Math.exp(z));
 }
 
 function validateInitialState(state) {
