@@ -1,309 +1,288 @@
-import { useState, useEffect, Component } from 'react';
-import { Brain, AlertTriangle, Zap } from 'lucide-react';
-import { useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Brain, Calendar, BarChart3, Zap, Play, AlertCircle, Settings, RefreshCw, Trash2 } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
-import SessionChart from './components/SessionChart.jsx';
-import { calculateMarkovTimeline, findBurnoutTick } from './utils/markovEngine.js';
-import { loadCalibration, saveCalibration, loadCalendar, saveCalendar, loadTasks, saveTasks } from './utils/storage.js';
+import MarkovAnalyticsDashboard from './components/MarkovAnalyticsDashboard.jsx';
+import generateWeeklySchedule from './utils/scheduler.js';
+import {
+  saveCalibration, loadCalibration,
+  saveCalendar, loadCalendar,
+  saveTasks, loadTasks,
+  saveSettings, loadSettings,
+  clearAll,
+} from './utils/storage.js';
 
-// ---------------------------------------------------------------------------
-// Error Boundary
-// ---------------------------------------------------------------------------
+const TABS = [
+  { id: 'calibrate', label: 'Calibration', icon: Brain },
+  { id: 'tasks', label: 'Schedule', icon: Calendar },
+  { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+];
 
-class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-mindflow-bg text-mindflow-text flex items-center justify-center">
-          <div className="text-center space-y-4 p-8">
-            <AlertTriangle className="w-12 h-12 text-mindflow-warning mx-auto" />
-            <h2 className="text-xl font-semibold text-mindflow-heading">Something went wrong</h2>
-            <p className="text-sm text-mindflow-muted max-w-md">
-              {this.state.error?.message || 'An unexpected error occurred.'}
-            </p>
-            <button
-              onClick={() => this.setState({ hasError: false, error: null })}
-              className="px-4 py-2 bg-mindflow-accent text-white rounded-lg text-sm hover:opacity-90"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      );
+const DEFAULT_SETTINGS = { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
+
+export default function App() {
+  // ── Persistent state (init from localStorage) ────────────────────
+  const [calibration, setCalibrationState] = useState(() => loadCalibration());
+  const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
+  const [tasks, setTasksState] = useState(() => loadTasks());
+  const [settings, setSettingsState] = useState(() => loadSettings());
+
+  // ── Session state ─────────────────────────────────────────────────
+  const [showWelcome, setShowWelcome] = useState(() => !loadCalibration());
+  const [activeTab, setActiveTab] = useState('calibrate');
+  const [optimizedWeek, setOptimizedWeek] = useState(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [scheduleError, setScheduleError] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // ── Stale detection ───────────────────────────────────────────────
+  const lastGeneratedRef = useRef(null);
+  const dataVersionRef = useRef(0);
+  const isStale = optimizedWeek && (dataVersionRef.current > 0);
+
+  // ── Wrapped setters (save to localStorage + track staleness) ─────
+  const setCalibration = (cal) => { setCalibrationState(cal); saveCalibration(cal); };
+  const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); saveCalendar(blocks); dataVersionRef.current++; };
+  const setTasks = (t) => { setTasksState(t); saveTasks(t); dataVersionRef.current++; };
+  const setSettings = (s) => { setSettingsState(s); saveSettings(s); };
+
+  // ── Generate schedule ─────────────────────────────────────────────
+  const handleGenerate = useCallback(() => {
+    setScheduleError(null);
+    if (!calibration) {
+      setScheduleError('Complete the calibration test first (or skip it).');
+      setActiveTab('calibrate');
+      return;
     }
-    return this.props.children;
-  }
-}
+    if (tasks.length === 0) {
+      setScheduleError('Add at least one task first.');
+      setActiveTab('tasks');
+      return;
+    }
+    setIsCalculating(true);
+    // Small delay so the loading state renders before the heavy computation
+    setTimeout(() => {
+      try {
+        const result = generateWeeklySchedule(
+          calendarBlocks, tasks, calibration.alphaScore, settings
+        );
+        setOptimizedWeek(result);
+        lastGeneratedRef.current = Date.now();
+        dataVersionRef.current = 0;
+        setIsCalculating(false);
+        setActiveTab('dashboard');
+      } catch (err) {
+        console.error('Scheduler crashed:', err);
+        setScheduleError('Failed to generate schedule. Check console for details.');
+        setIsCalculating(false);
+      }
+    }, 150);
+  }, [calibration, calendarBlocks, tasks, settings]);
 
-// ---------------------------------------------------------------------------
-// Screen constants
-// ---------------------------------------------------------------------------
+  // ── Handlers ──────────────────────────────────────────────────────
+  const handleCalibrationComplete = (cal) => { setCalibration(cal); setShowWelcome(false); };
+  const handleSkipCalibration = () => {
+    setCalibration({ stroopAccuracy: 0.75, avgResponseTimeMs: 750, alphaScore: 1.0 });
+    setShowWelcome(false);
+  };
+  const handleReset = () => {
+    if (confirm('Delete all your data? This cannot be undone.')) {
+      clearAll();
+      window.location.reload();
+    }
+  };
+  const switchTab = (id) => { setActiveTab(id); setScheduleError(null); };
+  const canGenerate = calibration && tasks.length > 0;
 
-const SCREEN = { WELCOME: 'welcome', STROOP: 'stroop', CALENDAR: 'calendar', MAIN: 'main' };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isValidCalibration(cal) {
-  return cal && typeof cal === 'object' && !Array.isArray(cal)
-    && typeof cal.alphaScore === 'number' && Number.isFinite(cal.alphaScore)
-    && typeof cal.stroopAccuracy === 'number' && Number.isFinite(cal.stroopAccuracy)
-    && typeof cal.avgResponseTimeMs === 'number' && Number.isFinite(cal.avgResponseTimeMs);
-}
-
-const DEFAULT_CALIBRATION = { stroopAccuracy: 0.75, avgResponseTimeMs: 750, alphaScore: 1.0 };
-
-// ---------------------------------------------------------------------------
-// Live fatigue preview (demo of Markov engine output with user's alpha)
-// ---------------------------------------------------------------------------
-
-function FatiguePreview({ calibration }) {
-  const timeline = useMemo(() => {
-    return calculateMarkovTimeline(calibration.alphaScore, 3, 1.0, 18);
-  }, [calibration.alphaScore]);
-
-  const burnoutTick = useMemo(() => {
-    return findBurnoutTick(timeline, 0.50);
-  }, [timeline]);
-
-  if (!timeline || timeline.length === 0) return null;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h3 className="text-sm font-medium text-mindflow-heading">
-          Your Fatigue Prediction
-        </h3>
-        <span className="text-xs text-mindflow-muted">
-          (3-hour study session at medium difficulty)
-        </span>
+  // ── Welcome screen (shown once, fullscreen) ───────────────────────
+  if (showWelcome) {
+    return (
+      <div className="min-h-screen bg-mindflow-bg flex items-center justify-center px-4">
+        <WelcomeScreen onStart={() => setShowWelcome(false)} onSkip={handleSkipCalibration} />
       </div>
-      <SessionChart
-        timeline={timeline}
-        burnoutTick={burnoutTick}
-        height={220}
-      />
-    </div>
-  );
-}
+    );
+  }
 
-// ---------------------------------------------------------------------------
-// MindFlow App
-// ---------------------------------------------------------------------------
-
-function App() {
-  const [screen, setScreen] = useState(() => {
-    const existing = loadCalibration();
-    return isValidCalibration(existing) ? SCREEN.MAIN : SCREEN.WELCOME;
-  });
-  const [calibration, setCalibration] = useState(() => {
-    const existing = loadCalibration();
-    return isValidCalibration(existing) ? existing : null;
-  });
-  const [calendarBlocks, setCalendarBlocks] = useState(() => loadCalendar());
-  const [tasks, setTasks] = useState(() => loadTasks());
-
-  // Persist calibration + calendar + tasks whenever they change
-  useEffect(() => {
-    if (calibration) saveCalibration(calibration);
-  }, [calibration]);
-  useEffect(() => {
-    saveCalendar(calendarBlocks);
-  }, [calendarBlocks]);
-  useEffect(() => {
-    saveTasks(tasks);
-  }, [tasks]);
-
-  const handleWelcomeStart = () => setScreen(SCREEN.STROOP);
-  const handleWelcomeSkip = () => {
-    setCalibration(DEFAULT_CALIBRATION);
-    setScreen(SCREEN.MAIN);
-  };
-
-  const handleStroopComplete = (result) => {
-    if (isValidCalibration(result)) {
-      setCalibration(result);
-    } else {
-      setCalibration(DEFAULT_CALIBRATION);
-    }
-    setScreen(SCREEN.CALENDAR);
-  };
-
-  const handleStroopSkip = () => {
-    setCalibration(DEFAULT_CALIBRATION);
-    setScreen(SCREEN.CALENDAR);
-  };
-
-  // ── Header ──
-  const header = (
-    <header className="border-b border-mindflow-border bg-mindflow-surface/60 backdrop-blur sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+  // ── Main app ──────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-mindflow-bg flex flex-col">
+      {/* ═══ HEADER ═══ */}
+      <header className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <Brain className="w-7 h-7 text-mindflow-accent" />
-          <h1 className="text-xl font-bold text-mindflow-heading tracking-tight">
-            MindFlow
-          </h1>
-          <span className="text-xs px-2 py-0.5 rounded-full border border-mindflow-accent/30 text-mindflow-accent bg-mindflow-accent/10">
-            BETA
-          </span>
+          <h1 className="text-xl font-bold text-mindflow-heading tracking-tight">MindFlow</h1>
+          <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider">Beta</span>
         </div>
-        {screen !== SCREEN.WELCOME && isValidCalibration(calibration) && (
-          <div className="flex items-center gap-2 text-sm">
-            <Zap className="w-4 h-4 text-mindflow-accent" />
-            <span className="text-mindflow-muted">Focus Score:</span>
-            <span className="font-semibold text-mindflow-heading">{calibration.alphaScore.toFixed(2)}</span>
+        <div className="flex items-center gap-3">
+          {calibration && (
+            <div className="flex items-center gap-2 text-sm bg-mindflow-bg rounded-lg px-3 py-1.5">
+              <Zap className="w-4 h-4 text-mindflow-accent" />
+              <span className="text-mindflow-muted hidden sm:inline">Focus</span>
+              <span className="text-mindflow-heading font-bold">{calibration.alphaScore.toFixed(2)}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-mindflow-accent text-white' : 'text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-bg'}`}
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          {activeTab === 'tasks' && (
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className="bg-mindflow-accent text-white px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-mindflow-accent/20"
+            >
+              <Play className="w-4 h-4" /> Generate
+            </button>
+          )}
+          {activeTab === 'dashboard' && isStale && (
+            <button
+              onClick={handleGenerate}
+              className="bg-mindflow-warning text-mindflow-bg px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" /> Regenerate
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ═══ SETTINGS PANEL ═══ */}
+      {showSettings && (
+        <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 animate-fade-in">
+          <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs">Chronotype:</span>
+              {['morning', 'neutral', 'night'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${settings.chronotype === c ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs">Max hrs/day (weekday):</span>
+              <input
+                type="number" value={settings.maxHoursPerDay} min={1} max={16}
+                onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
+                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs">Weekend:</span>
+              <input
+                type="number" value={settings.maxHoursWeekend} min={0} max={12}
+                onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
+                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleReset}
+              className="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium bg-mindflow-danger/10 text-mindflow-danger hover:bg-mindflow-danger/20 transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3 h-3" /> Reset All Data
+            </button>
           </div>
-        )}
-      </div>
-    </header>
-  );
-
-  // ── Main screen (will expand with Calendar + Dashboard in steps 45–65) ──
-  const mainScreen = (
-    <div className="space-y-8 animate-fade-in">
-      {/* Calibration summary */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 flex items-center gap-4">
-        <div className="bg-mindflow-accent/15 p-3 rounded-full">
-          <Zap className="w-6 h-6 text-mindflow-accent" />
         </div>
-        <div>
-          <p className="text-sm font-medium text-mindflow-heading">
-            Focus Score: {isValidCalibration(calibration) ? calibration.alphaScore.toFixed(2) : '1.00'}
-          </p>
-          <p className="text-xs text-mindflow-muted">
-            {calibration?.alphaScore >= 1.2 ? 'Excellent — you\'ll stay in Flow longer.' :
-             calibration?.alphaScore >= 0.9 ? 'Good — standard fatigue patterns apply.' :
-             calibration?.alphaScore >= 0.7 ? 'Moderate — schedule hard tasks early.' :
-             'Default calibration — retake the Stroop test for better accuracy.'}
-          </p>
-        </div>
-        <button
-          onClick={() => setScreen(SCREEN.STROOP)}
-          className="ml-auto text-xs text-mindflow-accent hover:underline shrink-0"
-        >
-          Recalibrate
-        </button>
-      </div>
-
-      {/* Live fatigue prediction */}
-      {isValidCalibration(calibration) && (
-        <FatiguePreview calibration={calibration} />
       )}
 
-      {/* Task input form */}
-      <TaskInputForm tasks={tasks} onChange={setTasks} />
-
-      {/* Navigation + Generate */}
-      <div className="space-y-3">
-        <button
-          onClick={() => setScreen(SCREEN.CALENDAR)}
-          className="text-sm text-mindflow-muted hover:text-mindflow-text transition-colors underline underline-offset-4"
-        >
-          ← Back to Weekly Schedule
-        </button>
-
-        {tasks.length > 0 && (
-          <div className="text-center">
+      {/* ═══ TABS ═══ */}
+      <nav className="flex border-b border-mindflow-border bg-mindflow-bg sticky top-[65px] z-30">
+        {TABS.map(tab => {
+          const I = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
             <button
-              className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
-                         hover:opacity-90 shadow-lg shadow-mindflow-accent/25 opacity-50 cursor-not-allowed"
-              disabled
-              title="Dashboard coming soon (steps 55-65)"
+              key={tab.id}
+              onClick={() => switchTab(tab.id)}
+              className={`flex items-center gap-2 px-6 py-3.5 text-sm font-medium transition-all border-b-2 relative ${isActive ? 'text-mindflow-accent border-mindflow-accent bg-mindflow-accent/5' : 'text-mindflow-muted border-transparent hover:text-mindflow-text hover:bg-mindflow-surface/50'}`}
             >
-              Generate Schedule ({tasks.length} task{tasks.length !== 1 ? 's' : ''})
+              <I className="w-4 h-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              {tab.id === 'calibrate' && calibration && (
+                <span className="w-1.5 h-1.5 rounded-full bg-mindflow-success absolute top-2 right-2" />
+              )}
+              {tab.id === 'tasks' && tasks.length > 0 && (
+                <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-1.5 py-0.5 rounded-full font-medium">{tasks.length}</span>
+              )}
             </button>
-            <p className="text-xs text-mindflow-muted mt-2">
-              Dashboard visualization coming in next update
-            </p>
-          </div>
-        )}
-      </div>
+          );
+        })}
+      </nav>
 
-      {/* Reset */}
-      <div className="text-center pt-4 border-t border-mindflow-border">
-        <button
-          onClick={() => {
-            try { localStorage.removeItem('mindflow_calibration'); localStorage.removeItem('mindflow_calendar'); localStorage.removeItem('mindflow_tasks'); } catch {}
-            setCalibration(null);
-            setCalendarBlocks([]);
-            setTasks([]);
-            setScreen(SCREEN.WELCOME);
-          }}
-          className="border border-mindflow-border text-mindflow-text px-4 py-2 rounded-lg text-sm hover:bg-mindflow-surface transition-colors"
-        >
-          Reset & Start Over
-        </button>
-      </div>
-    </div>
-  );
+      {/* ═══ ERROR BANNER ═══ */}
+      {scheduleError && (
+        <div className="bg-mindflow-danger/10 border-b border-mindflow-danger/30 px-6 py-3 flex items-center gap-2 text-sm text-mindflow-danger">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {scheduleError}
+          <button onClick={() => setScheduleError(null)} className="ml-auto text-mindflow-danger/70 hover:text-mindflow-danger text-xs">Dismiss</button>
+        </div>
+      )}
 
-  return (
-    <div className="min-h-screen bg-mindflow-bg text-mindflow-text">
-      {header}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {screen === SCREEN.WELCOME && (
-          <WelcomeScreen onStart={handleWelcomeStart} onSkip={handleWelcomeSkip} />
-        )}
-        {screen === SCREEN.STROOP && (
+      {/* ═══ CONTENT ═══ */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {activeTab === 'calibrate' && (
           <StroopTestModal
-            onComplete={handleStroopComplete}
-            onSkip={handleStroopSkip}
+            onComplete={handleCalibrationComplete}
+            onSkip={handleSkipCalibration}
             existingCalibration={calibration}
           />
         )}
-        {screen === SCREEN.CALENDAR && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-mindflow-heading">Your Weekly Schedule</h2>
-              <p className="text-sm text-mindflow-muted max-w-lg mx-auto">
-                Add your fixed commitments — classes, work, sports practice. The scheduler
-                will fit your study tasks into the gaps.
-              </p>
+
+        {activeTab === 'tasks' && (
+          <div className="space-y-8">
+            <div className="flex items-center gap-3 text-xs text-mindflow-muted flex-wrap">
+              <div className={`flex items-center gap-1.5 ${calendarBlocks.length > 0 ? 'text-mindflow-success' : ''}`}>
+                <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-bold">1</span>
+                Set schedule
+              </div>
+              <span className="opacity-30">→</span>
+              <div className={`flex items-center gap-1.5 ${tasks.length > 0 ? 'text-mindflow-success' : ''}`}>
+                <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-bold">2</span>
+                Add tasks
+              </div>
+              <span className="opacity-30">→</span>
+              <div className={`flex items-center gap-1.5 ${canGenerate ? 'text-mindflow-accent' : ''}`}>
+                <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-bold">3</span>
+                Generate
+              </div>
             </div>
             <WeeklyCalendar blocks={calendarBlocks} onChange={setCalendarBlocks} />
-            <div className="flex justify-center gap-3 pt-4">
-              <button
-                onClick={() => setScreen(SCREEN.MAIN)}
-                className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
-                           hover:opacity-90 shadow-lg shadow-mindflow-accent/25"
-              >
-                Continue to Tasks
-              </button>
-              <button
-                onClick={() => setScreen(SCREEN.MAIN)}
-                className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl
-                           text-sm hover:bg-mindflow-surface transition-colors"
-              >
-                Skip for now
-              </button>
-            </div>
+            <TaskInputForm tasks={tasks} onChange={setTasks} />
+            {canGenerate && (
+              <div className="flex justify-center pt-4">
+                <button
+                  onClick={handleGenerate}
+                  className="bg-mindflow-accent text-white px-12 py-4 rounded-2xl text-lg font-semibold hover:opacity-90 shadow-xl shadow-mindflow-accent/20 active:scale-[0.98] flex items-center gap-3"
+                >
+                  <Zap className="w-5 h-5" /> Generate Optimized Schedule
+                </button>
+              </div>
+            )}
           </div>
         )}
-        {screen === SCREEN.MAIN && mainScreen}
+
+        {activeTab === 'dashboard' && (
+          <MarkovAnalyticsDashboard
+            optimizedWeek={optimizedWeek}
+            alpha={calibration?.alphaScore || 1.0}
+            isCalculating={isCalculating}
+            isStale={isStale}
+            onRegenerate={handleGenerate}
+            calendarBlocks={calendarBlocks}
+          />
+        )}
       </main>
+
+      {/* ═══ FOOTER ═══ */}
+      <footer className="border-t border-mindflow-border bg-mindflow-surface/50 px-6 py-4">
+        <p className="text-center text-xs text-mindflow-muted">MindFlow · v0.2.0</p>
+      </footer>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Export (wrapped in error boundary)
-// ---------------------------------------------------------------------------
-
-export default function MindFlowApp() {
-  return (
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
   );
 }

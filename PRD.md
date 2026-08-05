@@ -1,9 +1,9 @@
 # MindFlow — Master PRD
 
-> **Progress: 54 / 85 steps complete — 63.5%**
+> **Progress: 74 / 85 steps complete — 87.1%**
 >
-> **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 13/52 = 25%** |
-> **Stage 3 (App Shell): 0/9 = 0%** | **Stage 4 (Integration): 0/11 = 0%**
+> **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
+> **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 0/11 = 0%**
 >
 > **2026-08-05 (v5 engine audit):** Two-round deep algorithm review across Markov engine,
 > scheduler, and Stroop test. 14 issues fixed: asymmetric P_BASE with micro-recovery,
@@ -52,8 +52,8 @@
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ✅ 8/8 — production-quality | 100% |
 | **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ✅ 4/4 — production-quality | 100% |
-| **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ❌ 0/11 | 0% |
-| **66–74** | App Shell | `src/App.jsx` — rewrite | 🟡 0/9 (prototype hardened) | 0%* |
+| **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ✅ 11/11 — production-quality | 100% |
+| **66–74** | App Shell | `src/App.jsx` — rewrite | ✅ 9/9 — production-quality | 100% |
 | **75–85** | Integration | Manual walkthrough | ❌ 0/11 | 0% |
 
 > \* Step 66–74 is 0% toward the PRD-specified full rewrite, but the existing prototype
@@ -73,11 +73,11 @@ Steps 31–36 Stroop Test         ███████████████�
 Steps 37–44 Task Form           ████████████████████████ 8/8   100%
 Steps 45–50 Calendar            ████████████████████████ 6/6   100%
 Steps 51–54 Session Chart       ████████████████████████ 4/4   100%
-Steps 55–65 Dashboard           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
-Steps 66–74 App Shell           ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%*
+Steps 55–65 Dashboard           ████████████████████████ 11/11 100%
+Steps 66–74 App Shell           ████████████████████████ 9/9   100%
 Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           54/85   63.5%
+TOTAL                           74/85   87.1%
 ```
 
 ### Stage Completion
@@ -85,8 +85,8 @@ TOTAL                           54/85   63.5%
 | Stage | Steps | Done | % | Status |
 |-------|-------|------|---|--------|
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
-| **Stage 2: Core Components** | 14–65 | 37/52 | **71%** | 🟡 Scheduler + 4 UI components done, 2 remain |
-| **Stage 3: App Shell** | 66–74 | 0/9 | **0%*** | 🟡 Prototype hardened |
+| **Stage 2: Core Components** | 14–65 | 52/52 | **100%** | ✅ All 6 UI components complete |
+| **Stage 3: App Shell** | 66–74 | 9/9 | **100%** | ✅ Tab navigation + Generate flow |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
 
 > **Stage 1** (Foundation) is complete and production-quality:
@@ -123,7 +123,7 @@ TOTAL                           54/85   63.5%
 > - 2,100+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
 > - 1 UI component remaining (Dashboard, steps 55–65)
 >
-> **Next:** Stage 2 final — create `src/components/MarkovAnalyticsDashboard.jsx` (steps 55–65)
+> **Next:** Stage 4 — Integration verification walkthrough (steps 75–85)
 
 ---
 
