@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
@@ -41,20 +41,42 @@ function getDateForDay(dayName, weekStart) {
 }
 
 export default function App() {
-  const weekStart = getWeekMonday();
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Compute weekStart based on offset
+  const getWeekStart = (offset = 0) => {
+    const [y, m, d] = getWeekMonday().split('-').map(Number);
+    const date = new Date(y, m - 1, d + offset * 7);
+    const yy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return yy + '-' + mm + '-' + dd;
+  };
+
+  const weekStart = getWeekStart(weekOffset);
+  const weekEnd = (() => {
+    const [y, m, d] = weekStart.split('-').map(Number);
+    const end = new Date(y, m - 1, d + 6);
+    return end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })();
+  const weekLabel = (() => {
+    const d = new Date(weekStart + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })();
   const [calibration, setCalibrationState] = useState(() => loadCalibration());
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
   const [settings, setSettingsState] = useState(() => loadSettings());
 
   const [showWelcome, setShowWelcome] = useState(() => !loadCalibration());
-  const [optimizedWeek, setOptimizedWeek] = useState(null);
+  const [weekResults, setWeekResults] = useState({}); // weekStart -> result
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
 
   const dataVersionRef = useRef(0);
-  const isStale = optimizedWeek && (dataVersionRef.current > 0);
+  const currentResult = weekResults[weekStart] || null;
+  const isStale = Object.keys(weekResults).length > 0 && (dataVersionRef.current > 0);
 
   const setCalibration = (cal) => { setCalibrationState(cal); saveCalibration(cal); };
   const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); saveCalendar(blocks); dataVersionRef.current++; };
@@ -65,15 +87,28 @@ export default function App() {
     if (isCalculating) return;
     setError(null);
     if (!calibration || typeof calibration.alphaScore !== 'number') {
-      setError('Take the calibration test first (Calibrate tab).');
+      setError('Take the calibration test first.');
       return;
     }
     if (tasks.length === 0) { setError('Add at least one task first.'); return; }
     setIsCalculating(true);
     setTimeout(() => {
       try {
-        const result = generateWeeklySchedule(calendarBlocks, tasks, calibration.alphaScore, settings, weekStart);
-        setOptimizedWeek(result);
+        const results = {};
+        let remaining = [...tasks];
+        let w = 0;
+        // Cascade: fill week 0, roll unscheduled to week 1, etc.
+        while (remaining.length > 0 && w < 8) {
+          const ws = getWeekStart(w);
+          const result = generateWeeklySchedule(calendarBlocks, remaining, calibration.alphaScore, settings, ws);
+          results[ws] = result;
+          remaining = result.unscheduled || [];
+          // For subsequent weeks, clear calendar blocks (school schedule is weekly)
+          // and pass the unscheduled tasks as the only tasks for that week
+          w++;
+        }
+        setWeekResults(results);
+        setWeekOffset(0);
         dataVersionRef.current = 0;
         setIsCalculating(false);
       } catch (err) {
@@ -93,6 +128,7 @@ export default function App() {
     if (confirm('Delete all your data? This cannot be undone.')) { clearAll(); window.location.reload(); }
   };
   const canGenerate = calibration && tasks.length > 0;
+  const hasResults = Object.keys(weekResults).length > 0;
 
   // ── Welcome ──
   if (showWelcome) {
@@ -105,7 +141,7 @@ export default function App() {
 
   // ── Result calendar: fixed blocks + scheduled study tasks ──
   const renderResultCalendar = () => {
-    if (!optimizedWeek) return null;
+    if (!currentResult) return null;
     const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
     const HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6am–10pm
     const ROW_H = 52; // px per hour
@@ -113,13 +149,13 @@ export default function App() {
     return (
       <div className="space-y-4">
         {/* Stats row */}
-        {optimizedWeek.stats && (
+        {currentResult.stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             {[
-              [optimizedWeek.stats.totalScheduledHours + 'h', 'Scheduled'],
-              [optimizedWeek.stats.utilizationPct + '%', 'Capacity'],
-              [optimizedWeek.stats.workloadBalance + '%', 'Balance'],
-              [(optimizedWeek.stats.avgFatigue || 0) + '%', 'Avg Fatigue'],
+              [currentResult.stats.totalScheduledHours + 'h', 'Scheduled'],
+              [currentResult.stats.utilizationPct + '%', 'Capacity'],
+              [currentResult.stats.workloadBalance + '%', 'Balance'],
+              [(currentResult.stats.avgFatigue || 0) + '%', 'Avg Fatigue'],
             ].map(([val, label], i) => (
               <div key={i} className="bg-mindflow-surface border border-mindflow-border rounded-lg py-2">
                 <p className="text-lg font-bold text-mindflow-heading">{val}</p>
@@ -130,9 +166,9 @@ export default function App() {
         )}
 
         {/* Warnings */}
-        {optimizedWeek.warnings?.length > 0 && (
+        {currentResult.warnings?.length > 0 && (
           <div className="space-y-1">
-            {optimizedWeek.warnings.map((w, i) => (
+            {currentResult.warnings.map((w, i) => (
               <div key={i} className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 ${
                 w.severity === 'high' ? 'bg-mindflow-danger/10 text-mindflow-danger' :
                 w.severity === 'medium' ? 'bg-mindflow-warning/10 text-mindflow-warning' :
@@ -149,7 +185,7 @@ export default function App() {
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
           <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
             {DAYS.map(d => {
-              const n = calendarBlocks.filter(b => b.day === d).length + (optimizedWeek.days[d]?.sessions?.length || 0);
+              const n = calendarBlocks.filter(b => b.day === d).length + (currentResult.days[d]?.sessions?.length || 0);
               return (
                 <div key={d} className="px-2 py-2 text-center border-r border-mindflow-border last:border-r-0">
                   <span className="text-[10px] font-semibold text-mindflow-heading">{d}</span>
@@ -185,7 +221,7 @@ export default function App() {
                 })}
 
                 {/* Scheduled study sessions */}
-                {(optimizedWeek.days[day]?.sessions || []).map((s, i) => {
+                {(currentResult.days[day]?.sessions || []).map((s, i) => {
                   const c = TYPE_COLORS[s.task.type] || TYPE_COLORS.other;
                   const startH = s.startTick / 6;
                   const endH = s.endTick / 6;
@@ -205,14 +241,14 @@ export default function App() {
         </div>
 
         {/* Unscheduled */}
-        {optimizedWeek.unscheduled?.length > 0 && (
+        {currentResult.unscheduled?.length > 0 && (
           <div className="bg-mindflow-warning/10 border border-mindflow-warning/30 rounded-xl p-4">
             <p className="text-sm font-medium text-mindflow-warning flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
-              {optimizedWeek.unscheduled.length} task{optimizedWeek.unscheduled.length !== 1 ? 's' : ''} couldn't fit
+              {currentResult.unscheduled.length} task{currentResult.unscheduled.length !== 1 ? 's' : ''} couldn't fit
             </p>
             <p className="text-xs text-mindflow-muted mt-1">
-              {optimizedWeek.unscheduled.map(t => t.title).join(', ')} — try reducing duration or freeing up calendar space.
+              {currentResult.unscheduled.map(t => t.title).join(', ')} — try reducing duration or freeing up calendar space.
             </p>
           </div>
         )}
@@ -247,9 +283,9 @@ export default function App() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {optimizedWeek && isStale && (
+          {hasResults && isStale && (
             <button onClick={handleGenerate} className="text-xs bg-mindflow-warning/15 text-mindflow-warning px-3 py-1.5 rounded-lg font-medium hover:opacity-90">
-              <RefreshCw className="w-3 h-3 inline mr-1" />Regenerate
+              <RefreshCw className="w-3 h-3 inline mr-1" />Regen
             </button>
           )}
           <button onClick={() => setShowSettings(!showSettings)}
@@ -333,7 +369,7 @@ export default function App() {
 
         {/* Generate */}
         <div className="text-center">
-          {canGenerate && !optimizedWeek && (
+          {canGenerate && !hasResults && (
             <button onClick={handleGenerate} disabled={isCalculating}
               className="bg-mindflow-accent text-white px-10 py-4 rounded-2xl text-lg font-semibold hover:opacity-90 shadow-xl shadow-mindflow-accent/20 active:scale-[0.98] flex items-center gap-3 mx-auto disabled:opacity-50">
               {isCalculating ? (
@@ -346,7 +382,37 @@ export default function App() {
         </div>
 
         {/* Results */}
-        {optimizedWeek && renderResultCalendar()}
+        {hasResults && (
+          <>
+            {/* Week navigation */}
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <button onClick={() => setWeekOffset(o => o - 1)}
+                className="p-2 rounded-lg text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface transition-colors">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-sm font-medium text-mindflow-heading min-w-[160px] text-center">
+                {(() => {
+                  const d = new Date(getWeekStart(weekOffset) + 'T00:00:00');
+                  const end = new Date(d);
+                  end.setDate(end.getDate() + 6);
+                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    + ' – ' + end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                })()}
+                {weekOffset === 0 && <span className="block text-[10px] text-mindflow-accent">This week</span>}
+              </span>
+              <button onClick={() => setWeekOffset(o => o + 1)}
+                className="p-2 rounded-lg text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface transition-colors">
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+            {currentResult ? renderResultCalendar() : (
+              <div className="text-center py-16 text-mindflow-muted text-sm">
+                No tasks scheduled for this week.
+                {weekOffset > 0 && ' All tasks were placed in earlier weeks.'}
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       <footer className="border-t border-mindflow-border bg-mindflow-surface/50 px-6 py-3">

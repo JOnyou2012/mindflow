@@ -905,7 +905,30 @@ export default function generateWeeklySchedule(
 
   const week = createEmptyWeek();
   const s = settings || {};
-  const taskList = (tasks || []).filter(t => t && t.durationMins > 0);
+  // Auto-split large/difficult tasks into smaller chunks
+  const MAX_CHUNK_MINS = 90;
+  const taskList = [];
+  for (const t of (tasks || [])) {
+    if (!t || t.durationMins <= 0) continue;
+    const needsSplit = t.durationMins > 180 || (t.durationMins > 120 && (t.difficulty || 3) >= 4);
+    if (needsSplit) {
+      const numChunks = Math.ceil(t.durationMins / MAX_CHUNK_MINS);
+      const chunkMins = Math.round(t.durationMins / numChunks);
+      for (let c = 0; c < numChunks; c++) {
+        taskList.push({
+          ...t,
+          id: t.id + '__chunk' + c,
+          title: t.title + ' (' + (c + 1) + '/' + numChunks + ')',
+          durationMins: c === numChunks - 1 ? t.durationMins - chunkMins * c : chunkMins,
+          parentId: t.id,
+          isChunk: true,
+        });
+      }
+    } else {
+      taskList.push({ ...t });
+    }
+  }
+
   if (taskList.length === 0) {
     week.stats = computeStats(week, [], s);
     week.warnings = [];
