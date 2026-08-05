@@ -104,8 +104,10 @@ TOTAL                           44/85   51.8%
 >   accuracy/response-time, color-coded results with interpretation
 > - `src/components/TaskInputForm.jsx`: full task entry with 6 fields (title,
 >   type, priority, difficulty stars, duration with quick-set, optional deadline),
->   task list with type/priority badges, hover-delete, Enter-key submit,
->   validation, localStorage persistence via App.jsx
+>   task list with type/priority badges, hover edit/delete, Enter-key submit,
+>   validation + duplicate detection, collapsible form, empty state, task
+>   summary bar (total count/time/difficulty/deadlines), click-to-edit,
+>   overdue badge + past-deadline styling, formatted duration/deadline display
 > - `src/App.jsx`: screen flow (Welcome→Stroop→Main), calibration summary
 >   with recalibrate, task form with generate placeholder, reset clears all state
 > - 2,096+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
