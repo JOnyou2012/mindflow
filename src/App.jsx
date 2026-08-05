@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
@@ -384,27 +384,38 @@ export default function App() {
         {/* Results */}
         {hasResults && (
           <>
-            {/* Week navigation */}
-            <div className="flex items-center justify-center gap-4 pt-2">
-              <button onClick={() => setWeekOffset(o => o - 1)}
-                className="p-2 rounded-lg text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface transition-colors">
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="text-sm font-medium text-mindflow-heading min-w-[160px] text-center">
-                {(() => {
-                  const d = new Date(getWeekStart(weekOffset) + 'T00:00:00');
-                  const end = new Date(d);
-                  end.setDate(end.getDate() + 6);
-                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                    + ' – ' + end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                })()}
-                {weekOffset === 0 && <span className="block text-[10px] text-mindflow-accent">This week</span>}
-              </span>
-              <button onClick={() => setWeekOffset(o => o + 1)}
-                className="p-2 rounded-lg text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface transition-colors">
-                <ChevronRight className="w-5 h-5" />
-              </button>
+            {/* Week selector strip */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {Array.from({ length: 8 }, (_, i) => {
+                const ws = getWeekStart(i);
+                const hasData = weekResults[ws];
+                const isCurrent = i === weekOffset;
+                if (!hasData && i > 0) return null; // only show weeks with data + week 0
+                const d = new Date(ws + 'T00:00:00');
+                const end = new Date(d);
+                end.setDate(end.getDate() + 6);
+                const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setWeekOffset(i)}
+                    className={`shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all
+                      ${isCurrent ? 'bg-mindflow-accent text-white' :
+                        hasData ? 'bg-mindflow-surface border border-mindflow-border text-mindflow-text hover:border-mindflow-accent/50' :
+                        'bg-mindflow-bg text-mindflow-muted/50'}`}
+                  >
+                    {label}
+                    {i === 0 && <span className="block text-[9px] opacity-70">This week</span>}
+                    {hasData && weekResults[ws].stats && (
+                      <span className="block text-[9px] opacity-70">
+                        {weekResults[ws].stats.totalScheduledHours}h
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
             {currentResult ? renderResultCalendar() : (
               <div className="text-center py-16 text-mindflow-muted text-sm">
                 No tasks scheduled for this week.
