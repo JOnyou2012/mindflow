@@ -162,22 +162,31 @@ function App() {
       {/* Task input form */}
       <TaskInputForm tasks={tasks} onChange={setTasks} />
 
-      {/* Generate button (wired to scheduler in steps 55–65) */}
-      {tasks.length > 0 && (
-        <div className="text-center">
-          <button
-            className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
-                       hover:opacity-90 shadow-lg shadow-mindflow-accent/25 opacity-50 cursor-not-allowed"
-            disabled
-            title="Calendar + Dashboard coming soon"
-          >
-            Generate Schedule ({tasks.length} task{tasks.length !== 1 ? 's' : ''})
-          </button>
-          <p className="text-xs text-mindflow-muted mt-2">
-            Calendar input and schedule dashboard coming in next updates
-          </p>
-        </div>
-      )}
+      {/* Navigation + Generate */}
+      <div className="space-y-3">
+        <button
+          onClick={() => setScreen(SCREEN.CALENDAR)}
+          className="text-sm text-mindflow-muted hover:text-mindflow-text transition-colors underline underline-offset-4"
+        >
+          ← Back to Weekly Schedule
+        </button>
+
+        {tasks.length > 0 && (
+          <div className="text-center">
+            <button
+              className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold
+                         hover:opacity-90 shadow-lg shadow-mindflow-accent/25 opacity-50 cursor-not-allowed"
+              disabled
+              title="Dashboard coming soon (steps 55-65)"
+            >
+              Generate Schedule ({tasks.length} task{tasks.length !== 1 ? 's' : ''})
+            </button>
+            <p className="text-xs text-mindflow-muted mt-2">
+              Dashboard visualization coming in next update
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Reset */}
       <div className="text-center pt-4 border-t border-mindflow-border">
