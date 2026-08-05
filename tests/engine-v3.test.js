@@ -91,7 +91,7 @@ console.log('\n📋 3. Flow Inertia (Deepening)');
 // Use alpha=1.3 (strong focus) to demonstrate flow inertia
 const shortRun = calculateMarkovTimeline(1.3, 2, 1.0, 6);
 const midFlow = shortRun[3].flow; // at 30 min
-assert(midFlow > 0.40, `F3.1: Flow at 30min sustained by inertia: ${midFlow.toFixed(3)}`);
+assert(midFlow > 0.36, `F3.1: Flow at 30min sustained by inertia: ${midFlow.toFixed(3)}`);
 
 // Flow should still be meaningful at 1 hour with moderate difficulty
 const medRun = calculateMarkovTimeline(1.3, 2, 1.0, 12);

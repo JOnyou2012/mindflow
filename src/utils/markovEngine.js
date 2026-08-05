@@ -1,13 +1,15 @@
 /**
- * MindFlow Markov Chain Engine v3
+ * MindFlow Markov Chain Engine v4
  *
- * Non-linear discrete-time Markov chain simulation of cognitive state
- * transitions during a study session. All math runs client-side.
+ * Non-homogeneous discrete-time Markov chain simulation of cognitive state
+ * transitions during a study session. The transition matrix itself evolves
+ * over time to model accumulating mental fatigue — this prevents the unrealistic
+ * steady-state plateau that homogeneous chains converge to.
  *
  * States: 0=Flow 1=Distracted 2=Fatigue 3=Recovery
  * Time step Δt = 10 minutes.
  *
- * Mathematical features (v3):
+ * Mathematical features (v4):
  *   - Sigmoidal transition modifiers (logistic, not linear)
  *   - State-dependent circadian sensitivity
  *   - Flow-entry warmup (attention ramp-up)
@@ -16,6 +18,9 @@
  *   - Biexponential recovery (fast 2-min sympathetic + slow 120-min parasympathetic)
  *   - Intervention sensitivity (break effectiveness drops as fatigue rises)
  *   - Cognitive capacity ceiling (diminishing returns beyond total load threshold)
+ *   - Temporal cognitive drain: flow retention erodes, fatigue gravity strengthens,
+ *     and spontaneous recovery weakens as the session progresses — preventing
+ *     the unrealistic steady-state plateau of homogeneous Markov chains
  *   - Custom initial state + attention residue support
  *   - Optimal break duration computation
  */
@@ -56,6 +61,16 @@ const INTERVENTION_STEEPNESS = 10.0; // how sharply effectiveness drops
 
 // Cognitive capacity
 const CAPACITY_BASE = 180.0;       // base cognitive capacity (load units)
+
+// Temporal cognitive drain (v4) — prevents steady-state plateau
+// As the session progresses, flow erodes, fatigue gravity strengthens,
+// and spontaneous recovery weakens. This models accumulating mental
+// exhaustion that homogeneous Markov chains cannot capture.
+const DRAIN_MIDPOINT = 0.50;       // session progress where drain becomes noticeable (50%)
+const DRAIN_STEEPNESS = 5.0;       // how sharply drain activates
+const FLOW_EROSION_MAX = 0.35;     // max flow retention loss at session end
+const FATIGUE_GRAVITY_MAX = 0.40;  // max fatigue transition amplification
+const RECOVERY_RESISTANCE_MAX = 0.35; // max spontaneous recovery reduction
 
 // Keep backward-compatible alias
 const RECOVERY_TAU_MINUTES = RECOVERY_TAU_SLOW;
@@ -319,6 +334,11 @@ export function computeCognitiveCapacity(alpha = 1.0) {
  *   - Capacity ceiling: when cumulative load exceeds cognitive capacity,
  *     all fatigue transitions are amplified.
  *
+ * v4 additions:
+ *   - Temporal cognitive drain: sigmoid curve over session progress that
+ *     erodes flow retention, amplifies fatigue gravity, and weakens
+ *     spontaneous recovery. Prevents homogeneous-chain plateau.
+ *
  * @param {number} alpha
  * @param {number} beta
  * @param {number} gamma
@@ -327,10 +347,11 @@ export function computeCognitiveCapacity(alpha = 1.0) {
  * @param {number} prevFatigue      P(Fatigue) at previous tick (for momentum)
  * @param {number} flowStreak       Consecutive ticks in flow state
  * @param {number} cumulativeLoad   Total cognitive load so far
+ * @param {number} totalSteps       Total session length (for temporal drain)
  * @returns {number[][]} 4×4 stochastic matrix
  */
 function buildDynamicMatrix(
-  alpha, beta, gamma, tick, currentFatigue, prevFatigue, flowStreak, cumulativeLoad
+  alpha, beta, gamma, tick, currentFatigue, prevFatigue, flowStreak, cumulativeLoad, totalSteps
 ) {
   const a = Number.isFinite(alpha) ? Math.max(0.3, Math.min(3.0, alpha)) : 1.0;
   const b = Number.isFinite(beta) ? Math.max(1, Math.min(5, beta)) : 3;
@@ -384,27 +405,44 @@ function buildDynamicMatrix(
     : 1.0;
   // At 150% capacity: 50% amplification of fatigue transitions
 
+  // -- Temporal cognitive drain (v4) ------------------------------------------
+  // Accumulating mental exhaustion as session progresses. A sigmoid drain
+  // curve that activates gradually — barely noticeable early, dominant late.
+  // This prevents the unrealistic steady-state plateau of homogeneous chains.
+  const sessionProgress = totalSteps > 0 ? tick / totalSteps : 0;
+  const drain = sigmoid(sessionProgress, DRAIN_MIDPOINT, DRAIN_STEEPNESS);
+  // drain: near 0 early in session → rises to near 1 by session end
+
+  // Flow erosion: harder to maintain flow as mental energy depletes
+  const flowErosionFactor = 1 - drain * FLOW_EROSION_MAX;
+
+  // Fatigue gravity: stronger pull toward fatigue as session wears on
+  const fatigueGravityFactor = 1 + drain * FATIGUE_GRAVITY_MAX;
+
+  // Recovery resistance: spontaneous recovery becomes harder late in session
+  const recoveryResistanceFactor = 1 - drain * RECOVERY_RESISTANCE_MAX;
+
   // -- Build matrix -----------------------------------------------------------
   const P = P_BASE.map((row) => [...row]);
 
-  // Row 0 — Flow
-  P[0][0] *= alphaFlowMod * flowAnchorMod;
+  // Row 0 — Flow: retention weakened by drain, exit-to-fatigue amplified
+  P[0][0] *= alphaFlowMod * flowAnchorMod * flowErosionFactor;
   P[0][1] *= (1 + betaDistractMod) * momentumAmplify;
-  P[0][2] *= (1 + betaFatigueMod) * gammaMod * momentumAmplify * capacityFactor;
+  P[0][2] *= (1 + betaFatigueMod) * gammaMod * momentumAmplify * capacityFactor * fatigueGravityFactor;
 
-  // Row 1 — Distracted
-  P[1][0] *= alphaFlowMod;
+  // Row 1 — Distracted: return-to-flow harder, fall-to-fatigue easier
+  P[1][0] *= alphaFlowMod * flowErosionFactor;
   P[1][1] *= (2 - alphaFlowMod);
-  P[1][2] *= gammaMod * momentumAmplify * capacityFactor;
+  P[1][2] *= gammaMod * momentumAmplify * capacityFactor * fatigueGravityFactor;
 
-  // Row 2 — Fatigued
-  P[2][0] *= (0.3 + alphaFlowMod * 0.2);
+  // Row 2 — Fatigued: harder to escape fatigue spontaneously
+  P[2][0] *= (0.3 + alphaFlowMod * 0.2) * flowErosionFactor;
   P[2][1] *= gammaMod;
-  P[2][2] *= gammaMod * capacityFactor;
-  P[2][3] *= alphaRecoveryMod;
+  P[2][2] *= gammaMod * capacityFactor * fatigueGravityFactor;
+  P[2][3] *= alphaRecoveryMod * recoveryResistanceFactor;
 
-  // Row 3 — Recovery
-  P[3][0] *= alphaRecoveryMod;
+  // Row 3 — Recovery: harder to bounce back to flow as session progresses
+  P[3][0] *= alphaRecoveryMod * recoveryResistanceFactor;
   P[3][1] *= (1.5 - alphaFlowMod * 0.5);
   P[3][3] *= alphaFlowMod;
 
@@ -431,6 +469,7 @@ function simulateTrajectory(alpha, beta, gamma, steps, v0, opts = {}) {
   let prevFatigue = null;
   let flowStreak = 0;
   const cumulativeLoad = opts.cumulativeLoad || 0;
+  const totalSteps = steps; // for temporal drain calculation
 
   for (let t = 0; t <= steps; t++) {
     timeline.push(makeTick(t, v));
@@ -444,10 +483,10 @@ function simulateTrajectory(alpha, beta, gamma, steps, v0, opts = {}) {
       flowStreak = Math.max(0, flowStreak - 2); // decay streak when not in flow
     }
 
-    // Build matrix with all v3 parameters
+    // Build matrix with all v4 parameters including temporal drain
     const P = buildDynamicMatrix(
       alpha, beta, gamma, t, currentFatigue, prevFatigue, flowStreak,
-      cumulativeLoad + t * (beta / 5) * gamma // approximate cumulative load this session
+      cumulativeLoad + t * (beta / 5) * gamma, totalSteps
     );
 
     // v(t+1) = v(t) · P
@@ -481,6 +520,7 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
   let prevFatigue = null;
   let flowStreak = 0;
   const cumulativeLoad = opts.cumulativeLoad || 0;
+  const totalSteps = startTick + steps; // total session length including pre-break portion
 
   for (let t = 0; t <= steps; t++) {
     timeline.push(makeTick(startTick + t, v));
@@ -491,7 +531,7 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
 
     const P = buildDynamicMatrix(
       alpha, beta, gamma, startTick + t, currentFatigue, prevFatigue, flowStreak,
-      cumulativeLoad + (startTick + t) * (beta / 5) * gamma
+      cumulativeLoad + (startTick + t) * (beta / 5) * gamma, totalSteps
     );
 
     const next = [0, 0, 0, 0];
