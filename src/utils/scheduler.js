@@ -408,17 +408,22 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   const difficultyFactor = 1 + (difficulty - 1) * DIFFICULTY_CIRCADIAN_WEIGHT;
   const fatigueFactor = gamma * (1 + S) * difficultyFactor;
 
-  // Non-linear congestion penalty: squared utilization
+  // Non-linear congestion penalty: strongly penalizes filling up one day
+  // v6: 4× stronger — was 0.8, now 3.0. Prevents Monday bunching.
   const dayCap = WEEKEND_DAYS.has(slot.day)
     ? (settings.maxHoursWeekend ?? 4)
     : (settings.maxHoursPerDay ?? 8);
+  const dayMaxTicks = dayCap * 6;
   const congestion = dayCap > 0
-    ? (slot.usedTicks / (dayCap * 6))
+    ? (slot.usedTicks / dayMaxTicks)
     : 0;
-  const congestionPenalty = congestion * congestion * 0.8;
+  const congestionPenalty = congestion * congestion * 3.0;
+
+  // Fresh day bonus: reward placing first task on an empty day
+  // Pulls tasks toward unused days instead of bunching on Monday
+  const freshDayBonus = slot.usedTicks === 0 ? -0.15 : 0;
 
   // v5: Per-day difficulty budget — spread hard tasks across days
-  // Prevents all difficulty-5 tasks from clustering on Monday
   const difficultyCongestion = MAX_DIFFICULTY_PER_DAY > 0
     ? (dayDifficultyLoad + difficulty) / MAX_DIFFICULTY_PER_DAY
     : 0;
@@ -429,20 +434,19 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Weekend penalty
   const weekendPenalty = WEEKEND_DAYS.has(slot.day) ? 0.3 : 0;
 
-  // Cross-day carryover: previous day's strain bleeds into today's first slot.
-  // Uses TAU_BUILD for symmetric buildup/decay of cognitive strain
-  // (strain recovers more slowly than acute Process S homeostatic pressure).
-  // After 8h sleep: e^(-8/14.4) ≈ 0.574, so ~57% of strain persists overnight.
+  // Cross-day carryover
   const carryoverDecay = Math.exp(-OVERNIGHT_RECOVERY_HOURS / TAU_BUILD);
   const crossDayPenalty = prevDayStrain * CROSS_DAY_CARRYOVER * carryoverDecay
-    * (1 - congestion); // diminishes as today fills up (strain already accounted)
+    * (1 - congestion);
 
-  // Task sequencing: alternating task types improves recovery
+  // Task sequencing: ALWAYS check against the last task type on this day
+  // v6: removed slot.usedTicks === 0 condition — was only checking first task
+  // per day, allowing back-to-back same-type tasks after the first one
   let sequencingScore = 0;
-  if (lastTaskType && slot.usedTicks === 0) {
+  if (lastTaskType) {
     const lastProfile = TYPE_PROFILES[lastTaskType] || TYPE_PROFILES.other;
     if (profile.gammaBoost === lastProfile.gammaBoost) {
-      sequencingScore = SEQUENCING_BONUS; // same type → penalty
+      sequencingScore = SEQUENCING_BONUS * 1.5; // same type → stronger penalty
     } else {
       sequencingScore = -SEQUENCING_BONUS; // different type → bonus
     }
@@ -458,8 +462,8 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
-  return fatigueFactor + congestionPenalty + difficultySpreadPenalty
-       + weekendPenalty + crossDayPenalty
+  return fatigueFactor + congestionPenalty + freshDayBonus
+       + difficultySpreadPenalty + weekendPenalty + crossDayPenalty
        + sequencingScore + flowBlockScore + positionTiebreaker;
 }
 
