@@ -16,9 +16,10 @@ import {
 const TYPE_COLORS = { academic: '#3b82f6', sports: '#22c55e', arts: '#8b5cf6', other: '#6b7280' };
 
 function fmtHr(h) {
-  const hh = Math.floor(h), p = hh >= 12 ? 'pm' : 'am';
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  const p = hh >= 12 ? 'pm' : 'am';
   const d = hh > 12 ? hh - 12 : (hh === 0 ? 12 : hh);
-  return `${d}${p}`;
+  return mm > 0 ? `${d}:${String(mm).padStart(2, '0')}${p}` : `${d}${p}`;
 }
 
 // Compute this week's Monday as ISO date string (timezone-safe)
@@ -410,20 +411,26 @@ export default function App() {
 
                     <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
                       <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
-                        {DAYS.map(day => (
-                          <div key={day} className="px-1 py-1.5 text-center border-r border-mindflow-border last:border-r-0">
+                        {DAYS.map(day => {
+                          const dayFullDate = (() => { const [y,m,d]=ws.split('-').map(Number); const dt=new Date(y,m-1,d+DAYS.indexOf(day)); return dt.toISOString().split('T')[0]; })();
+                          const isPast = dayFullDate < new Date().toISOString().split('T')[0];
+                          return (
+                          <div key={day} className={`px-1 py-1.5 text-center border-r border-mindflow-border last:border-r-0 ${isPast ? 'opacity-40' : ''}`}>
                             <span className="text-[11px] font-semibold text-mindflow-heading">{day}</span>
-                            <span className="block text-[9px] text-mindflow-muted">{getDateForDay(day, ws)}</span>
+                            <span className="block text-[9px] text-mindflow-muted">{isPast ? 'Past' : getDateForDay(day, ws)}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div className="grid grid-cols-7">
                         {DAYS.map(day => {
                           const dayDate = getDateForDay(day, ws);
                           const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                           const isTodayCol = dayDate === todayStr;
+                          const dayFullDate = (() => { const [y,m,d]=ws.split('-').map(Number); const dt=new Date(y,m-1,d+DAYS.indexOf(day)); return dt.toISOString().split('T')[0]; })();
+                          const isPastCol = dayFullDate < new Date().toISOString().split('T')[0];
                           return (
-                          <div key={day} className={`relative border-r border-mindflow-border last:border-r-0 ${isTodayCol ? 'bg-mindflow-accent/5' : ''}`} style={{ height: 17 * ROW_H + 'px' }}>
+                          <div key={day} className={`relative border-r border-mindflow-border last:border-r-0 ${isTodayCol ? 'bg-mindflow-accent/5' : ''} ${isPastCol ? 'opacity-40' : ''}`} style={{ height: 17 * ROW_H + 'px' }}>
                             {HOURS.map((h, i) => (
                               <div key={h} className="absolute left-0 right-0 border-t border-mindflow-border/30" style={{ top: i * ROW_H + 'px' }}>
                                 {day === 'Mon' && <span className="absolute -left-12 top-0 text-[9px] text-mindflow-muted w-10 text-right pr-1 -translate-y-1/2">{fmtHr(h)}</span>}
