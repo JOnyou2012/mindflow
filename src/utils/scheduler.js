@@ -327,7 +327,7 @@ function formatTickLabel(tick) {
 function deadlineToDay(isoDate) {
   if (!isoDate) return null;
   try {
-    const d = new Date(isoDate);
+    const d = new Date(isoDate + 'T00:00:00');
     if (isNaN(d.getTime())) return null;
     const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return map[d.getDay()];
@@ -336,10 +336,30 @@ function deadlineToDay(isoDate) {
   }
 }
 
-function deadlineAllowsDay(task, day) {
-  const deadlineDay = deadlineToDay(task.deadline);
-  if (!deadlineDay) return true;
-  return DAY_INDEX[day] <= DAY_INDEX[deadlineDay];
+/**
+ * Check if a task's deadline allows it to be scheduled on a given day.
+ * Uses actual calendar dates so deadlines work across week boundaries.
+ *
+ * @param {object} task           Task with optional deadline (ISO date string)
+ * @param {string} day            Day name ('Mon'–'Sun')
+ * @param {string} weekStartDate  ISO date string for this week's Monday
+ * @returns {boolean}
+ */
+function deadlineAllowsDay(task, day, weekStartDate) {
+  if (!task.deadline) return true;
+
+  const deadlineDate = new Date(task.deadline + 'T00:00:00');
+  if (isNaN(deadlineDate.getTime())) return true;
+
+  // Compute the actual date for this day name relative to the week start
+  const weekStart = new Date(weekStartDate + 'T00:00:00');
+  if (isNaN(weekStart.getTime())) return true;
+
+  const dayIndex = DAY_INDEX[day];
+  const dayDate = new Date(weekStart);
+  dayDate.setDate(dayDate.getDate() + dayIndex);
+
+  return dayDate <= deadlineDate;
 }
 
 // ===========================================================================
@@ -831,8 +851,17 @@ function applyAttentionResidueToState(state, prevType, nextType) {
  * @returns {OptimizedWeek}
  */
 export default function generateWeeklySchedule(
-  calendarBlocks = [], tasks = [], alpha = 1.0, settings = {}
+  calendarBlocks = [], tasks = [], alpha = 1.0, settings = {}, weekStartDate = null
 ) {
+  // Default to this week's Monday if no date provided
+  const wsDate = weekStartDate || (() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day; // Monday offset
+    const mon = new Date(now);
+    mon.setDate(mon.getDate() + diff);
+    return mon.toISOString().split('T')[0];
+  })();
   const week = createEmptyWeek();
   const s = settings || {};
   const taskList = (tasks || []).filter(t => t && t.durationMins > 0);
@@ -920,7 +949,7 @@ export default function generateWeeklySchedule(
     for (const slot of allSlots) {
       if (slot.usedTicks >= slot.maxTicks) continue;
       if (taskTicks > slot.durationTicks) continue;
-      if (!deadlineAllowsDay(task, slot.day)) continue;
+      if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
 
       const ticksSinceLastTask = Math.max(0,
         (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
@@ -977,7 +1006,7 @@ export default function generateWeeklySchedule(
     for (const slot of allSlots) {
       if (slot.usedTicks >= slot.maxTicks) continue;
       if (taskTicks > slot.durationTicks) continue;
-      if (!deadlineAllowsDay(task, slot.day)) continue;
+      if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
       if (slot === bestSlot) continue;
       validAlternatives++;
     }
@@ -1114,7 +1143,7 @@ export default function generateWeeklySchedule(
       for (const slot of allSlots) {
         if (slot.usedTicks >= slot.maxTicks) continue;
         if (taskTicks > slot.durationTicks) continue;
-        if (!deadlineAllowsDay(task, slot.day)) continue;
+        if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
 
         // Relaxed scoring: gamma only, no congestion, no Process S penalty
         // v5: difficulty still matters even in refinement — hard tasks get

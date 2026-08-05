@@ -21,7 +21,27 @@ function fmtHr(h) {
   return `${d}${p}`;
 }
 
+// Compute this week's Monday as ISO date string
+function getWeekMonday() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now);
+  mon.setDate(mon.getDate() + diff);
+  return mon.toISOString().split('T')[0];
+}
+
+function getDateForDay(dayName, weekStart) {
+  const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const idx = DAYS.indexOf(dayName);
+  if (idx < 0) return '';
+  const d = new Date(weekStart + 'T00:00:00');
+  d.setDate(d.getDate() + idx);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function App() {
+  const weekStart = getWeekMonday();
   const [calibration, setCalibrationState] = useState(() => loadCalibration());
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
@@ -52,7 +72,7 @@ export default function App() {
     setIsCalculating(true);
     setTimeout(() => {
       try {
-        const result = generateWeeklySchedule(calendarBlocks, tasks, calibration.alphaScore, settings);
+        const result = generateWeeklySchedule(calendarBlocks, tasks, calibration.alphaScore, settings, weekStart);
         setOptimizedWeek(result);
         dataVersionRef.current = 0;
         setIsCalculating(false);
@@ -133,7 +153,7 @@ export default function App() {
               return (
                 <div key={d} className="px-2 py-2 text-center border-r border-mindflow-border last:border-r-0">
                   <span className="text-[10px] font-semibold text-mindflow-heading">{d}</span>
-                  <span className="block text-[9px] text-mindflow-muted">{n > 0 ? `${n} blocks` : 'Free'}</span>
+                  <span className="block text-[9px] text-mindflow-muted">{getDateForDay(d, weekStart)}</span>
                 </div>
               );
             })}

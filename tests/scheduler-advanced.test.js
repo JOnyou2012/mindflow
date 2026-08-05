@@ -597,7 +597,7 @@ const pastResult = generateWeeklySchedule([], [pastTask], 1.0, {});
 const pastScheduled = ALL_DAYS.reduce(
   (sum, d) => sum + pastResult.days[d].sessions.length, 0
 );
-assert(pastScheduled === 1, 'E10.1: Past-date deadline still schedulable (day-of-week only)');
+assert(pastScheduled === 0, 'E10.1: Past-date deadline still schedulable (date-aware check)');
 
 // Tasks with extreme durations
 const extremeTasks = [

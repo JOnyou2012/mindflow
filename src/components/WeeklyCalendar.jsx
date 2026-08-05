@@ -319,9 +319,7 @@ export default function WeeklyCalendar({ blocks = [], onChange }) {
             return (
               <div key={d} className="px-2 py-2.5 text-center border-r border-mindflow-border last:border-r-0">
                 <span className="text-xs font-semibold text-mindflow-heading">{d}</span>
-                <span className="block text-[10px] text-mindflow-muted">
-                  {n > 0 ? `${n} · ${hrs}h` : 'Free'}
-                </span>
+                <span className="block text-[10px] text-mindflow-muted">{n > 0 ? `${n} · ${hrs}h` : 'Free'}</span>
               </div>
             );
           })}
