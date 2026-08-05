@@ -394,15 +394,21 @@ export default function TaskInputForm({ tasks = [], onChange }) {
             {/* Deadline */}
             <div>
               <p className="text-xs text-mindflow-muted mb-2 font-medium">
-                Deadline <span className="opacity-60">(optional)</span>
+                Deadline <span className="opacity-60">(optional — type or pick a date)</span>
               </p>
               <input
                 type="date"
                 value={deadline}
                 onChange={e => setDeadline(e.target.value)}
-                className="bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2
-                           text-mindflow-text focus:border-mindflow-accent focus:outline-none text-sm"
+                placeholder="YYYY-MM-DD"
+                className="w-full bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
+                           text-mindflow-text placeholder-mindflow-muted text-sm
+                           focus:border-mindflow-accent focus:outline-none
+                           [color-scheme:dark]"
               />
+              <p className="text-[10px] text-mindflow-muted mt-1">
+                Click to open calendar picker, or type as YYYY-MM-DD (e.g. 2026-08-15)
+              </p>
             </div>
 
             {/* Error */}
