@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { X, School, Dumbbell, Palette, Ellipsis, Trash2, Clock, AlertCircle, Utensils, Moon, Plus } from 'lucide-react';
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -61,18 +61,6 @@ export default function WeeklyCalendar({ blocks = [], onChange }) {
   const [popEnd, setPopEnd] = useState(10);
   const [popMsg, setPopMsg] = useState('');
 
-  // -- First-visit: auto-add dinner --
-  const [initialized, setInitialized] = useState(false);
-  useEffect(() => {
-    if (initialized || blocks.length > 0) return;
-    setInitialized(true);
-    const preset = QUICK_PRESETS[2]; // Dinner
-    onChange(preset.days.map(d => ({
-      id: crypto.randomUUID(), day: d,
-      startHour: preset.start, durationHours: preset.end - preset.start,
-      label: preset.label, type: preset.type, isFixed: true,
-    })));
-  }, [blocks.length, initialized, onChange]);
 
   // -- Stats --
   const stats = useMemo(() => {
