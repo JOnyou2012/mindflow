@@ -408,16 +408,6 @@ export default function App() {
                       {!result && <span className="text-xs text-mindflow-muted">(empty)</span>}
                     </div>
 
-                    {result?.stats && (
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        {[[result.stats.utilizationPct+'%','Capacity'],[result.stats.workloadBalance+'%','Balance'],[(result.stats.avgFatigue||0)+'%','Fatigue'],[result.stats.totalScheduledHours+'h','Hours']].map(([v,l],i)=>(
-                          <div key={i} className="bg-mindflow-surface border border-mindflow-border rounded-lg py-1.5">
-                            <p className="text-sm font-bold text-mindflow-heading">{v}</p><p className="text-[9px] text-mindflow-muted">{l}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
                     <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
                       <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
                         {DAYS.map(day => (
