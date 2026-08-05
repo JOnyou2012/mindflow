@@ -1,9 +1,10 @@
 # MindFlow — Master PRD
 
-> **Progress: 74 / 85 steps complete — 87.1%**
+> **Progress: 74 / 94 steps complete — 78.7%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
-> **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 0/11 = 0%**
+> **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 0/11 = 0%** |
+> **Stage 5 (Google Calendar): 0/9 = 0%**
 >
 > **2026-08-05 (v5 engine audit):** Two-round deep algorithm review across Markov engine,
 > scheduler, and Stroop test. 14 issues fixed: asymmetric P_BASE with micro-recovery,
@@ -88,6 +89,7 @@ TOTAL                           74/85   87.1%
 | **Stage 2: Core Components** | 14–65 | 52/52 | **100%** | ✅ All 6 UI components complete |
 | **Stage 3: App Shell** | 66–74 | 9/9 | **100%** | ✅ Tab navigation + Generate flow |
 | **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
+| **Stage 5: Google Calendar** | 86–94 | 0/9 | **0%** | ❌ Not started |
 
 > **Stage 1** (Foundation) is complete and production-quality:
 > - Markov engine v3: sigmoidal modifiers, biexponential recovery, flow inertia/collapse,
@@ -2375,6 +2377,123 @@ This PRD incorporates fixes for every known bug from previous iterations:
 
 ---
 
-> **85 steps. Check off as you build. Count checked ÷ 85 = percentage complete.**
+> **85 steps + Stage 5. Check off as you build. Count checked ÷ total = percentage complete.**
+>
+> **New: Stage 5 — Google Calendar Integration (steps 86–94, 9 steps)**
+
+---
+---
+
+# Part 7: Stage 5 — Google Calendar Integration
+
+> **Goal:** Allow users to connect their Google Calendar account so school
+> schedules, classes, and recurring events are automatically synced into
+> MindFlow's Weekly Calendar. Eliminates manual fixed-schedule entry.
+
+## Overview
+
+Instead of manually adding every class and school event, users can sign in
+with Google and import their existing calendar. The integration is read-only
+initially — MindFlow pulls calendar data but doesn't write back.
+
+## Technical Approach
+
+- **Google Calendar API v3** via OAuth 2.0
+- Use Google Identity Services (GIS) for token-based auth
+- `https://www.googleapis.com/auth/calendar.readonly` scope
+- Fetch primary calendar events for the current week
+- Map Google Calendar event fields to MindFlow CalendarBlock format
+- Allow selecting which calendars to sync (primary, school, work, etc.)
+- Auto-refresh on app load, with manual refresh button
+- Cache synced events in localStorage, show "last synced" timestamp
+
+## Data Mapping
+
+| Google Calendar Field | MindFlow CalendarBlock Field |
+|----------------------|------------------------------|
+| `summary` | `label` |
+| `start.dateTime` / `start.date` | `startHour` |
+| `end.dateTime` / `end.date` | `durationHours` (computed) |
+| Day of week from date | `day` |
+| Event color ID | `type` (mapped: blue→academic, green→sports, etc.) |
+| `id` | `id` (prefixed with `gcal-`) |
+
+## Steps
+
+### Steps 86–94: Google Calendar Sync
+
+**Step 86** — Create Google Cloud Project & OAuth consent screen
+- [ ] 86. Create project in Google Cloud Console
+- [ ] 86. Enable Google Calendar API
+- [ ] 86. Configure OAuth consent screen (test users, scopes)
+- [ ] 86. Create OAuth 2.0 Web Client ID
+- [ ] 86. Add `http://localhost:5173` to authorized JS origins
+- [ ] 86. Store Client ID in `.env` as `VITE_GOOGLE_CLIENT_ID`
+
+**Step 87** — Install dependencies & create `src/utils/googleCalendar.js`
+- [ ] 87. `npm install @react-oauth/google`
+- [ ] 87. Create `src/utils/googleCalendar.js` with:
+  - `initGoogleAuth()` — initialize GIS client
+  - `signIn()` — trigger OAuth flow
+  - `signOut()` — revoke tokens
+  - `fetchWeekEvents(weekStart)` — GET calendar events for Mon–Sun
+  - `mapToBlocks(events)` — convert Google events to CalendarBlock[]
+  - `getSyncStatus()` — return { lastSync, calendarName, eventCount }
+
+**Step 88** — Create `src/components/GoogleSyncButton.jsx`
+- [ ] 88. Sign-in button: Google "G" logo + "Connect Calendar"
+- [ ] 88. Signed-in state: user avatar/email + "Synced X min ago" + refresh + sign out
+- [ ] 88. Loading state during sync
+- [ ] 88. Error state: "Sync failed — try again"
+
+**Step 89** — Wire Google Sync into App.jsx
+- [ ] 89. Wrap app in `GoogleOAuthProvider` with Client ID
+- [ ] 89. Add `googleBlocks` state alongside `calendarBlocks`
+- [ ] 89. Merge `googleBlocks` + `calendarBlocks` before passing to scheduler
+- [ ] 89. Calendar grid shows Google-synced blocks with a small "G" icon
+- [ ] 89. Google-synced blocks are locked (can't edit/delete manually)
+
+**Step 90** — Handle recurring events
+- [ ] 90. Parse `recurrence` RRULE from Google events
+- [ ] 90. Expand recurring events within the current week
+- [ ] 90. Handle exceptions (cancelled/modified instances)
+
+**Step 91** — Multi-calendar support
+- [ ] 91. Fetch user's calendar list from `calendarList.list`
+- [ ] 91. Let user toggle which calendars to sync
+- [ ] 91. Color-code by source calendar
+
+**Step 92** — Sync status & caching
+- [ ] 92. Show "Last synced: 2 min ago" in header
+- [ ] 92. Cache events in localStorage with `syncTimestamp`
+- [ ] 92. Auto-refresh on app load if cache > 30 min old
+- [ ] 92. Manual refresh button
+
+**Step 93** — Error handling & edge cases
+- [ ] 93. Token expired → auto-refresh or prompt re-login
+- [ ] 93. Network error → cached data fallback + retry button
+- [ ] 93. All-day events → map to 6am–10pm block
+- [ ] 93. Multi-day events → split into per-day blocks
+- [ ] 93. Events outside 6am–10pm → shown as "early/late" indicator
+- [ ] 93. Zero events → "No events found this week" message
+- [ ] 93. Rate limiting → batch requests, respect `Retry-After` headers
+
+**Step 94** — Privacy & security
+- [ ] 94. Calendar data never leaves the browser (no server upload)
+- [ ] 94. Access token stored in memory only (not localStorage)
+- [ ] 94. Refresh token handled by GIS library
+- [ ] 94. Sign-out clears all cached calendar data
+- [ ] 94. Scope limited to `calendar.readonly` only
+
+## Future Enhancements (post Stage 5)
+- Write scheduled study sessions back to Google Calendar
+- Two-way sync (changes in Google Calendar update MindFlow)
+- Microsoft Outlook / Apple Calendar support
+- iCal import for offline calendar files
+- Team/family calendar sharing for group study scheduling
+
+---
+
+> **85 steps (core) + 9 steps (Stage 5) = 94 total.**
 >
 > **Every session**: *"Check the checklist. Percentage? Next step?"*
