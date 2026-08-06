@@ -6,12 +6,17 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
+> **2026-08-06:** Settings panel built (theme toggle, accent color picker, chronotype,
+> hours/day, reset). Google Calendar integration coded but removed after causing
+> blank-page crash — will be rebuilt with proper error boundaries. Language support
+> pending (6 languages: EN/ZH-CN/ZH-TW/ES/HI/AR). All 1,957+ tests pass.
+>
 > **2026-08-05 (v6 scheduler):** Major UX-driven scheduler overhaul. Multi-week cascade
 > with deadline-based week targeting, realistic study hours (8am-9pm with time-of-day
 > preference curve), 30-min gaps between tasks, spread incentives (fresh day bonus +
 > same-day penalty), multiple candidate start times per free window, date+time deadlines,
 > past-day blocking with today highlight, auto-split large/difficult tasks, horizontal
-> scroll showing all 4 weeks side by side. All 2,100+ tests pass (0 failures).
+> scroll showing all 4 weeks side by side.
 >
 > **2026-08-05 (v3 engine):** Biexponential recovery (fast 2-min sympathetic + slow
 > 120-min parasympathetic). Flow deepening with sudden collapse tipping point at ~2h.
@@ -127,9 +132,11 @@ TOTAL                           85/94   90.4%
 > - `src/components/SessionChart.jsx`: stacked area chart (Flow/Distracted/Fatigue/
 >   Recovery), useId() gradients, burnout reference line, compact mode
 > - `src/App.jsx`: screen flow (Welcome→Stroop→Calendar→Tasks), live fatigue
->   preview using real alpha, localStorage persistence for all data
-> - 2,100+ tests across 4 suites, 0 failures, 0 source lint warnings, 0 build errors
-> - 1 UI component remaining (Dashboard, steps 55–65)
+>   preview using real alpha, localStorage persistence, settings panel (theme
+>   toggle, 6 accent colors, chronotype, daily/hour caps, reset)
+> - 1,957+ tests across 4 suites, 0 failures, 0 build errors
+> - Settings: language pending (6 translations ready), Google Calendar pending
+>   (code built but removed due to runtime crash)
 >
 > **Next:** Stage 4 — Integration verification walkthrough (steps 75–85)
 
