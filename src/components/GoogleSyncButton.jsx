@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { RefreshCw, LogOut, AlertCircle } from 'lucide-react';
 
 export default function GoogleSyncButton({ onSync, syncStatus, onSignOut }) {

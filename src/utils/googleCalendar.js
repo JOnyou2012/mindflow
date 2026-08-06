@@ -9,7 +9,6 @@
  */
 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
-const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 
 let accessToken = null;
 let tokenExpiry = 0;
@@ -133,7 +132,7 @@ const GOOGLE_COLOR_MAP = {
 /**
  * Map a Google Calendar event to a MindFlow CalendarBlock.
  */
-function mapEventToBlock(event, weekStart) {
+function mapEventToBlock(event, _weekStart) {
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   let startDate, endDate;

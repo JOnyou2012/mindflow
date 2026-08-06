@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
@@ -119,7 +119,7 @@ export default function App() {
   }, []);
 
   // Merge Google blocks + manual blocks for display and scheduling
-  const allBlocks = [...calendarBlocks, ...googleBlocks];
+  const allBlocks = useMemo(() => [...calendarBlocks, ...googleBlocks], [calendarBlocks, googleBlocks]);
 
   const dataVersionRef = useRef(0);
   const isStale = Object.keys(weekResults).length > 0 && (dataVersionRef.current > 0);
@@ -176,7 +176,7 @@ export default function App() {
         setIsCalculating(false);
       }
     }, 100);
-  }, [calibration, calendarBlocks, tasks, settings, isCalculating]);
+  }, [calibration, allBlocks, tasks, settings, isCalculating, weekStart]);
 
   const handleCalibrationComplete = (cal) => { setCalibration(cal); setShowWelcome(false); };
   const handleSkipCalibration = () => {
