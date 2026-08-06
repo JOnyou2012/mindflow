@@ -1,13 +1,11 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Brain, Play, AlertCircle, Settings, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useState, useCallback, useRef, useMemo } from 'react';
+import { Brain, Play, AlertCircle, Settings, RefreshCw, CheckCircle2 } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
-import GoogleSyncButton from './components/GoogleSyncButton.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import { getTranslations } from './utils/i18n.js';
-import { initTokenClient, signIn, signOut, syncWeek, isSignedIn } from './utils/googleCalendar.js';
 import generateWeeklySchedule from './utils/scheduler.js';
 import {
   saveCalibration, loadCalibration,
@@ -74,61 +72,8 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
   useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
 
-  // Google Calendar sync
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-  const [tokenClient, setTokenClient] = useState(null);
-  const [googleBlocks, setGoogleBlocks] = useState([]);
-  const [googleSyncMeta, setGoogleSyncMeta] = useState({ connected: false, lastSync: null, blockCount: 0 });
-
-  // Init token client once GIS script loads
-  useEffect(() => {
-    if (!clientId) return;
-    let cancelled = false;
-    const init = () => {
-      if (cancelled) return;
-      try {
-        const tc = initTokenClient(clientId);
-        setTokenClient(tc);
-        if (isSignedIn()) {
-          setGoogleSyncMeta(m => ({ ...m, connected: true }));
-        }
-      } catch {}
-    };
-    if (window.google?.accounts) {
-      init();
-    } else {
-      const id = setInterval(() => {
-        if (window.google?.accounts) { clearInterval(id); init(); }
-      }, 200);
-      return () => clearInterval(id);
-    }
-    return () => { cancelled = true; };
-  }, [clientId]);
-
-  // Auto-reconnect if token still valid
-  useEffect(() => {
-    if (isSignedIn() && !googleSyncMeta.connected) {
-      setGoogleSyncMeta(m => ({ ...m, connected: true, lastSync: Date.now() }));
-    }
-  }, [googleSyncMeta.connected]);
-
-  const handleGoogleSync = useCallback(async () => {
-    if (!tokenClient) throw new Error('Google Calendar not configured');
-    await signIn(tokenClient);
-    const { blocks, meta } = await syncWeek(weekStart, tokenClient);
-    setGoogleBlocks(blocks);
-    setGoogleSyncMeta({ connected: true, lastSync: meta.syncedAt, blockCount: meta.blockCount });
-    dataVersionRef.current++;
-  }, [tokenClient, weekStart]);
-
-  const handleGoogleSignOut = useCallback(() => {
-    signOut();
-    setGoogleBlocks([]);
-    setGoogleSyncMeta({ connected: false, lastSync: null, blockCount: 0 });
-  }, []);
-
-  // Merge Google blocks + manual blocks for display and scheduling
-  const allBlocks = useMemo(() => [...calendarBlocks, ...googleBlocks], [calendarBlocks, googleBlocks]);
+  // Merge blocks for display and scheduling
+  const allBlocks = useMemo(() => [...calendarBlocks], [calendarBlocks]);
 
   const dataVersionRef = useRef(0);
   const isStale = Object.keys(weekResults).length > 0 && (dataVersionRef.current > 0);
@@ -335,7 +280,7 @@ export default function App() {
 
   // ── Main app ──
   return (
-    <div className="min-h-screen bg-mindflow-bg flex flex-col" style={{ '--color-mindflow-accent': accent, '--color-mindflow-accent-glow': accent + '40' }}>
+    <div className="min-h-screen bg-mindflow-bg flex flex-col">
       {/* Header */}
       <header className="bg-mindflow-surface border-b border-mindflow-border px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
@@ -413,16 +358,6 @@ export default function App() {
             Fixed Weekly Schedule
             {calendarBlocks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
-          {clientId && (
-            <div className="flex items-center justify-between bg-mindflow-surface border border-mindflow-border rounded-xl px-4 py-3">
-              <span className="text-xs text-mindflow-muted">Google Calendar</span>
-              <GoogleSyncButton
-                onSync={handleGoogleSync}
-                syncStatus={googleSyncMeta}
-                onSignOut={handleGoogleSignOut}
-              />
-            </div>
-          )}
           <WeeklyCalendar blocks={allBlocks} onChange={setCalendarBlocks} weekStart={weekStart} />
         </section>
 
