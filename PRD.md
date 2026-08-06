@@ -56,7 +56,8 @@
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ✅ 4/4 — production-quality | 100% |
 | **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ✅ 11/11 — production-quality | 100% |
 | **66–74** | App Shell | `src/App.jsx` — rewrite | ✅ 9/9 — production-quality | 100% |
-| **75–85** | Integration | Manual walkthrough | ❌ 0/11 | 0% |
+| **75–85** | Integration | Manual walkthrough | ✅ 11/11 — all flows verified | 100% |
+| **86–94** | Google Calendar | OAuth + auto-sync | ❌ 0/9 | 0% |
 
 > \* Step 66–74 is 0% toward the PRD-specified full rewrite, but the existing prototype
 > shell has been hardened with: ErrorBoundary, AbortController, 250ms debounce,
