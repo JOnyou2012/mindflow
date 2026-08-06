@@ -161,7 +161,12 @@ export default function App() {
     setShowWelcome(false);
   };
   const handleReset = () => {
-    if (confirm('Delete all your data? This cannot be undone.')) { clearAll(); window.location.reload(); }
+    if (confirm('Delete all your data? This cannot be undone.')) {
+      clearAll();
+      try { localStorage.removeItem('mindflow_theme'); } catch {}
+      try { localStorage.removeItem('mindflow_accent'); } catch {}
+      window.location.reload();
+    }
   };
   const canGenerate = calibration && tasks.length > 0;
   const hasResults = Object.keys(weekResults).length > 0;

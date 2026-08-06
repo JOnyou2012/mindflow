@@ -45,4 +45,6 @@ export function loadSettings() {
 
 export function clearAll() {
   Object.values(KEYS).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+  try { localStorage.removeItem('mindflow_theme'); } catch {}
+  try { localStorage.removeItem('mindflow_accent'); } catch {}
 }
