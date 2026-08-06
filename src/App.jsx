@@ -5,6 +5,8 @@ import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
 import GoogleSyncButton from './components/GoogleSyncButton.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
+import { getTranslations, LANGUAGES, getStoredLang, setStoredLang } from './utils/i18n.js';
 import { initTokenClient, signIn, signOut, syncWeek, isSignedIn } from './utils/googleCalendar.js';
 import generateWeeklySchedule from './utils/scheduler.js';
 import {
@@ -64,6 +66,15 @@ export default function App() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [lang, setLang] = useState(() => getStoredLang());
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mindflow_theme') || 'dark'; } catch { return 'dark'; }});
+  const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#8b5cf6'; } catch { return '#8b5cf6'; }});
+
+  // Save preferences
+  useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
+  useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
+
+  const T = getTranslations(lang);
 
   // Google Calendar sync
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -326,7 +337,7 @@ export default function App() {
 
   // ── Main app ──
   return (
-    <div className="min-h-screen bg-mindflow-bg flex flex-col">
+    <div className="min-h-screen bg-mindflow-bg flex flex-col" style={{ '--color-mindflow-accent': accent, '--color-mindflow-accent-glow': accent + '40' }}>
       {/* Header */}
       <header className="bg-mindflow-surface border-b border-mindflow-border px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
@@ -356,26 +367,17 @@ export default function App() {
 
       {/* Settings panel */}
       {showSettings && (
-        <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-3 animate-fade-in">
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <span className="text-mindflow-muted">Chronotype:</span>
-            {['morning', 'neutral', 'night'].map(c => (
-              <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
-                className={`px-2.5 py-1 rounded-md capitalize ${settings.chronotype === c ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{c}</button>
-            ))}
-            <span className="text-mindflow-muted ml-2">Hrs/day:</span>
-            <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
-              onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
-              className="w-12 bg-mindflow-bg border border-mindflow-border rounded px-2 py-1 text-mindflow-text focus:border-mindflow-accent focus:outline-none" />
-            <span className="text-mindflow-muted">Weekend:</span>
-            <input type="number" value={settings.maxHoursWeekend} min={0} max={12}
-              onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
-              className="w-12 bg-mindflow-bg border border-mindflow-border rounded px-2 py-1 text-mindflow-text focus:border-mindflow-accent focus:outline-none" />
-            <button onClick={handleReset} className="ml-auto px-3 py-1 rounded-md bg-mindflow-danger/10 text-mindflow-danger hover:bg-mindflow-danger/20 flex items-center gap-1">
-              <Trash2 className="w-3 h-3" />Reset All
-            </button>
-          </div>
-        </div>
+        <SettingsPanel
+          settings={settings}
+          onSettingsChange={setSettings}
+          onReset={handleReset}
+          lang={lang}
+          onLangChange={setLang}
+          theme={theme}
+          onThemeChange={setTheme}
+          accent={accent}
+          onAccentChange={setAccent}
+        />
       )}
 
       {/* Error banner */}
