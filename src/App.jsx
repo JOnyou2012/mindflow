@@ -1,11 +1,9 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { Brain, Play, AlertCircle, Settings, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Brain, Play, AlertCircle, Settings, CheckCircle2, Trash2, RefreshCw } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
-import SettingsPanel from './components/SettingsPanel.jsx';
-import { getTranslations } from './utils/i18n.js';
 import generateWeeklySchedule from './utils/scheduler.js';
 import {
   saveCalibration, loadCalibration,
@@ -64,15 +62,7 @@ export default function App() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [lang, setLang] = useState(() => getStoredLang());
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mindflow_theme') || 'dark'; } catch { return 'dark'; }});
-  const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#8b5cf6'; } catch { return '#8b5cf6'; }});
 
-  // Save preferences
-  useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
-  useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
-
-  // Merge blocks for display and scheduling
   const allBlocks = useMemo(() => [...calendarBlocks], [calendarBlocks]);
 
   const dataVersionRef = useRef(0);
@@ -310,17 +300,38 @@ export default function App() {
 
       {/* Settings panel */}
       {showSettings && (
-        <SettingsPanel
-          settings={settings}
-          onSettingsChange={setSettings}
-          onReset={handleReset}
-          lang={lang}
-          onLangChange={setLang}
-          theme={theme}
-          onThemeChange={setTheme}
-          accent={accent}
-          onAccentChange={setAccent}
-        />
+        <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 animate-fade-in">
+          <div className="max-w-2xl mx-auto space-y-4 text-sm">
+            {/* Chronotype */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">Chronotype</span>
+              {['morning', 'neutral', 'night'].map(c => (
+                <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${settings.chronotype === c ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{c}</button>
+              ))}
+            </div>
+
+            {/* Daily hours */}
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">Hours/day</span>
+              <span className="text-mindflow-muted text-[10px]">Weekday</span>
+              <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
+                onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
+                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
+              <span className="text-mindflow-muted text-[10px] ml-2">Weekend</span>
+              <input type="number" value={settings.maxHoursWeekend} min={0} max={12}
+                onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
+                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
+            </div>
+
+            {/* Reset */}
+            <div className="pt-2 border-t border-mindflow-border">
+              <button onClick={handleReset} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-mindflow-danger/10 text-mindflow-danger hover:bg-mindflow-danger/20 transition-colors flex items-center gap-1.5">
+                <Trash2 className="w-3 h-3" />Reset All Data
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Error banner */}
