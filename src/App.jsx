@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { Brain, Play, AlertCircle, Settings, CheckCircle2, Trash2, RefreshCw } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
@@ -62,6 +62,17 @@ export default function App() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mindflow_theme') || 'dark'; } catch { return 'dark'; }});
+  const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#8b5cf6'; } catch { return '#8b5cf6'; }});
+
+  // Persist theme + accent
+  useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
+  useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
+
+  // Apply accent as CSS variable
+  useEffect(() => {
+    document.documentElement.style.setProperty('--color-mindflow-accent', accent);
+  }, [accent]);
 
   const allBlocks = useMemo(() => [...calendarBlocks], [calendarBlocks]);
 
@@ -302,8 +313,27 @@ export default function App() {
       {showSettings && (
         <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 animate-fade-in">
           <div className="max-w-2xl mx-auto space-y-4 text-sm">
+            {/* Theme */}
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">Theme</span>
+              {['dark', 'light'].map(t => (
+                <button key={t} onClick={() => setTheme(t)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${theme === t ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{t}</button>
+              ))}
+            </div>
+
+            {/* Accent color */}
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">Accent</span>
+              {['#8b5cf6','#3b82f6','#22c55e','#f97316','#ec4899','#06b6d4'].map(c => (
+                <button key={c} onClick={() => setAccent(c)}
+                  className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
+                  style={{ backgroundColor: c, borderColor: accent === c ? '#fff' : 'transparent', boxShadow: accent === c ? '0 0 0 2px ' + c + '40' : 'none' }} />
+              ))}
+            </div>
+
             {/* Chronotype */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <span className="text-mindflow-muted text-xs w-20 shrink-0">Chronotype</span>
               {['morning', 'neutral', 'night'].map(c => (
                 <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
