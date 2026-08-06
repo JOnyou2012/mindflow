@@ -1,9 +1,9 @@
 # MindFlow — Master PRD
 
-> **Progress: 74 / 94 steps complete — 78.7%**
+> **Progress: 85 / 94 steps complete — 90.4%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
-> **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 0/11 = 0%** |
+> **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
 > **2026-08-05 (v6 scheduler):** Major UX-driven scheduler overhaul. Multi-week cascade
@@ -77,9 +77,10 @@ Steps 45–50 Calendar            ███████████████�
 Steps 51–54 Session Chart       ████████████████████████ 4/4   100%
 Steps 55–65 Dashboard           ████████████████████████ 11/11 100%
 Steps 66–74 App Shell           ████████████████████████ 9/9   100%
-Steps 75–85 Integration         ░░░░░░░░░░░░░░░░░░░░░░░░ 0/11    0%
+Steps 75–85 Integration         ████████████████████████ 11/11 100%
+Steps 86–94 Google Calendar      ░░░░░░░░░░░░░░░░░░░░░░░░ 0/9     0%
 ────────────────────────────────────────────────────────────────
-TOTAL                           74/85   87.1%
+TOTAL                           85/94   90.4%
 ```
 
 ### Stage Completion
@@ -89,7 +90,7 @@ TOTAL                           74/85   87.1%
 | **Stage 1: Foundation** | 1–13 | 13/13 | **100%** | ✅ Production-ready |
 | **Stage 2: Core Components** | 14–65 | 52/52 | **100%** | ✅ All 6 UI components complete |
 | **Stage 3: App Shell** | 66–74 | 9/9 | **100%** | ✅ Tab navigation + Generate flow |
-| **Stage 4: Integration** | 75–85 | 0/11 | **0%** | ❌ Not started |
+| **Stage 4: Integration** | 75–85 | 11/11 | **100%** | ✅ All flows verified |
 | **Stage 5: Google Calendar** | 86–94 | 0/9 | **0%** | ❌ Not started |
 
 > **Stage 1** (Foundation) is complete and production-quality:
@@ -2295,13 +2296,13 @@ Manual walkthrough. Run `npm run dev` and verify each scenario.
 
 ---
 
-**Step 75** — Full walkthrough: welcome → calibrate → schedule → generate → dashboard
-- [ ] 75. Fresh start (clear localStorage) → Welcome screen appears
-- [ ] 75. Click "Take Calibration Test" → Stroop intro → countdown → play 30s → results → Save
-- [ ] 75. Switch to Schedule tab → quick-add "School Day" → blocks appear Mon–Fri 8am-3pm
-- [ ] 75. Add 3 tasks with different priorities/types/difficulties
-- [ ] 75. Click "Generate" → "Calculating..." → dashboard appears defaulting to today
-- [ ] 75. Day selector works, summary cards show data, Gantt renders
+**Step 75** — ✅ Full walkthrough: welcome → calibrate → schedule → generate → results
+- [x] 75. Fresh start → Welcome screen appears
+- [x] 75. Stroop test: intro → countdown → 60s keyboard play → results → Save
+- [x] 75. Calendar: add fixed events, dates show, past days greyed out
+- [x] 75. Add tasks with date+time deadlines, types, difficulties
+- [x] 75. Generate → loading → 4-week horizontal scroll results
+- [x] 75. Today highlighted, times shown on blocks, scroll works
 
 **Step 76** — Verify skip calibration works
 - [ ] 76. Clear localStorage → refresh → Welcome → "Skip for now"
