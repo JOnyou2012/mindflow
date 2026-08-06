@@ -1,5 +1,53 @@
 # MindFlow — Master PRD
 
+---
+
+## 🤖 AI AGENT RULES — READ THIS FIRST
+
+> **This project is worked on by multiple people and multiple AI agents.**
+> To keep everyone in sync, every AI agent MUST follow these rules:
+
+1. **COMMIT YOUR WORK.** After completing any step or meaningful change, run:
+   ```
+   git add -A && git commit -m "descriptive message" && git push origin main
+   ```
+   Always `git pull` before starting work to get the latest changes.
+
+2. **UPDATE THIS PRD.** After completing steps, immediately update:
+   - The progress percentage at the top of this file
+   - The master progress table (check off completed steps)
+   - The stage completion table
+   - The "Next" line pointing to the next unfinished step
+   - Add a dated note in the audit log section describing what you did
+
+3. **CHECK THE CHECKLIST FIRST.** At the start of every session, read the master
+   progress table. Look for the next unchecked step. Ask yourself: "What percentage
+   are we at? What's the next undone step?"
+
+4. **RUN TESTS BEFORE COMMITTING.** `node tests/scheduler.test.js` and verify
+   `npm run build` passes with 0 errors. Never push broken builds.
+
+5. **BE SPECIFIC IN COMMIT MESSAGES.** Include step numbers (e.g. "steps 86-88"),
+   what was built, and any bugs fixed. Use the format:
+   ```
+   feat/fix/docs: short description (steps X-Y)
+   
+   - bullet points of what changed
+   
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   ```
+
+6. **DON'T DUPLICATE WORK.** Read the master progress table before building anything.
+   If a step is marked ✅, it's done — don't rebuild it. If it's ❌, it needs work.
+
+7. **KEEP FILES ORGANIZED.** New components go in `src/components/`. Utilities in
+   `src/utils/`. Tests in `tests/`. Follow the existing file naming conventions.
+
+8. **WHEN IN DOUBT, PULL.** Always `git pull` before starting. Your partner or their
+   AI might have pushed changes since your last session.
+
+---
+
 > **Progress: 85 / 94 steps complete — 90.4%**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
@@ -42,7 +90,8 @@
 > exist yet (steps 27-65). App.jsx is prototype only.
 >
 > Give this entire file to your AI at the start of every session. Say:
-> *"Check the checklist. Percentage? Next step?"*
+> *"Read the AI Agent Rules at the top, then check the checklist. What's our
+> percentage? What's the next undone step? Pull latest changes first."*
 
 ---
 
