@@ -1,4 +1,4 @@
-import { LANGUAGES, getStoredLang, setStoredLang } from '../utils/i18n.js';
+import { LANGUAGES, setStoredLang } from '../utils/i18n.js';
 
 const ACCENT_COLORS = [
   { name: 'Purple', hex: '#8b5cf6' },

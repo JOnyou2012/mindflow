@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Brain, Play, AlertCircle, Settings, RefreshCw, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Brain, Play, AlertCircle, Settings, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
 import StroopTestModal from './components/StroopTestModal.jsx';
 import WeeklyCalendar from './components/WeeklyCalendar.jsx';
 import TaskInputForm from './components/TaskInputForm.jsx';
 import GoogleSyncButton from './components/GoogleSyncButton.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
-import { getTranslations, LANGUAGES, getStoredLang, setStoredLang } from './utils/i18n.js';
+import { getTranslations } from './utils/i18n.js';
 import { initTokenClient, signIn, signOut, syncWeek, isSignedIn } from './utils/googleCalendar.js';
 import generateWeeklySchedule from './utils/scheduler.js';
 import {
@@ -73,8 +73,6 @@ export default function App() {
   // Save preferences
   useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
   useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
-
-  const T = getTranslations(lang);
 
   // Google Calendar sync
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
