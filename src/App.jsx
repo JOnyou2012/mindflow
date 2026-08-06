@@ -69,6 +69,28 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
   useEffect(() => { try { localStorage.setItem('mindflow_accent', accent); } catch {} }, [accent]);
 
+  // Apply theme: toggle light class on <html>
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light-theme');
+      root.style.setProperty('--color-mindflow-bg', '#f5f5f7');
+      root.style.setProperty('--color-mindflow-surface', '#ffffff');
+      root.style.setProperty('--color-mindflow-border', '#e0e0e6');
+      root.style.setProperty('--color-mindflow-text', '#3a3a44');
+      root.style.setProperty('--color-mindflow-heading', '#1a1a24');
+      root.style.setProperty('--color-mindflow-muted', '#888899');
+    } else {
+      root.classList.remove('light-theme');
+      root.style.removeProperty('--color-mindflow-bg');
+      root.style.removeProperty('--color-mindflow-surface');
+      root.style.removeProperty('--color-mindflow-border');
+      root.style.removeProperty('--color-mindflow-text');
+      root.style.removeProperty('--color-mindflow-heading');
+      root.style.removeProperty('--color-mindflow-muted');
+    }
+  }, [theme]);
+
   // Apply accent as CSS variable
   useEffect(() => {
     document.documentElement.style.setProperty('--color-mindflow-accent', accent);
