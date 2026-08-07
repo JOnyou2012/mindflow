@@ -258,23 +258,25 @@ export default function TaskInputForm({ tasks = [], onChange, T }) {
         </div>
       ) : (
         /* Empty state */
-        <div className="bg-mindflow-surface border border-mindflow-border border-dashed rounded-xl p-10 text-center">
-          <div className="bg-mindflow-bg rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-            <Plus className="w-7 h-7 text-mindflow-muted" />
+        <div className="py-16 text-center">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-5"
+            style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.15), rgba(212,165,116,0.05))', border: '1px solid rgba(212,165,116,0.12)' }}>
+            <Plus className="w-6 h-6 text-mindflow-accent" />
           </div>
-          <p className="text-mindflow-heading font-medium mb-1">{T.taskNoTasks}</p>
-          <p className="text-sm text-mindflow-muted max-w-xs mx-auto">
+          <p className="text-mindflow-heading font-medium mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>{T.taskNoTasks}</p>
+          <p className="text-sm text-mindflow-muted max-w-sm mx-auto leading-relaxed">
             {T.taskNoTasksDesc}
           </p>
         </div>
       )}
 
       {/* ── Add / Edit form ── */}
-      <div id="task-form" className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
+      <div id="task-form" className="rounded-xl overflow-hidden border border-mindflow-border/60"
+        style={{ background: 'linear-gradient(180deg, rgba(212,165,116,0.02) 0%, transparent 50%)' }}>
         <button
           type="button"
           onClick={() => setFormOpen(o => !o)}
-          className="w-full p-5 flex items-center justify-between hover:bg-mindflow-bg/50 transition-colors"
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-mindflow-bg/30 transition-colors"
         >
           <h3 className="text-sm font-medium text-mindflow-heading flex items-center gap-2">
             {isEditing ? (

@@ -188,17 +188,18 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
 
   // -- Render --
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* ================================================================ */}
       {/* ADD FIXED EVENT FORM */}
       {/* ================================================================ */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-medium text-mindflow-heading flex items-center gap-2">
-          <Plus className="w-4 h-4 text-mindflow-accent" />{T.calAddEvent}
-        </h3>
-        <p className="text-xs text-mindflow-muted -mt-2">
-          {T.calDesc}
-        </p>
+      <div className="p-6 rounded-xl border border-mindflow-border/60 space-y-5"
+        style={{ background: 'linear-gradient(180deg, rgba(212,165,116,0.03) 0%, transparent 40%)' }}>
+        <div>
+          <h3 className="text-base font-semibold text-mindflow-heading flex items-center gap-2" style={{ fontFamily: "'Playfair Display', serif" }}>
+            {T.calAddEvent}
+          </h3>
+          <p className="text-xs text-mindflow-muted mt-1">{T.calDesc}</p>
+        </div>
 
         {/* Event name + Type */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
@@ -293,10 +294,10 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
         <button
           type="button"
           onClick={handleAdd}
-          className="w-full bg-mindflow-accent text-white py-2.5 rounded-lg font-medium
-                     hover:opacity-90 transition-opacity text-sm"
+          className="px-6 py-2.5 rounded-lg font-medium text-sm transition-all active:scale-[0.98]"
+          style={{ backgroundColor: 'rgba(212,165,116,0.15)', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}
         >
-          {T.calAdd}
+          + {T.calAdd}
         </button>
       </div>
 
@@ -304,7 +305,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
       {/* QUICK PRESETS */}
       {/* ================================================================ */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] text-mindflow-muted uppercase tracking-wide mr-1">{T.calQuick}:</span>
+        <span className="text-[10px] text-mindflow-muted uppercase tracking-widest font-medium">{T.calQuick}</span>
         {QUICK_PRESETS.map((p, i) => {
           const c = TYPE_CFG[p.type];
           return (
@@ -328,14 +329,16 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
       {/* ================================================================ */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-mindflow-border bg-mindflow-bg/50">
+        <div className="grid grid-cols-7 border-b border-mindflow-border/60">
           {DAYS.map(d => {
             const n = blocks.filter(b => b.day === d).length;
             const hrs = blocks.filter(b => b.day === d).reduce((s, b) => s + b.durationHours, 0);
+            const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+            const isToday = d === todayStr.slice(0,3);
             return (
-              <div key={d} className="px-2 py-2.5 text-center border-r border-mindflow-border last:border-r-0">
-                <span className="text-xs font-semibold text-mindflow-heading">{d}</span>
-                <span className="block text-[9px] text-mindflow-muted">{getDayDate(d) || (n > 0 ? `${n} · ${hrs}h` : T.free)}</span>
+              <div key={d} className={`px-2 py-3 text-center border-r border-mindflow-border/40 last:border-r-0 ${isToday ? 'bg-mindflow-accent/5' : ''}`}>
+                <span className={`text-[11px] font-semibold tracking-wide ${isToday ? 'text-mindflow-accent' : 'text-mindflow-heading'}`}>{d}</span>
+                <span className="block text-[9px] text-mindflow-muted mt-0.5">{getDayDate(d) || (n > 0 ? `${n} · ${hrs}h` : T.free)}</span>
               </div>
             );
           })}
@@ -395,17 +398,18 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
 
       {/* Stats footer */}
       {stats.totalBlocks > 0 && (
-        <div className="flex items-center justify-between text-xs text-mindflow-muted">
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {stats.totalHours}{T.calHScheduled} · {stats.totalBlocks} {stats.totalBlocks !== 1 ? T.calBlocks : T.calBlock} · {stats.daysUsed} {stats.daysUsed !== 1 ? T.calDaysUnit : T.calDay}
+        <div className="flex items-center justify-between text-[11px] text-mindflow-muted pt-1">
+          <span className="flex items-center gap-2">
+            <span>{stats.totalBlocks} {stats.totalBlocks !== 1 ? T.calBlocks : T.calBlock}</span>
+            <span className="text-mindflow-border">·</span>
+            <span>{stats.totalHours}h</span>
+            <span className="text-mindflow-border">·</span>
+            <span>{stats.daysUsed} {stats.daysUsed !== 1 ? T.calDaysUnit : T.calDay}</span>
           </span>
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm(T.confirmRemoveAll)) onChange([]);
-            }}
-            className="hover:text-mindflow-danger transition-colors"
+            onClick={() => { if (window.confirm(T.confirmRemoveAll)) onChange([]); }}
+            className="hover:text-mindflow-danger transition-colors text-[11px]"
           >
             {T.clearAllEvents}
           </button>
