@@ -349,68 +349,81 @@ export default function App() {
 
       {/* Settings panel */}
       {showSettings && (
-        <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 animate-fade-in">
-          <div className="max-w-2xl mx-auto space-y-4 text-sm">
-            {/* Language */}
-            <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsLanguage}</span>
-              <select
-                value={lang}
-                onChange={e => { setLang(e.target.value); setStoredLang(e.target.value); }}
-                className="bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-1.5 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none"
-              >
-                {LANGUAGES.map(l => (
-                  <option key={l.code} value={l.code}>{l.native} — {l.label}</option>
-                ))}
-              </select>
-            </div>
+        <div className="bg-mindflow-surface border-b border-mindflow-border animate-fade-in">
+          <div className="max-w-2xl mx-auto px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
 
-            {/* Theme */}
-            <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsTheme}</span>
-              {['dark', 'light'].map(t => (
-                <button key={t} onClick={() => setTheme(t)}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${theme === t ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{t}</button>
-              ))}
-            </div>
+              {/* ── Appearance ── */}
+              <div className="sm:col-span-2 mb-1">
+                <p className="text-[10px] text-mindflow-muted uppercase tracking-widest font-medium mb-3">Appearance</p>
+              </div>
 
-            {/* Accent color */}
-            <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsAccent}</span>
-              {['#d4a574','#7eb8a0','#9b7eb8','#d4786e','#e0b870','#8899aa'].map(c => (
-                <button key={c} onClick={() => setAccent(c)}
-                  className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
-                  style={{ backgroundColor: c, borderColor: accent === c ? '#fff' : 'transparent', boxShadow: accent === c ? '0 0 0 2px ' + c + '40' : 'none' }} />
-              ))}
-            </div>
+              <div className="flex items-center gap-3">
+                <span className="text-mindflow-muted text-xs w-16 shrink-0">{T.settingsLanguage}</span>
+                <select value={lang} onChange={e => { setLang(e.target.value); setStoredLang(e.target.value); }}
+                  className="flex-1 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-1.5 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none">
+                  {LANGUAGES.map(l => (<option key={l.code} value={l.code}>{l.native}</option>))}
+                </select>
+              </div>
 
-            {/* Chronotype */}
-            <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsChronotype}</span>
-              {['morning', 'neutral', 'night'].map(c => (
-                <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${settings.chronotype === c ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{c}</button>
-              ))}
-            </div>
+              <div className="flex items-center gap-3">
+                <span className="text-mindflow-muted text-xs w-16 shrink-0">{T.settingsTheme}</span>
+                <div className="flex gap-1 bg-mindflow-bg rounded-lg p-0.5">
+                  {['dark', 'light'].map(t => (
+                    <button key={t} onClick={() => setTheme(t)}
+                      className={`px-4 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${theme === t ? 'bg-mindflow-surface text-mindflow-heading shadow-sm' : 'text-mindflow-muted hover:text-mindflow-text'}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
 
-            {/* Daily hours */}
-            <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsWeekdayHours}</span>
-              <span className="text-mindflow-muted text-[10px]">{T.settingsWeekday}</span>
-              <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
-                onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
-                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
-              <span className="text-mindflow-muted text-[10px] ml-2">Weekend</span>
-              <input type="number" value={settings.maxHoursWeekend} min={0} max={12}
-                onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
-                className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
-            </div>
+              <div className="flex items-center gap-3">
+                <span className="text-mindflow-muted text-xs w-16 shrink-0">{T.settingsAccent}</span>
+                <div className="flex gap-2">
+                  {['#d4a574','#7eb8a0','#9b7eb8','#d4786e','#e0b870','#8899aa'].map(c => (
+                    <button key={c} onClick={() => setAccent(c)}
+                      className={`w-5 h-5 rounded-full transition-all ${accent === c ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c, ringColor: c, '--tw-ring-color': c, boxShadow: accent === c ? '0 0 0 2px ' + c + '40' : 'none' }} />
+                  ))}
+                </div>
+              </div>
 
-            {/* Reset */}
-            <div className="pt-2 border-t border-mindflow-border">
-              <button onClick={handleReset} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-mindflow-danger/10 text-mindflow-danger hover:bg-mindflow-danger/20 transition-colors flex items-center gap-1.5">
-                <Trash2 className="w-3 h-3" />{T.settingsReset}
-              </button>
+              {/* ── Schedule ── */}
+              <div className="sm:col-span-2 mt-3 mb-1 pt-4 border-t border-mindflow-border">
+                <p className="text-[10px] text-mindflow-muted uppercase tracking-widest font-medium mb-3">Schedule</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-mindflow-muted text-xs w-16 shrink-0">{T.settingsChronotype}</span>
+                <div className="flex gap-1 bg-mindflow-bg rounded-lg p-0.5">
+                  {['morning', 'neutral', 'night'].map(c => (
+                    <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${settings.chronotype === c ? 'bg-mindflow-surface text-mindflow-heading shadow-sm' : 'text-mindflow-muted hover:text-mindflow-text'}`}>{c}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-mindflow-muted text-xs w-16 shrink-0">{T.settingsWeekdayHours}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-mindflow-muted text-[10px]">{T.settingsWeekday}</span>
+                  <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
+                    onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
+                    className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1.5 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
+                  <span className="text-mindflow-muted text-[10px]">{T.settingsWeekend}</span>
+                  <input type="number" value={settings.maxHoursWeekend} min={0} max={12}
+                    onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
+                    className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1.5 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />
+                </div>
+              </div>
+
+              {/* ── Danger zone ── */}
+              <div className="sm:col-span-2 mt-3 pt-4 border-t border-mindflow-border">
+                <button onClick={handleReset}
+                  className="text-[11px] text-mindflow-muted hover:text-mindflow-danger transition-colors flex items-center gap-1.5">
+                  <Trash2 className="w-3 h-3" />{T.settingsReset}
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
@@ -425,10 +438,10 @@ export default function App() {
       )}
 
       {/* Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Calibration */}
-        <section>
-          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+        <section className="pb-10">
+          <h2 className="text-base font-semibold text-mindflow-heading mb-5 flex items-center gap-3">
             <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
               style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>1</span>
             {T.secCalibration}
@@ -437,17 +450,24 @@ export default function App() {
           {!calibration ? (
             <StroopTestModal onComplete={handleCalibrationComplete} onSkip={handleSkipCalibration} existingCalibration={calibration} T={T} />
           ) : (
-            <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 flex items-center justify-between">
-              <span className="text-sm text-mindflow-text">{T.secCalibrationDone}: <strong className="text-mindflow-heading">{calibration.alphaScore.toFixed(2)}</strong></span>
+            <div className="flex items-center justify-between py-3 px-5 rounded-xl border-l-2"
+              style={{ backgroundColor: 'rgba(212,165,116,0.04)', borderLeftColor: '#d4a574', borderLeftWidth: '3px' }}>
+              <div className="flex items-center gap-4">
+                <span className="text-xs text-mindflow-muted tracking-wide uppercase">{T.secCalibrationDone}</span>
+                <span className="text-2xl font-bold text-mindflow-heading" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {calibration.alphaScore.toFixed(2)}
+                </span>
+              </div>
               <button onClick={() => { setCalibrationState(null); try { localStorage.removeItem('mindflow_calibration'); } catch {} }}
-                className="text-xs text-mindflow-muted hover:text-mindflow-text underline">{T.recalibrate}</button>
+                className="text-xs text-mindflow-muted hover:text-mindflow-accent transition-colors">{T.recalibrate}</button>
             </div>
           )}
         </section>
 
         {/* Fixed Schedule */}
-        <section>
-          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+        <section className="pb-10">
+          <hr className="section-rule mb-10" />
+          <h2 className="text-base font-semibold text-mindflow-heading mb-5 flex items-center gap-3">
             <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
               style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>2</span>
             {T.secSchedule}
@@ -457,8 +477,9 @@ export default function App() {
         </section>
 
         {/* Tasks */}
-        <section>
-          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+        <section className="pb-10">
+          <hr className="section-rule mb-10" />
+          <h2 className="text-base font-semibold text-mindflow-heading mb-5 flex items-center gap-3">
             <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
               style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>3</span>
             {T.secTasks}
@@ -468,10 +489,11 @@ export default function App() {
         </section>
 
         {/* Generate */}
-        <div className="text-center">
-          {canGenerate && !hasResults && (
+        {canGenerate && !hasResults && (
+          <div className="py-10 text-center">
+            <hr className="section-rule mb-8" />
             <button onClick={handleGenerate} disabled={isCalculating}
-              className="btn-primary px-12 py-4 rounded-xl text-lg flex items-center gap-3 mx-auto disabled:opacity-40 active:scale-[0.98] transition-all"
+              className="btn-primary px-14 py-5 rounded-xl text-lg flex items-center gap-3 mx-auto disabled:opacity-40 active:scale-[0.98] transition-all text-base shadow-xl"
               style={{ fontFamily: "'Inter', sans-serif" }}>
               {isCalculating ? (
                 <><span className="animate-pulse">{T.generating}</span></>
@@ -479,8 +501,8 @@ export default function App() {
                 <><Play className="w-5 h-5" /> {T.generate}</>
               )}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Results — ALWAYS show 4 weeks, scroll horizontally */}
         {hasResults && (
@@ -574,8 +596,8 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-mindflow-border bg-mindflow-surface/50 px-6 py-3">
-        <p className="text-center text-[10px] text-mindflow-muted">{T.appFooter}</p>
+      <footer className="border-t border-mindflow-border px-6 py-4">
+        <p className="text-center text-[10px] text-mindflow-muted tracking-wide">{T.appFooter}</p>
       </footer>
     </div>
   );

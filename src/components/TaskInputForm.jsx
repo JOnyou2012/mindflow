@@ -199,10 +199,13 @@ export default function TaskInputForm({ tasks = [], onChange, T }) {
               <div
                 key={task.id}
                 onClick={() => startEdit(task)}
-                className={`bg-mindflow-surface border rounded-xl p-4 flex items-start justify-between
-                  group hover:border-mindflow-accent/40 transition-all cursor-pointer
-                  ${editingId === task.id ? 'border-mindflow-accent ring-1 ring-mindflow-accent/30' : 'border-mindflow-border'}
-                  ${overdue ? 'border-mindflow-danger/30 bg-mindflow-danger/5' : ''}`}
+                className="flex items-start justify-between group cursor-pointer transition-all
+                  pl-4 pr-4 py-3.5 rounded-r-lg mb-2"
+                style={{
+                  backgroundColor: editingId === task.id ? 'rgba(212,165,116,0.06)' : 'transparent',
+                  borderLeft: '3px solid ' + (overdue ? '#d4786e' : tm.color),
+                  opacity: overdue ? 0.6 : 1,
+                }}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
