@@ -252,24 +252,26 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       </div>
 
       {/* Key mapping */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-5 w-full max-w-sm">
-        <p className="text-xs text-mindflow-muted uppercase tracking-wide text-center mb-3">{T.calibKeyMapping}</p>
-        <div className="grid grid-cols-4 gap-2">
+      <div className="w-full max-w-sm">
+        <p className="text-[10px] text-mindflow-muted uppercase tracking-widest text-center mb-4">{T.calibKeyMapping}</p>
+        <div className="grid grid-cols-4 gap-3">
           {COLORS.map(c => (
-            <div key={c.key} className="text-center space-y-1">
-              <div className="w-10 h-10 rounded-lg mx-auto border-2 border-white/20" style={{ backgroundColor: c.hex }} />
-              <p className="text-[10px] text-mindflow-muted">{c.name}</p>
-              <p className="text-lg font-bold text-mindflow-heading">{c.key.toUpperCase()}</p>
+            <div key={c.key} className="text-center">
+              <div className="w-14 h-14 rounded-xl mx-auto flex items-center justify-center text-xl font-bold shadow-sm"
+                style={{ backgroundColor: c.hex, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                {c.key.toUpperCase()}
+              </div>
+              <p className="text-[10px] text-mindflow-muted mt-1.5">{c.name}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Example */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-6 text-center space-y-3 max-w-sm">
-        <p className="text-xs text-mindflow-muted uppercase tracking-wide">{T.calibExample}</p>
-        <p className="text-4xl font-bold" style={{ color: '#7eb8a0' }}>{T.calibExampleWord}</p>
-        <p className="text-xs text-mindflow-muted">{T.calibExampleDesc}</p>
+      <div className="text-center max-w-sm">
+        <p className="text-[10px] text-mindflow-muted uppercase tracking-widest mb-3">{T.calibExample}</p>
+        <p className="text-5xl font-bold mb-2" style={{ color: '#7eb8a0', fontFamily: "'Playfair Display', serif" }}>{T.calibExampleWord}</p>
+        <p className="text-xs text-mindflow-muted leading-relaxed">{T.calibExampleDesc}</p>
       </div>
 
       {existingCalibration && (
@@ -298,10 +300,11 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
   // COUNTDOWN
   // ===========================================================================
   if (phase === 'countdown') return (
-    <div className="flex items-center justify-center py-32">
-      <div className="text-center space-y-4">
-        <p className="text-mindflow-muted text-sm uppercase tracking-widest">{T.calibCountdown}</p>
-        <span className="text-8xl font-black text-mindflow-accent animate-pulse">{countdown}</span>
+    <div className="flex items-center justify-center py-40">
+      <div className="text-center space-y-6">
+        <p className="text-mindflow-muted text-sm uppercase tracking-[0.2em]">{T.calibCountdown}</p>
+        <span className="text-[9rem] font-bold text-mindflow-accent animate-pulse leading-none"
+          style={{ fontFamily: "'Playfair Display', serif" }}>{countdown}</span>
         <p className="text-xs text-mindflow-muted">{T.calibCountdownHint}</p>
       </div>
     </div>
@@ -388,46 +391,36 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
   // RESULTS
   // ===========================================================================
   if (phase === 'results' && results) return (
-    <div className="flex flex-col items-center gap-6 py-12 animate-fade-in">
-      <div className="bg-mindflow-accent/15 p-5 rounded-full">
-        <Zap className="w-16 h-16 text-mindflow-accent" />
-      </div>
-
+    <div className="flex flex-col items-center gap-8 py-10 animate-fade-in">
+      {/* Hero alpha score */}
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-mindflow-heading">{T.calibResults}</h2>
-        <p className="text-sm text-mindflow-muted mt-1">
+        <p className="text-xs text-mindflow-muted uppercase tracking-widest mb-2">{T.calibFocusScore}</p>
+        <p className={`text-7xl font-bold tracking-tight ${alphaColor(results.alphaScore)}`}
+          style={{ fontFamily: "'Playfair Display', serif" }}>
+          {results.alphaScore.toFixed(2)}
+        </p>
+        <p className="text-sm text-mindflow-muted mt-2">
           {results.trialCount} {T.calibTrials} · {GAME_SECS}s
         </p>
       </div>
 
-      {/* Main metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-lg">
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
-          <Target className="w-5 h-5 text-mindflow-accent mx-auto mb-2" />
-          <p className="text-2xl font-bold text-mindflow-heading">
-            {(results.accuracy * 100).toFixed(0)}%
-          </p>
-          <p className="text-xs text-mindflow-muted">{T.calibAccuracy}</p>
-        </div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
-          <Clock className="w-5 h-5 text-mindflow-warning mx-auto mb-2" />
-          <p className="text-2xl font-bold text-mindflow-heading">{results.avgResponseTimeMs}</p>
-          <p className="text-xs text-mindflow-muted">{T.calibSpeed}</p>
-        </div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
-          <Keyboard className="w-5 h-5 text-mindflow-accent mx-auto mb-2" />
-          <p className="text-2xl font-bold text-mindflow-heading">{results.rtVariabilityMs}</p>
-          <p className="text-xs text-mindflow-muted">{T.calibConsistency}</p>
-        </div>
-        <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
-          <Zap className={`w-5 h-5 mx-auto mb-2 ${alphaColor(results.alphaScore)}`} />
-          <p className={`text-2xl font-bold ${alphaColor(results.alphaScore)}`}>{results.alphaScore.toFixed(2)}</p>
-          <p className="text-xs text-mindflow-muted">{T.calibFocusScore}</p>
-        </div>
+      {/* Secondary metrics */}
+      <div className="grid grid-cols-3 gap-4 w-full max-w-md">
+        {[
+          { val: (results.accuracy * 100).toFixed(0) + '%', label: T.calibAccuracy, color: '#7eb8a0' },
+          { val: results.avgResponseTimeMs + 'ms', label: T.calibSpeed, color: '#e0b870' },
+          { val: 'SD ' + results.rtVariabilityMs, label: T.calibConsistency, color: '#d4a574' },
+        ].map((m, i) => (
+          <div key={i} className="text-center py-3 px-2 rounded-lg"
+            style={{ borderLeft: '2px solid ' + m.color, backgroundColor: m.color + '0d' }}>
+            <p className="text-xl font-bold text-mindflow-heading">{m.val}</p>
+            <p className="text-[10px] text-mindflow-muted mt-0.5">{m.label}</p>
+          </div>
+        ))}
       </div>
 
       {/* Detailed breakdown */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg w-full space-y-2 text-sm">
+      <div className="max-w-md w-full space-y-2 text-sm p-4 rounded-xl border border-mindflow-border/40">
         <p className="font-medium text-mindflow-heading text-xs uppercase tracking-wide">{T.calibScoreBreakdown}</p>
 
         <div className="space-y-1.5">
@@ -459,8 +452,8 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       </div>
 
       {/* Interpretation */}
-      <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg text-sm text-mindflow-text">
-        <p className="font-medium text-mindflow-heading mb-1">{T.calibWhatMeans}</p>
+      <div className="max-w-md w-full text-sm text-mindflow-text p-4 rounded-r-lg border-l-2" style={{ borderLeftColor: '#d4a574', backgroundColor: 'rgba(212,165,116,0.04)' }}>
+        <p className="font-medium text-mindflow-heading mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>{T.calibWhatMeans}</p>
         {results.alphaScore >= 1.2 && (
           <p>{T.calibInterpretExcellent}</p>
         )}
