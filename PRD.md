@@ -83,6 +83,25 @@
 > difficulty labels, presets, error messages, calendar stats, and settings labels
 > are fully translated. Build 0 errors, 0 new lint warnings.
 >
+> **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
+> **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
+> toward morning slots (best circadian gamma + best time-of-day score). A single task
+> with a 9-10am calendar block always landed at 10am even when the afternoon was
+> completely free. Added a `daySpreadBonus` that penalizes morning placement (<2pm)
+> when day utilization is below 35%, scaling 0.40→0. Naturally pushes single tasks
+> to the afternoon while multi-task days still use morning slots. **2) Per-day capacity
+> enforcement** — the cap check used per-slot `usedTicks` instead of the day aggregate,
+> so tasks across multiple same-day slots could collectively exceed daily caps.
+> Fixed with `dayUsedTicks` checks at all three placement points. **3) Timezone-safe
+> date comparison** — `todayStr` used `toISOString()` (UTC) but `dateForDay()` builds
+> local dates. In timezones behind UTC, today could be misclassified as past, routing
+> tasks to the wrong day. Now uses local date parts consistent with the rest of the
+> codebase. **4) Week navigation** — the PlanView only showed weeks with generated
+> results. Now renders a full 11-week range (-2/+8 from today), empty weeks show the
+> calendar grid with an empty-state notice, and the Today button jumps to the actual
+> current week. Added `noSessionsThisWeek` i18n key in all 6 languages. All 1,996
+> tests pass (117 + 756 + 849 + 274), build 0 errors.
+>
 > **2026-08-06:** Settings panel built (theme toggle, accent color picker, chronotype,
 > hours/day, reset). Google Calendar integration coded but removed after causing
 > blank-page crash — will be rebuilt with proper error boundaries.
