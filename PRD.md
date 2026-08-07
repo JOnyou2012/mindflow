@@ -83,6 +83,17 @@
 > difficulty labels, presets, error messages, calendar stats, and settings labels
 > are fully translated. Build 0 errors, 0 new lint warnings.
 >
+> **2026-08-08 (deadline fix):** The task form stores deadlines as `YYYY-MM-DDTHH:MM`
+> (e.g. `2026-08-15T23:59`). Two locations in the scheduling pipeline blindly appended
+> `T00:00:00` to the deadline string, producing `2026-08-15T23:59T00:00:00` — an
+> invalid Date. This caused EVERY task with a deadline to fail the App.jsx eligibility
+> filter and be permanently deferred, never reaching the scheduler. Fixed by checking
+> for an existing `T` separator before appending (matching the already-correct pattern
+> in `deadlineAllowsDay` and `slotBeforeDeadline`). Also fixed silently dropped tasks:
+> tasks deferred beyond the last generated week are now appended to that week's
+> unscheduled list instead of vanishing. Added regression tests 15.7 (time-including
+> deadline) and 15.8 (date-only deadline). All 1,998 tests pass, build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task
