@@ -104,6 +104,15 @@ export default function App() {
           results[ws] = result;
           w++;
         }
+        // Attach any tasks still remaining (deferred beyond the last
+        // generated week) to the last week's unscheduled list so they
+        // don't silently disappear from the UI.
+        if (remaining.length > 0 && w > 0) {
+          const lastWs = getWeekStart(w - 1);
+          if (results[lastWs]) {
+            results[lastWs].unscheduled = [...(results[lastWs].unscheduled || []), ...remaining];
+          }
+        }
         setWeekResults(results);
         dataVersionRef.current = 0;
         setIsCalculating(false);
