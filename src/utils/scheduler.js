@@ -353,14 +353,16 @@ function deadlineAllowsDay(task, day, weekStartDate) {
   const deadlineDt = new Date(dlStr);
   if (isNaN(deadlineDt.getTime())) return true;
 
-  // Compute this day's date
+  // Compute this day's date and normalize both dates to midnight for a
+  // pure date comparison (ignore time-of-day). The slot-level time check
+  // in slotBeforeDeadline() handles the specific hour constraint separately.
   const [y, m, d] = weekStartDate.split('-').map(Number);
   const dayIdx = DAY_INDEX[day];
   const dayDate = new Date(y, m - 1, d + dayIdx);
-  dayDate.setHours(23, 59, 59, 999); // end of this day
+  dayDate.setHours(0, 0, 0, 0);
+  deadlineDt.setHours(0, 0, 0, 0);
 
   // Task can be on this day if the day is before or on the deadline date.
-  // Note: time-of-day check happens during slot scoring (slot must end before deadline time).
   return dayDate <= deadlineDt;
 }
 
@@ -944,14 +946,19 @@ function applyAttentionResidueToState(state, prevType, nextType) {
 export default function generateWeeklySchedule(
   calendarBlocks = [], tasks = [], alpha = 1.0, settings = {}, weekStartDate = null
 ) {
-  // Default to this week's Monday if no date provided
+  // Default to this week's Monday if no date provided.
+  // Must use local date parts, NOT toISOString() which is UTC — in timezones
+  // ahead of UTC (Asia, Australia, etc.), toISOString returns the previous day
+  // and shifts the entire week by one day, breaking all deadline checks.
   const wsDate = weekStartDate || (() => {
     const now = new Date();
     const day = now.getDay();
     const diff = day === 0 ? -6 : 1 - day;
     const mon = new Date(now);
     mon.setDate(mon.getDate() + diff);
-    return mon.toISOString().split('T')[0];
+    return mon.getFullYear() + '-' +
+      String(mon.getMonth() + 1).padStart(2, '0') + '-' +
+      String(mon.getDate()).padStart(2, '0');
   })();
 
   // Today's date for blocking past days (only when real dates are in play).
