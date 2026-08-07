@@ -54,10 +54,13 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
+> **2026-08-07:** Language/i18n complete — 6 languages (EN/ZH-CN/ZH-TW/ES/HI/AR) with
+> full translation maps (101 keys each), language selector dropdown in settings panel,
+> persisted to localStorage. Build 0 errors, 0 new lint warnings.
+>
 > **2026-08-06:** Settings panel built (theme toggle, accent color picker, chronotype,
 > hours/day, reset). Google Calendar integration coded but removed after causing
-> blank-page crash — will be rebuilt with proper error boundaries. Language support
-> pending (6 languages: EN/ZH-CN/ZH-TW/ES/HI/AR). All 1,957+ tests pass.
+> blank-page crash — will be rebuilt with proper error boundaries.
 >
 > **2026-08-05 (v6 scheduler):** Major UX-driven scheduler overhaul. Multi-week cascade
 > with deadline-based week targeting, realistic study hours (8am-9pm with time-of-day
@@ -184,7 +187,7 @@ TOTAL                           85/94   90.4%
 >   preview using real alpha, localStorage persistence, settings panel (theme
 >   toggle, 6 accent colors, chronotype, daily/hour caps, reset)
 > - 1,957+ tests across 4 suites, 0 failures, 0 build errors
-> - Settings: language pending (6 translations ready), Google Calendar pending
+> - Settings: language complete (6 languages, 101 keys each), Google Calendar pending
 >   (code built but removed due to runtime crash)
 >
 > **Next:** Stage 4 — Integration verification walkthrough (steps 75–85)
