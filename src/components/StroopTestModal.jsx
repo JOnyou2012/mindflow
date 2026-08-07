@@ -3,10 +3,10 @@ import { Brain, Zap, Clock, RefreshCw, Target, Keyboard } from 'lucide-react';
 
 // 4 colors mapped to 4 keyboard keys — user must learn this mapping
 const COLORS = [
-  { name: 'Red',    hex: '#ef4444', key: 'r' },
-  { name: 'Green',  hex: '#22c55e', key: 'g' },
-  { name: 'Blue',   hex: '#3b82f6', key: 'b' },
-  { name: 'Yellow', hex: '#eab308', key: 'y' },
+  { name: 'Red',    hex: '#d4786e', key: 'r' },
+  { name: 'Green',  hex: '#7eb8a0', key: 'g' },
+  { name: 'Blue',   hex: '#7e9ab8', key: 'b' },
+  { name: 'Yellow', hex: '#e0b870', key: 'y' },
 ];
 const COLOR_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c]));
 
@@ -268,7 +268,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       {/* Example */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-6 text-center space-y-3 max-w-sm">
         <p className="text-xs text-mindflow-muted uppercase tracking-wide">{T.calibExample}</p>
-        <p className="text-4xl font-bold" style={{ color: '#22c55e' }}>{T.calibExampleWord}</p>
+        <p className="text-4xl font-bold" style={{ color: '#7eb8a0' }}>{T.calibExampleWord}</p>
         <p className="text-xs text-mindflow-muted">{T.calibExampleDesc}</p>
       </div>
 

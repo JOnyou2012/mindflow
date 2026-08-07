@@ -14,7 +14,7 @@ import {
 } from './utils/storage.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
-const TYPE_COLORS = { academic: '#3b82f6', sports: '#22c55e', arts: '#8b5cf6', other: '#6b7280' };
+const TYPE_COLORS = { academic: '#7eb8a0', sports: '#d4a574', arts: '#9b7eb8', other: '#8899aa' };
 
 function fmtHr(h) {
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
@@ -64,7 +64,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mindflow_theme') || 'dark'; } catch { return 'dark'; }});
-  const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#8b5cf6'; } catch { return '#8b5cf6'; }});
+  const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#d4a574'; } catch { return '#8b5cf6'; }});
   const [lang, setLang] = useState(() => getStoredLang());
 
   // Translations for current language
@@ -316,15 +316,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-mindflow-bg flex flex-col">
       {/* Header */}
-      <header className="bg-mindflow-surface border-b border-mindflow-border px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+      <header className="glass px-6 py-3 flex items-center justify-between sticky top-0 z-40 border-b border-mindflow-border/50">
         <div className="flex items-center gap-3">
-          <Brain className="w-6 h-6 text-mindflow-accent" />
-          <h1 className="text-lg font-bold text-mindflow-heading">{T.appName}</h1>
-          <span className="text-[11px] text-mindflow-muted">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.2), rgba(212,165,116,0.05))' }}>
+            <Brain className="w-4.5 h-4.5 text-mindflow-accent" style={{ filter: 'drop-shadow(0 0 6px rgba(212,165,116,0.3))' }} />
+          </div>
+          <h1 className="text-lg font-bold text-mindflow-heading tracking-tight italic" style={{ fontFamily: "'Playfair Display', serif" }}>{T.appName}</h1>
+          <span className="w-1 h-1 rounded-full bg-mindflow-muted/40 mt-1" />
+          <span className="text-[11px] text-mindflow-muted tracking-wide uppercase" style={{ fontSize: '10px' }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </span>
           {calibration && (
-            <span className="text-xs bg-mindflow-accent/10 text-mindflow-accent px-2 py-0.5 rounded-full">
+            <span className="text-xs px-2 py-0.5 rounded-full border tracking-wide"
+              style={{ backgroundColor: 'rgba(212,165,116,0.08)', borderColor: 'rgba(212,165,116,0.2)', color: '#d4a574', fontSize: '10px' }}>
               α {calibration.alphaScore.toFixed(2)}
             </span>
           )}
@@ -372,7 +377,7 @@ export default function App() {
             {/* Accent color */}
             <div className="flex items-center gap-2">
               <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsAccent}</span>
-              {['#8b5cf6','#3b82f6','#22c55e','#f97316','#ec4899','#06b6d4'].map(c => (
+              {['#d4a574','#7eb8a0','#9b7eb8','#d4786e','#e0b870','#8899aa'].map(c => (
                 <button key={c} onClick={() => setAccent(c)}
                   className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
                   style={{ backgroundColor: c, borderColor: accent === c ? '#fff' : 'transparent', boxShadow: accent === c ? '0 0 0 2px ' + c + '40' : 'none' }} />
@@ -423,9 +428,10 @@ export default function App() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
         {/* Calibration */}
         <section>
-          <h2 className="text-sm font-medium text-mindflow-heading mb-4 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-mindflow-accent text-white text-[10px] font-bold flex items-center justify-center">1</span>
-            Calibration
+          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+            <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>1</span>
+            {T.secCalibration}
             {calibration && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
           {!calibration ? (
@@ -441,8 +447,9 @@ export default function App() {
 
         {/* Fixed Schedule */}
         <section>
-          <h2 className="text-sm font-medium text-mindflow-heading mb-4 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-mindflow-accent text-white text-[10px] font-bold flex items-center justify-center">2</span>
+          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+            <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>2</span>
             {T.secSchedule}
             {calendarBlocks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
@@ -451,8 +458,9 @@ export default function App() {
 
         {/* Tasks */}
         <section>
-          <h2 className="text-sm font-medium text-mindflow-heading mb-4 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-mindflow-accent text-white text-[10px] font-bold flex items-center justify-center">3</span>
+          <h2 className="text-base font-semibold text-mindflow-heading mb-4 flex items-center gap-3">
+            <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(212,165,116,0.3), rgba(212,165,116,0.1))', color: '#d4a574', border: '1px solid rgba(212,165,116,0.2)' }}>3</span>
             {T.secTasks}
             {tasks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
@@ -463,7 +471,8 @@ export default function App() {
         <div className="text-center">
           {canGenerate && !hasResults && (
             <button onClick={handleGenerate} disabled={isCalculating}
-              className="bg-mindflow-accent text-white px-10 py-4 rounded-2xl text-lg font-semibold hover:opacity-90 shadow-xl shadow-mindflow-accent/20 active:scale-[0.98] flex items-center gap-3 mx-auto disabled:opacity-50">
+              className="btn-primary px-12 py-4 rounded-xl text-lg flex items-center gap-3 mx-auto disabled:opacity-40 active:scale-[0.98] transition-all"
+              style={{ fontFamily: "'Inter', sans-serif" }}>
               {isCalculating ? (
                 <><span className="animate-pulse">{T.generating}</span></>
               ) : (

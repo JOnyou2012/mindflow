@@ -33,15 +33,15 @@ function isPastDeadline(iso) {
 
 export default function TaskInputForm({ tasks = [], onChange, T }) {
   const TYPES = [
-    { value: 'academic', label: T.typeAcademic, color: '#3b82f6' },
-    { value: 'sports', label: T.typeSports, color: '#22c55e' },
-    { value: 'arts', label: T.typeArts, color: '#8b5cf6' },
-    { value: 'other', label: T.typeOther, color: '#6b7280' },
+    { value: 'academic', label: T.typeAcademic, color: '#7eb8a0' },
+    { value: 'sports', label: T.typeSports, color: '#d4a574' },
+    { value: 'arts', label: T.typeArts, color: '#9b7eb8' },
+    { value: 'other', label: T.typeOther, color: '#8899aa' },
   ];
   const PRIORITIES = [
-    { value: 'high', label: T.priorityHigh, color: '#ef4444' },
-    { value: 'medium', label: T.priorityMedium, color: '#fbbf24' },
-    { value: 'low', label: T.priorityLow, color: '#6b7280' },
+    { value: 'high', label: T.priorityHigh, color: '#d4786e' },
+    { value: 'medium', label: T.priorityMedium, color: '#e0b870' },
+    { value: 'low', label: T.priorityLow, color: '#8899aa' },
   ];
   const DIFFICULTY_LABELS = ['', T.diffVeryEasy, T.diffEasy, T.diffMedium, T.diffHard, T.diffVeryHard];
 

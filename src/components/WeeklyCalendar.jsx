@@ -6,10 +6,10 @@ const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri'];
 const START_H = 6, END_H = 22, TOTAL_H = END_H - START_H, ROW_H = 48;
 
 const TYPE_ICONS = {
-  academic: { color: '#3b82f6', icon: School },
-  sports:   { color: '#22c55e', icon: Dumbbell },
-  arts:     { color: '#8b5cf6', icon: Palette },
-  other:    { color: '#6b7280', icon: Ellipsis },
+  academic: { color: '#7eb8a0', icon: School },
+  sports:   { color: '#d4a574', icon: Dumbbell },
+  arts:     { color: '#9b7eb8', icon: Palette },
+  other:    { color: '#8899aa', icon: Ellipsis },
 };
 
 // Generate time options: 6:00, 6:30, 7:00, ... 21:30

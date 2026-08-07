@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Brain, Zap, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import SessionChart from './SessionChart';
 
-const TYPE_COLORS = { academic: '#3b82f6', sports: '#22c55e', arts: '#8b5cf6', other: '#6b7280' };
+const TYPE_COLORS = { academic: '#7eb8a0', sports: '#d4a574', arts: '#9b7eb8', other: '#8899aa' };
 const TYPE_LABELS = { academic: 'Academic', sports: 'Sports', arts: 'Arts', other: 'Other' };
 
 function getToday() {

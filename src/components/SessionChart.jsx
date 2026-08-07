@@ -29,20 +29,20 @@ export default function SessionChart({
         <AreaChart data={timeline} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={fg} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity={0.85} />
-              <stop offset="100%" stopColor="#22c55e" stopOpacity={0.15} />
+              <stop offset="0%" stopColor="#7eb8a0" stopOpacity={0.85} />
+              <stop offset="100%" stopColor="#7eb8a0" stopOpacity={0.15} />
             </linearGradient>
             <linearGradient id={dg} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#eab308" stopOpacity={0.85} />
-              <stop offset="100%" stopColor="#eab308" stopOpacity={0.15} />
+              <stop offset="0%" stopColor="#e0b870" stopOpacity={0.85} />
+              <stop offset="100%" stopColor="#e0b870" stopOpacity={0.15} />
             </linearGradient>
             <linearGradient id={ftg} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.85} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0.15} />
+              <stop offset="0%" stopColor="#d4786e" stopOpacity={0.85} />
+              <stop offset="100%" stopColor="#d4786e" stopOpacity={0.15} />
             </linearGradient>
             <linearGradient id={rg} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34d399" stopOpacity={0.60} />
-              <stop offset="100%" stopColor="#34d399" stopOpacity={0.08} />
+              <stop offset="0%" stopColor="#7eb8a0" stopOpacity={0.60} />
+              <stop offset="100%" stopColor="#7eb8a0" stopOpacity={0.08} />
             </linearGradient>
           </defs>
           <XAxis
@@ -77,20 +77,20 @@ export default function SessionChart({
             />
           )}
           {/* Recovery drawn first so it sits at the bottom of the stack */}
-          <Area type="monotone" dataKey="recovery" name="Recovery" stackId="1" stroke="#34d399" fill={`url(#${rg})`} strokeWidth={compact ? 1 : 1} />
-          <Area type="monotone" dataKey="fatigue" name="Fatigue" stackId="1" stroke="#ef4444" fill={`url(#${ftg})`} strokeWidth={1} />
-          <Area type="monotone" dataKey="distracted" name="Distracted" stackId="1" stroke="#eab308" fill={`url(#${dg})`} strokeWidth={1} />
-          <Area type="monotone" dataKey="flow" name="Flow" stackId="1" stroke="#22c55e" fill={`url(#${fg})`} strokeWidth={1} />
+          <Area type="monotone" dataKey="recovery" name="Recovery" stackId="1" stroke="#7eb8a0" fill={`url(#${rg})`} strokeWidth={compact ? 1 : 1} />
+          <Area type="monotone" dataKey="fatigue" name="Fatigue" stackId="1" stroke="#d4786e" fill={`url(#${ftg})`} strokeWidth={1} />
+          <Area type="monotone" dataKey="distracted" name="Distracted" stackId="1" stroke="#e0b870" fill={`url(#${dg})`} strokeWidth={1} />
+          <Area type="monotone" dataKey="flow" name="Flow" stackId="1" stroke="#7eb8a0" fill={`url(#${fg})`} strokeWidth={1} />
           {showReferenceLine && bl && (
             <ReferenceLine
               x={bl}
-              stroke="#ef4444"
+              stroke="#d4786e"
               strokeDasharray="6 6"
               strokeWidth={2}
               label={{
                 value: 'Burnout',
                 position: 'top',
-                fill: '#ef4444',
+                fill: '#d4786e',
                 fontSize: compact ? 10 : 11,
                 fontWeight: 600,
               }}
