@@ -45,7 +45,7 @@ function isPastDeadline(iso) {
 
 // -- Component ----------------------------------------------------------------
 
-export default function TaskInputForm({ tasks = [], onChange }) {
+export default function TaskInputForm({ tasks = [], onChange, T }) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('academic');
   const [difficulty, setDifficulty] = useState(3);
@@ -153,27 +153,27 @@ export default function TaskInputForm({ tasks = [], onChange }) {
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 className="w-4 h-4 text-mindflow-accent" />
-            <h3 className="text-sm font-medium text-mindflow-heading">Task Summary</h3>
+            <h3 className="text-sm font-medium text-mindflow-heading">{T.taskSummary}</h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div className="bg-mindflow-bg rounded-lg py-2 px-3">
               <p className="text-lg font-bold text-mindflow-heading">{stats.count}</p>
-              <p className="text-[10px] text-mindflow-muted">Total Tasks</p>
+              <p className="text-[10px] text-mindflow-muted">{T.taskTotal}</p>
             </div>
             <div className="bg-mindflow-bg rounded-lg py-2 px-3">
               <p className="text-lg font-bold text-mindflow-heading">{formatMinutes(stats.totalMins)}</p>
-              <p className="text-[10px] text-mindflow-muted">Total Time</p>
+              <p className="text-[10px] text-mindflow-muted">{T.taskTotalTime}</p>
             </div>
             <div className="bg-mindflow-bg rounded-lg py-2 px-3">
               <p className="text-lg font-bold text-mindflow-heading">{stats.avgDifficulty.toFixed(1)}</p>
-              <p className="text-[10px] text-mindflow-muted">Avg Difficulty</p>
+              <p className="text-[10px] text-mindflow-muted">{T.taskAvgDiff}</p>
             </div>
             <div className="bg-mindflow-bg rounded-lg py-2 px-3">
               <p className={`text-lg font-bold ${stats.pastDeadline > 0 ? 'text-mindflow-danger' : 'text-mindflow-heading'}`}>
                 {stats.withDeadlines}
-                {stats.pastDeadline > 0 && <span className="text-[10px] ml-0.5">({stats.pastDeadline} overdue)</span>}
+                {stats.pastDeadline > 0 && <span className="text-[10px] ml-0.5">({stats.pastDeadline} {T.taskOverdue.toLowerCase()})</span>}
               </p>
-              <p className="text-[10px] text-mindflow-muted">With Deadlines</p>
+              <p className="text-[10px] text-mindflow-muted">{T.taskWithDeadlines}</p>
             </div>
           </div>
         </div>
@@ -184,14 +184,14 @@ export default function TaskInputForm({ tasks = [], onChange }) {
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-medium text-mindflow-heading">
-              Your Tasks ({tasks.length})
+              {T.yourTasks} ({tasks.length})
             </h3>
             <button
               type="button"
               onClick={handleClearAll}
               className="text-xs text-mindflow-muted hover:text-mindflow-danger transition-colors"
             >
-              Clear all
+              {T.taskClearAll}
             </button>
           </div>
           {tasks.map(task => {
@@ -211,7 +211,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
                     <p className="text-mindflow-heading font-medium truncate">{task.title}</p>
                     {overdue && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-mindflow-danger/15 text-mindflow-danger shrink-0">
-                        OVERDUE
+                        {T.taskOverdue}
                       </span>
                     )}
                   </div>
@@ -261,9 +261,9 @@ export default function TaskInputForm({ tasks = [], onChange }) {
           <div className="bg-mindflow-bg rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
             <Plus className="w-7 h-7 text-mindflow-muted" />
           </div>
-          <p className="text-mindflow-heading font-medium mb-1">No tasks yet</p>
+          <p className="text-mindflow-heading font-medium mb-1">{T.taskNoTasks}</p>
           <p className="text-sm text-mindflow-muted max-w-xs mx-auto">
-            Add your study tasks below — include difficulty, duration, and deadlines for the best schedule.
+            {T.taskNoTasksDesc}
           </p>
         </div>
       )}
@@ -277,9 +277,9 @@ export default function TaskInputForm({ tasks = [], onChange }) {
         >
           <h3 className="text-sm font-medium text-mindflow-heading flex items-center gap-2">
             {isEditing ? (
-              <><Edit3 className="w-4 h-4 text-mindflow-accent" />Edit Task</>
+              <><Edit3 className="w-4 h-4 text-mindflow-accent" />{T.taskEdit}</>
             ) : (
-              <><Plus className="w-4 h-4 text-mindflow-accent" />Add Task</>
+              <><Plus className="w-4 h-4 text-mindflow-accent" />{T.taskAdd}</>
             )}
           </h3>
           <span className="text-mindflow-muted">
@@ -295,7 +295,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
               value={title}
               onChange={e => { setTitle(e.target.value); setError(''); }}
               onKeyDown={handleKeyDown}
-              placeholder="Task title (e.g. Math problem set)"
+              placeholder={T.taskTitle}
               className="w-full bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5
                          text-mindflow-text placeholder-mindflow-muted focus:border-mindflow-accent
                          focus:outline-none text-sm"
@@ -304,7 +304,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 
             {/* Type */}
             <div>
-              <p className="text-xs text-mindflow-muted mb-2 font-medium">Type</p>
+              <p className="text-xs text-mindflow-muted mb-2 font-medium">{T.calType}</p>
               <div className="flex gap-2">
                 {TYPES.map(t => (
                   <button
@@ -323,7 +323,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 
             {/* Priority */}
             <div>
-              <p className="text-xs text-mindflow-muted mb-2 font-medium">Priority</p>
+              <p className="text-xs text-mindflow-muted mb-2 font-medium">{T.taskPriority}</p>
               <div className="flex gap-2">
                 {PRIORITIES.map(p => (
                   <button
@@ -342,7 +342,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 
             {/* Difficulty */}
             <div>
-              <p className="text-xs text-mindflow-muted mb-2 font-medium">Difficulty</p>
+              <p className="text-xs text-mindflow-muted mb-2 font-medium">{T.taskDifficulty}</p>
               <div className="flex gap-1.5">
                 {[1, 2, 3, 4, 5].map(s => (
                   <button
@@ -366,7 +366,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
 
             {/* Duration */}
             <div>
-              <p className="text-xs text-mindflow-muted mb-2 font-medium">Duration</p>
+              <p className="text-xs text-mindflow-muted mb-2 font-medium">{T.taskDuration}</p>
               <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="number"
@@ -376,7 +376,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
                   className="w-28 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2
                              text-mindflow-text focus:border-mindflow-accent focus:outline-none text-sm"
                 />
-                <span className="text-sm text-mindflow-muted">minutes</span>
+                <span className="text-sm text-mindflow-muted">{T.taskMinutes}</span>
                 {QUICK_DURATIONS.map(m => (
                   <button
                     key={m}
@@ -394,7 +394,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
             {/* Deadline */}
             <div>
               <p className="text-xs text-mindflow-muted mb-2 font-medium">
-                Deadline <span className="opacity-60">(optional — date + time)</span>
+                {T.taskDeadline} <span className="opacity-60">{T.taskDeadlineOpt}</span>
               </p>
               <div className="flex gap-2">
                 <input
@@ -438,7 +438,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
                 className="flex-1 bg-mindflow-accent text-white py-2.5 rounded-lg font-medium
                            hover:opacity-90 transition-opacity text-sm"
               >
-                {isEditing ? 'Save Changes' : 'Add Task'}
+                {isEditing ? T.taskSave : T.taskAdd}
               </button>
               {isEditing && (
                 <button
@@ -447,7 +447,7 @@ export default function TaskInputForm({ tasks = [], onChange }) {
                   className="px-4 py-2.5 rounded-lg border border-mindflow-border text-mindflow-text
                              text-sm hover:bg-mindflow-surface transition-colors flex items-center gap-1"
                 >
-                  <X className="w-4 h-4" />Cancel
+                  <X className="w-4 h-4" />{T.taskCancel}
                 </button>
               )}
             </div>

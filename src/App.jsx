@@ -115,7 +115,7 @@ export default function App() {
     if (isCalculating) return;
     setError(null);
     if (!calibration || typeof calibration.alphaScore !== 'number') {
-      setError('Take the calibration test first.');
+      setError(T.noCalibration);
       return;
     }
     if (tasks.length === 0) { setError('Add at least one task first.'); return; }
@@ -158,7 +158,7 @@ export default function App() {
         setIsCalculating(false);
       }
     }, 100);
-  }, [calibration, allBlocks, tasks, settings, isCalculating, weekStart]);
+  }, [calibration, allBlocks, tasks, settings, isCalculating, weekStart, T]);
 
   const handleCalibrationComplete = (cal) => { setCalibration(cal); setShowWelcome(false); };
   const handleSkipCalibration = () => {
@@ -166,7 +166,7 @@ export default function App() {
     setShowWelcome(false);
   };
   const handleReset = () => {
-    if (confirm('Delete all your data? This cannot be undone.')) {
+    if (confirm(T.settingsResetConfirm)) {
       clearAll();
       try { localStorage.removeItem('mindflow_theme'); } catch {}
       try { localStorage.removeItem('mindflow_accent'); } catch {}
@@ -181,7 +181,7 @@ export default function App() {
   if (showWelcome) {
     return (
       <div className="min-h-screen bg-mindflow-bg flex items-center justify-center px-4">
-        <WelcomeScreen onStart={() => setShowWelcome(false)} onSkip={handleSkipCalibration} />
+        <WelcomeScreen onStart={() => setShowWelcome(false)} onSkip={handleSkipCalibration} T={T} />
       </div>
     );
   }
@@ -199,10 +199,10 @@ export default function App() {
         {currentResult.stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             {[
-              [currentResult.stats.totalScheduledHours + 'h', 'Scheduled'],
-              [currentResult.stats.utilizationPct + '%', 'Capacity'],
-              [currentResult.stats.workloadBalance + '%', 'Balance'],
-              [(currentResult.stats.avgFatigue || 0) + '%', 'Avg Fatigue'],
+              [currentResult.stats.totalScheduledHours + 'h', T.scheduled],
+              [currentResult.stats.utilizationPct + '%', T.capacity],
+              [currentResult.stats.workloadBalance + '%', T.balance],
+              [(currentResult.stats.avgFatigue || 0) + '%', T.avgFatigue],
             ].map(([val, label], i) => (
               <div key={i} className="bg-mindflow-surface border border-mindflow-border rounded-lg py-2">
                 <p className="text-lg font-bold text-mindflow-heading">{val}</p>
@@ -304,7 +304,7 @@ export default function App() {
         {isStale && (
           <div className="flex justify-center">
             <button onClick={handleGenerate} className="bg-mindflow-warning text-mindflow-bg px-6 py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" /> Schedule Changed — Regenerate
+              <RefreshCw className="w-4 h-4" /> {T.scheduleChanged}
             </button>
           </div>
         )}
@@ -319,7 +319,7 @@ export default function App() {
       <header className="bg-mindflow-surface border-b border-mindflow-border px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <Brain className="w-6 h-6 text-mindflow-accent" />
-          <h1 className="text-lg font-bold text-mindflow-heading">MindFlow</h1>
+          <h1 className="text-lg font-bold text-mindflow-heading">{T.appName}</h1>
           <span className="text-[11px] text-mindflow-muted">
             {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </span>
@@ -332,7 +332,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           {hasResults && isStale && (
             <button onClick={handleGenerate} className="text-xs bg-mindflow-warning/15 text-mindflow-warning px-3 py-1.5 rounded-lg font-medium hover:opacity-90">
-              <RefreshCw className="w-3 h-3 inline mr-1" />Regen
+              <RefreshCw className="w-3 h-3 inline mr-1" />{T.regen}
             </button>
           )}
           <button onClick={() => setShowSettings(!showSettings)}
@@ -362,7 +362,7 @@ export default function App() {
 
             {/* Theme */}
             <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">Theme</span>
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsTheme}</span>
               {['dark', 'light'].map(t => (
                 <button key={t} onClick={() => setTheme(t)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${theme === t ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{t}</button>
@@ -371,7 +371,7 @@ export default function App() {
 
             {/* Accent color */}
             <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">Accent</span>
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsAccent}</span>
               {['#8b5cf6','#3b82f6','#22c55e','#f97316','#ec4899','#06b6d4'].map(c => (
                 <button key={c} onClick={() => setAccent(c)}
                   className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
@@ -381,7 +381,7 @@ export default function App() {
 
             {/* Chronotype */}
             <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">Chronotype</span>
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsChronotype}</span>
               {['morning', 'neutral', 'night'].map(c => (
                 <button key={c} onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
                   className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${settings.chronotype === c ? 'bg-mindflow-accent text-white' : 'bg-mindflow-bg text-mindflow-text hover:bg-mindflow-border'}`}>{c}</button>
@@ -390,7 +390,7 @@ export default function App() {
 
             {/* Daily hours */}
             <div className="flex items-center gap-2">
-              <span className="text-mindflow-muted text-xs w-20 shrink-0">Hours/day</span>
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsWeekdayHours}</span>
               <span className="text-mindflow-muted text-[10px]">Weekday</span>
               <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
                 onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
@@ -404,7 +404,7 @@ export default function App() {
             {/* Reset */}
             <div className="pt-2 border-t border-mindflow-border">
               <button onClick={handleReset} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-mindflow-danger/10 text-mindflow-danger hover:bg-mindflow-danger/20 transition-colors flex items-center gap-1.5">
-                <Trash2 className="w-3 h-3" />Reset All Data
+                <Trash2 className="w-3 h-3" />{T.settingsReset}
               </button>
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function App() {
       {error && (
         <div className="bg-mindflow-danger/10 border-b border-mindflow-danger/30 px-6 py-2 flex items-center gap-2 text-sm text-mindflow-danger">
           <AlertCircle className="w-4 h-4" />{error}
-          <button onClick={() => setError(null)} className="ml-auto text-xs hover:underline">Dismiss</button>
+          <button onClick={() => setError(null)} className="ml-auto text-xs hover:underline">{T.dismiss}</button>
         </div>
       )}
 
@@ -429,12 +429,12 @@ export default function App() {
             {calibration && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
           {!calibration ? (
-            <StroopTestModal onComplete={handleCalibrationComplete} onSkip={handleSkipCalibration} existingCalibration={calibration} />
+            <StroopTestModal onComplete={handleCalibrationComplete} onSkip={handleSkipCalibration} existingCalibration={calibration} T={T} />
           ) : (
             <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 flex items-center justify-between">
-              <span className="text-sm text-mindflow-text">Focus Score: <strong className="text-mindflow-heading">{calibration.alphaScore.toFixed(2)}</strong></span>
+              <span className="text-sm text-mindflow-text">{T.secCalibrationDone}: <strong className="text-mindflow-heading">{calibration.alphaScore.toFixed(2)}</strong></span>
               <button onClick={() => { setCalibrationState(null); try { localStorage.removeItem('mindflow_calibration'); } catch {} }}
-                className="text-xs text-mindflow-muted hover:text-mindflow-text underline">Retake</button>
+                className="text-xs text-mindflow-muted hover:text-mindflow-text underline">{T.recalibrate}</button>
             </div>
           )}
         </section>
@@ -443,20 +443,20 @@ export default function App() {
         <section>
           <h2 className="text-sm font-medium text-mindflow-heading mb-4 flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-mindflow-accent text-white text-[10px] font-bold flex items-center justify-center">2</span>
-            Fixed Weekly Schedule
+            {T.secSchedule}
             {calendarBlocks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
-          <WeeklyCalendar blocks={allBlocks} onChange={setCalendarBlocks} weekStart={weekStart} />
+          <WeeklyCalendar blocks={allBlocks} onChange={setCalendarBlocks} weekStart={weekStart} T={T} />
         </section>
 
         {/* Tasks */}
         <section>
           <h2 className="text-sm font-medium text-mindflow-heading mb-4 flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-mindflow-accent text-white text-[10px] font-bold flex items-center justify-center">3</span>
-            Study Tasks
+            {T.secTasks}
             {tasks.length > 0 && <CheckCircle2 className="w-4 h-4 text-mindflow-success" />}
           </h2>
-          <TaskInputForm tasks={tasks} onChange={setTasks} />
+          <TaskInputForm tasks={tasks} onChange={setTasks} T={T} />
         </section>
 
         {/* Generate */}
@@ -465,9 +465,9 @@ export default function App() {
             <button onClick={handleGenerate} disabled={isCalculating}
               className="bg-mindflow-accent text-white px-10 py-4 rounded-2xl text-lg font-semibold hover:opacity-90 shadow-xl shadow-mindflow-accent/20 active:scale-[0.98] flex items-center gap-3 mx-auto disabled:opacity-50">
               {isCalculating ? (
-                <><span className="animate-pulse">Generating...</span></>
+                <><span className="animate-pulse">{T.generating}</span></>
               ) : (
-                <><Play className="w-5 h-5" /> Generate Schedule</>
+                <><Play className="w-5 h-5" /> {T.generate}</>
               )}
             </button>
           )}
@@ -495,9 +495,9 @@ export default function App() {
                         {' – '}
                         {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </h3>
-                      {isThisWeek && <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-2 py-0.5 rounded-full">This week</span>}
-                      {result?.stats && <span className="text-xs text-mindflow-muted">{result.stats.totalScheduledHours}h scheduled</span>}
-                      {!result && <span className="text-xs text-mindflow-muted">(empty)</span>}
+                      {isThisWeek && <span className="text-[10px] bg-mindflow-accent/15 text-mindflow-accent px-2 py-0.5 rounded-full">{T.resultsThisWeek}</span>}
+                      {result?.stats && <span className="text-xs text-mindflow-muted">{result.stats.totalScheduledHours}{T.hoursScheduled}</span>}
+                      {!result && <span className="text-xs text-mindflow-muted">{T.resultsEmpty}</span>}
                     </div>
 
                     <div className="bg-mindflow-surface border border-mindflow-border rounded-xl overflow-hidden">
@@ -508,7 +508,7 @@ export default function App() {
                           return (
                           <div key={day} className={`px-1 py-1.5 text-center border-r border-mindflow-border last:border-r-0 ${isPast ? 'opacity-40' : ''}`}>
                             <span className="text-[11px] font-semibold text-mindflow-heading">{day}</span>
-                            <span className="block text-[9px] text-mindflow-muted">{isPast ? 'Past' : getDateForDay(day, ws)}</span>
+                            <span className="block text-[9px] text-mindflow-muted">{isPast ? T.past : getDateForDay(day, ws)}</span>
                           </div>
                           );
                         })}
@@ -555,7 +555,7 @@ export default function App() {
                       <div key={i} className="text-[10px] text-mindflow-warning bg-mindflow-warning/10 rounded px-2 py-1">⚠ {w.message}</div>
                     ))}
                     {result?.unscheduled?.length > 0 && (
-                      <div className="text-[10px] text-mindflow-muted">+{result.unscheduled.length} task{result.unscheduled.length!==1?'s':''} rolled to next week</div>
+                      <div className="text-[10px] text-mindflow-muted">+{result.unscheduled.length} task{result.unscheduled.length!==1?'s':''} {T.resultsRolled}</div>
                     )}
                   </div>
                 );
@@ -566,7 +566,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-mindflow-border bg-mindflow-surface/50 px-6 py-3">
-        <p className="text-center text-[10px] text-mindflow-muted">MindFlow v5</p>
+        <p className="text-center text-[10px] text-mindflow-muted">{T.appFooter}</p>
       </footer>
     </div>
   );

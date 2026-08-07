@@ -20,7 +20,7 @@ const TRIAL_TYPES = {
   CONGRUENT: 'congruent',       // word = ink color — baseline (no conflict)
 };
 
-export default function StroopTestModal({ onComplete, onSkip, existingCalibration }) {
+export default function StroopTestModal({ onComplete, onSkip, existingCalibration, T }) {
   const [phase, setPhase] = useState('intro');
   const [countdown, setCountdown] = useState(CD_START);
   const [currentWord, setCurrentWord] = useState(null);      // { name, hex, trialType }
@@ -247,16 +247,13 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       </div>
 
       <div className="text-center space-y-2 max-w-lg">
-        <h2 className="text-2xl font-bold text-mindflow-heading">Concentration Baseline Test</h2>
-        <p className="text-mindflow-text">
-          Words appear in <strong>mismatched colors</strong>. Press the key for the{' '}
-          <strong>ink color</strong>, not the word. <strong>{GAME_SECS} seconds</strong>.
-        </p>
+        <h2 className="text-2xl font-bold text-mindflow-heading">{T.calibTitle}</h2>
+        <p className="text-mindflow-text">{T.calibDesc}</p>
       </div>
 
       {/* Key mapping */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-5 w-full max-w-sm">
-        <p className="text-xs text-mindflow-muted uppercase tracking-wide text-center mb-3">Key Mapping — Memorize These</p>
+        <p className="text-xs text-mindflow-muted uppercase tracking-wide text-center mb-3">{T.calibKeyMapping}</p>
         <div className="grid grid-cols-4 gap-2">
           {COLORS.map(c => (
             <div key={c.key} className="text-center space-y-1">
@@ -270,19 +267,15 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
       {/* Example */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-6 text-center space-y-3 max-w-sm">
-        <p className="text-xs text-mindflow-muted uppercase tracking-wide">Example</p>
-        <p className="text-4xl font-bold" style={{ color: '#22c55e' }}>BLUE</p>
-        <p className="text-xs text-mindflow-muted">
-          Word says <span className="text-blue-400">BLUE</span>, ink is{' '}
-          <span className="text-green-400 font-bold">Green</span> → press{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-mindflow-bg border border-mindflow-border text-mindflow-heading text-xs font-bold">G</kbd>
-        </p>
+        <p className="text-xs text-mindflow-muted uppercase tracking-wide">{T.calibExample}</p>
+        <p className="text-4xl font-bold" style={{ color: '#22c55e' }}>{T.calibExampleWord}</p>
+        <p className="text-xs text-mindflow-muted">{T.calibExampleDesc}</p>
       </div>
 
       {existingCalibration && (
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl px-4 py-3 flex items-center gap-3">
           <Target className="w-5 h-5 text-mindflow-muted" />
-          <span className="text-sm text-mindflow-text">Previous score:</span>
+          <span className="text-sm text-mindflow-text">{T.calibPreviousScore}</span>
           <span className={`text-sm font-bold ${alphaColor(existingCalibration.alphaScore)}`}>
             {existingCalibration.alphaScore.toFixed(2)}
           </span>
@@ -290,13 +283,13 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       )}
 
       <button onClick={start} className="bg-mindflow-accent text-white px-10 py-3.5 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25">
-        Start Test ({GAME_SECS}s)
+        {T.calibStart}
       </button>
       <button onClick={handleSkip} className="text-mindflow-muted hover:text-mindflow-text text-sm underline underline-offset-4 transition-colors">
-        Skip for now (use default focus score)
+        {T.calibSkip}
       </button>
       <p className="text-xs text-mindflow-muted">
-        {GAME_SECS} seconds · Keep your fingers on R, G, B, Y
+        {GAME_SECS}s · {T.calibCountdownHint}
       </p>
     </div>
   );
@@ -307,9 +300,9 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
   if (phase === 'countdown') return (
     <div className="flex items-center justify-center py-32">
       <div className="text-center space-y-4">
-        <p className="text-mindflow-muted text-sm uppercase tracking-widest">Get Ready</p>
+        <p className="text-mindflow-muted text-sm uppercase tracking-widest">{T.calibCountdown}</p>
         <span className="text-8xl font-black text-mindflow-accent animate-pulse">{countdown}</span>
-        <p className="text-xs text-mindflow-muted">Fingers on <kbd className="px-1 py-0.5 rounded bg-mindflow-bg border border-mindflow-border text-xs font-bold">R G B Y</kbd></p>
+        <p className="text-xs text-mindflow-muted">{T.calibCountdownHint}</p>
       </div>
     </div>
   );
@@ -321,7 +314,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     if (!currentWord) {
       return (
         <div className="flex items-center justify-center py-32">
-          <p className="text-mindflow-muted text-sm animate-pulse">Starting...</p>
+          <p className="text-mindflow-muted text-sm animate-pulse">{T.calibStarting}</p>
         </div>
       );
     }
@@ -335,7 +328,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         <div className="w-full max-w-md space-y-1">
           <div className="flex justify-between text-xs text-mindflow-muted">
             <span>{(timeLeft / 1000).toFixed(0)}s</span>
-            <span>{trialsRef.current.length} trials</span>
+            <span>{trialsRef.current.length} {T.calibTrials}</span>
           </div>
           <div className="w-full h-2 bg-mindflow-bg rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-100 ${barColor}`}
@@ -385,7 +378,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         </div>
 
         <p className="text-xs text-mindflow-muted">
-          Press the key for the <strong>ink color</strong>, not the word
+          {T.calibPlaying}
         </p>
       </div>
     );
@@ -401,9 +394,9 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       </div>
 
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-mindflow-heading">Your Results</h2>
+        <h2 className="text-2xl font-bold text-mindflow-heading">{T.calibResults}</h2>
         <p className="text-sm text-mindflow-muted mt-1">
-          {results.trialCount} trials in {GAME_SECS} seconds
+          {results.trialCount} {T.calibTrials} · {GAME_SECS}s
         </p>
       </div>
 
@@ -414,28 +407,28 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
           <p className="text-2xl font-bold text-mindflow-heading">
             {(results.accuracy * 100).toFixed(0)}%
           </p>
-          <p className="text-xs text-mindflow-muted">Accuracy</p>
+          <p className="text-xs text-mindflow-muted">{T.calibAccuracy}</p>
         </div>
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
           <Clock className="w-5 h-5 text-mindflow-warning mx-auto mb-2" />
           <p className="text-2xl font-bold text-mindflow-heading">{results.avgResponseTimeMs}</p>
-          <p className="text-xs text-mindflow-muted">Avg Speed (ms)</p>
+          <p className="text-xs text-mindflow-muted">{T.calibSpeed}</p>
         </div>
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
           <Keyboard className="w-5 h-5 text-mindflow-accent mx-auto mb-2" />
           <p className="text-2xl font-bold text-mindflow-heading">{results.rtVariabilityMs}</p>
-          <p className="text-xs text-mindflow-muted">Consistency (SD)</p>
+          <p className="text-xs text-mindflow-muted">{T.calibConsistency}</p>
         </div>
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 text-center">
           <Zap className={`w-5 h-5 mx-auto mb-2 ${alphaColor(results.alphaScore)}`} />
           <p className={`text-2xl font-bold ${alphaColor(results.alphaScore)}`}>{results.alphaScore.toFixed(2)}</p>
-          <p className="text-xs text-mindflow-muted">Focus Score</p>
+          <p className="text-xs text-mindflow-muted">{T.calibFocusScore}</p>
         </div>
       </div>
 
       {/* Detailed breakdown */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg w-full space-y-2 text-sm">
-        <p className="font-medium text-mindflow-heading text-xs uppercase tracking-wide">Score Breakdown</p>
+        <p className="font-medium text-mindflow-heading text-xs uppercase tracking-wide">{T.calibScoreBreakdown}</p>
 
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
@@ -467,18 +460,18 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
       {/* Interpretation */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-4 max-w-lg text-sm text-mindflow-text">
-        <p className="font-medium text-mindflow-heading mb-1">What this means</p>
+        <p className="font-medium text-mindflow-heading mb-1">{T.calibWhatMeans}</p>
         {results.alphaScore >= 1.2 && (
-          <p>Excellent sustained attention and cognitive control. You resist interference well and maintain speed. You'll stay in Flow longer — schedule 90+ minute deep-work blocks.</p>
+          <p>{T.calibInterpretExcellent}</p>
         )}
         {results.alphaScore >= 0.9 && results.alphaScore < 1.2 && (
-          <p>Good cognitive control with mild interference effects. Standard fatigue patterns apply. Take breaks every 75–90 minutes for optimal performance.</p>
+          <p>{T.calibInterpretGood}</p>
         )}
         {results.alphaScore >= 0.7 && results.alphaScore < 0.9 && (
-          <p>Moderate attention control. {results.lapses > 2 ? `You had ${results.lapses} attention lapses — ` : ''}Schedule harder tasks when you're freshest. Use 45–60 minute blocks with real breaks.</p>
+          <p>{results.lapses > 2 ? `${results.lapses} lapses — ` : ''}{T.calibInterpretModerate}</p>
         )}
         {results.alphaScore < 0.7 && (
-          <p>Your attention shows significant variability. {results.lapses > 3 ? `${results.lapses} attention lapses detected — ` : ''}Try 25-minute Pomodoro blocks. Avoid late-night study sessions. Retake this test when well-rested for comparison.</p>
+          <p>{results.lapses > 3 ? `${results.lapses} lapses — ` : ''}{T.calibInterpretLow}</p>
         )}
       </div>
 
@@ -491,13 +484,13 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
           })}
           className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25"
         >
-          Save & Continue
+          {T.calibSave}
         </button>
         <button
           onClick={() => { setResults(null); trialsRef.current = []; setPhase('intro'); }}
           className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl text-sm hover:bg-mindflow-surface transition-colors flex items-center gap-2"
         >
-          <RefreshCw className="w-4 h-4" />Retake
+          <RefreshCw className="w-4 h-4" />{T.calibRetake}
         </button>
       </div>
     </div>

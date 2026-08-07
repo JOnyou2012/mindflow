@@ -1,12 +1,12 @@
 import { Brain, ArrowRight } from 'lucide-react';
 
-const STEPS = [
-  { emoji: '🧪', title: '1. Calibrate', desc: '30-second focus test' },
-  { emoji: '📅', title: '2. Schedule', desc: 'Add your week + tasks' },
-  { emoji: '📊', title: '3. Optimize', desc: 'Get your perfect plan' },
-];
+export default function WelcomeScreen({ onStart, onSkip, T }) {
+  const STEPS = [
+    { emoji: '🧪', title: T.welcomeStep1, desc: T.welcomeStep1Desc },
+    { emoji: '📅', title: T.welcomeStep2, desc: T.welcomeStep2Desc },
+    { emoji: '📊', title: T.welcomeStep3, desc: T.welcomeStep3Desc },
+  ];
 
-export default function WelcomeScreen({ onStart, onSkip }) {
   return (
     <div className="flex flex-col items-center gap-8 py-12 sm:py-16">
       {/* Hero: icon + headline + description — slides up on entrance */}
@@ -17,13 +17,10 @@ export default function WelcomeScreen({ onStart, onSkip }) {
 
         <div className="text-center space-y-3 max-w-lg">
           <h1 className="text-3xl font-bold text-mindflow-heading tracking-tight">
-            Study smarter, not longer
+            {T.welcomeTitle}
           </h1>
           <p className="text-mindflow-text leading-relaxed">
-            MindFlow uses a mathematical model of your brain to predict when you'll
-            hit mental burnout — and builds you a personalized weekly schedule that
-            puts hard tasks when you're freshest and inserts breaks right before you
-            crash.
+            {T.welcomeDesc}
           </p>
         </div>
       </div>
@@ -60,7 +57,7 @@ export default function WelcomeScreen({ onStart, onSkip }) {
                      hover:opacity-90 active:scale-[0.98] shadow-lg shadow-mindflow-accent/25
                      flex items-center gap-2 transition-all duration-200"
         >
-          Take Calibration Test <ArrowRight className="w-5 h-5" />
+          {T.welcomeStart} <ArrowRight className="w-5 h-5" />
         </button>
         <button
           type="button"
@@ -71,7 +68,7 @@ export default function WelcomeScreen({ onStart, onSkip }) {
                      hover:border-mindflow-border/80 active:scale-[0.98]
                      transition-all duration-200"
         >
-          Skip for now (use default)
+          {T.welcomeSkip}
         </button>
       </div>
 
@@ -79,7 +76,7 @@ export default function WelcomeScreen({ onStart, onSkip }) {
         className="opacity-0 animate-fade-in text-xs text-mindflow-muted"
         style={{ animationDelay: '780ms', animationFillMode: 'forwards' }}
       >
-        You can always calibrate later for more accurate results
+        {T.welcomeHint}
       </p>
     </div>
   );

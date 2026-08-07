@@ -135,6 +135,41 @@ const t = {
     synced: 'events synced',
     justNow: 'just now',
     ago: 'ago',
+
+    // Calibration extras
+    calibPreviousScore: 'Previous score:',
+    calibStarting: 'Starting...',
+    calibTrials: 'trials',
+    calibScoreBreakdown: 'Score Breakdown',
+    calibWhatMeans: 'What this means',
+    calibInterpretExcellent: 'Excellent sustained attention and cognitive control. You resist interference well and maintain speed. You\'ll stay in Flow longer — schedule 90+ minute deep-work blocks.',
+    calibInterpretGood: 'Good cognitive control with mild interference effects. Standard fatigue patterns apply. Take breaks every 75–90 minutes for optimal performance.',
+    calibInterpretModerate: 'Moderate attention control. Schedule harder tasks when you\'re freshest. Use 45–60 minute blocks with real breaks.',
+    calibInterpretLow: 'Your attention shows significant variability. Try 25-minute Pomodoro blocks. Avoid late-night study sessions. Retake this test when well-rested for comparison.',
+
+    // App extras
+    regen: 'Regen',
+    scheduleChanged: 'Schedule Changed — Regenerate',
+    dismiss: 'Dismiss',
+    couldNotFit: 'couldn\'t fit',
+    tryReducing: 'try reducing duration or freeing up calendar space.',
+    yourTasks: 'Your Tasks',
+    noEvents: 'No events',
+    freeDay: 'Free',
+    hoursScheduled: 'h scheduled',
+    confirmDeleteAll: 'Delete all your data? This cannot be undone.',
+    clearAllEvents: 'Clear all',
+    confirmRemoveAll: 'Remove all calendar blocks?',
+
+    // Calendar extras
+    calTo: 'to',
+    calDuration: 'm',
+    calEditEvent: 'Edit Event',
+    calLabel: 'Label',
+    calSaveChanges: 'Save Changes',
+    calDelete: 'Delete',
+    calFree: 'Free',
+    calDescription: 'These are your non-negotiable commitments — classes, work, meals. The scheduler works around them.',
   },
 
   'zh-CN': {
@@ -659,7 +694,7 @@ const t = {
 };
 
 export function getTranslations(lang) {
-  return t[lang] || t['en'];
+  return { ...t['en'], ...t[lang] };
 }
 
 export function getStoredLang() {

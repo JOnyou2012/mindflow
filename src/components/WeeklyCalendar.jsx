@@ -44,7 +44,7 @@ const QUICK_PRESETS = [
   { label: 'Sports Practice', type: 'sports', start: 15, end: 17, days: ['Mon','Wed','Fri'] },
 ];
 
-export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null }) {
+export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null, T }) {
   // Compute dates for day headers (timezone-safe)
   const getDayDate = (dayName) => {
     if (!weekStart) return '';
@@ -186,16 +186,16 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
       {/* ================================================================ */}
       <div className="bg-mindflow-surface border border-mindflow-border rounded-xl p-5 space-y-4">
         <h3 className="text-sm font-medium text-mindflow-heading flex items-center gap-2">
-          <Plus className="w-4 h-4 text-mindflow-accent" />Add Fixed Event
+          <Plus className="w-4 h-4 text-mindflow-accent" />{T.calAddEvent}
         </h3>
         <p className="text-xs text-mindflow-muted -mt-2">
-          These are your non-negotiable commitments — classes, work, meals. The scheduler works around them.
+          {T.calDesc}
         </p>
 
         {/* Event name + Type */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <div className="sm:col-span-3">
-            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Event Name</label>
+            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calEventName}</label>
             <input
               type="text"
               value={label}
@@ -208,7 +208,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Type</label>
+            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calType}</label>
             <div className="flex gap-1">
               {Object.entries(TYPE_CFG).map(([k, c]) => (
                 <button
@@ -230,7 +230,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
         {/* Time range + Days */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Time</label>
+            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calTime}</label>
             <div className="flex items-center gap-2">
               <select
                 value={startTime}
@@ -242,7 +242,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
                   <option key={t} value={t}>{fmtHr(t)}</option>
                 ))}
               </select>
-              <span className="text-mindflow-muted text-xs">to</span>
+              <span className="text-mindflow-muted text-xs">{T.calTo}</span>
               <select
                 value={endTime}
                 onChange={e => { setEndTime(Number(e.target.value)); setError(''); }}
@@ -259,7 +259,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Days</label>
+            <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calDays}</label>
             <div className="flex flex-wrap gap-1">
               {DAYS.map(d => (
                 <button
@@ -288,7 +288,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
           className="w-full bg-mindflow-accent text-white py-2.5 rounded-lg font-medium
                      hover:opacity-90 transition-opacity text-sm"
         >
-          Add to Schedule
+          {T.calAdd}
         </button>
       </div>
 
@@ -296,7 +296,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
       {/* QUICK PRESETS */}
       {/* ================================================================ */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] text-mindflow-muted uppercase tracking-wide mr-1">Quick:</span>
+        <span className="text-[10px] text-mindflow-muted uppercase tracking-wide mr-1">{T.calQuick}:</span>
         {QUICK_PRESETS.map((p, i) => {
           const c = TYPE_CFG[p.type];
           return (
@@ -327,7 +327,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
             return (
               <div key={d} className="px-2 py-2.5 text-center border-r border-mindflow-border last:border-r-0">
                 <span className="text-xs font-semibold text-mindflow-heading">{d}</span>
-                <span className="block text-[9px] text-mindflow-muted">{getDayDate(d) || (n > 0 ? `${n} · ${hrs}h` : 'Free')}</span>
+                <span className="block text-[9px] text-mindflow-muted">{getDayDate(d) || (n > 0 ? `${n} · ${hrs}h` : T.free)}</span>
               </div>
             );
           })}
@@ -395,11 +395,11 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
           <button
             type="button"
             onClick={() => {
-              if (window.confirm(`Remove all ${stats.totalBlocks} calendar blocks?`)) onChange([]);
+              if (window.confirm(T.confirmRemoveAll)) onChange([]);
             }}
             className="hover:text-mindflow-danger transition-colors"
           >
-            Clear all
+            {T.clearAllEvents}
           </button>
         </div>
       )}
@@ -411,7 +411,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={closePop}>
           <div className="bg-mindflow-surface border border-mindflow-border rounded-2xl p-6 w-80 shadow-2xl space-y-4 animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-mindflow-heading font-semibold text-sm">Edit Event</h3>
+              <h3 className="text-mindflow-heading font-semibold text-sm">{T.calEditEvent}</h3>
               <button type="button" onClick={closePop} className="p-1 rounded-lg text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-bg transition-colors">
                 <X className="w-4 h-4" />
               </button>
@@ -424,20 +424,20 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
             </div>
 
             <div>
-              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Label</label>
+              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calLabel}</label>
               <input type="text" value={popLabel} onChange={e => { setPopLabel(e.target.value); setPopMsg(''); }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); saveEdit(); } }}
                 className="w-full bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none" autoFocus />
             </div>
 
             <div>
-              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Time</label>
+              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calTime}</label>
               <div className="flex items-center gap-2">
                 <select value={popStart} onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
                   {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
-                <span className="text-mindflow-muted text-xs">to</span>
+                <span className="text-mindflow-muted text-xs">{T.calTo}</span>
                 <select value={popEnd} onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
                   {TIME_OPTIONS.filter(t => t > popStart).map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
@@ -446,7 +446,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
             </div>
 
             <div>
-              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">Type</label>
+              <label className="text-[10px] text-mindflow-muted uppercase tracking-wide font-medium block mb-1">{T.calType}</label>
               <div className="flex gap-2">
                 {Object.entries(TYPE_CFG).map(([k, c]) => (
                   <button key={k} type="button" onClick={() => setPopType(k)}
@@ -469,7 +469,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
               <button type="button" onClick={saveEdit} disabled={!popLabel.trim()}
                 className="flex-1 bg-mindflow-accent text-white py-2.5 rounded-lg text-sm font-medium
                            hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">
-                Save Changes
+                {T.calSaveChanges}
               </button>
               <button type="button" onClick={deleteBlock}
                 className="px-3 py-2.5 bg-mindflow-danger/15 text-mindflow-danger rounded-lg text-sm
