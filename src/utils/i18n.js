@@ -170,6 +170,68 @@ const t = {
     calDelete: 'Delete',
     calFree: 'Free',
     calDescription: 'These are your non-negotiable commitments — classes, work, meals. The scheduler works around them.',
+
+    // Type labels (used in both calendar and tasks)
+    typeAcademic: 'Academic',
+    typeSports: 'Sports',
+    typeArts: 'Arts',
+    typeOther: 'Other',
+
+    // Priority labels
+    priorityHigh: 'High',
+    priorityMedium: 'Medium',
+    priorityLow: 'Low',
+
+    // Difficulty labels
+    diffVeryEasy: 'Very Easy',
+    diffEasy: 'Easy',
+    diffMedium: 'Medium',
+    diffHard: 'Hard',
+    diffVeryHard: 'Very Hard',
+
+    // Quick presets
+    presetSchool: 'School Day',
+    presetHalf: 'Half Day',
+    presetDinner: 'Dinner',
+    presetSleep: 'Sleep',
+    presetSports: 'Sports Practice',
+
+    // Calendar error messages
+    calErrEventName: 'Enter an event name.',
+    calErrSelectDay: 'Select at least one day.',
+    calErrEndAfterStart: 'End time must be after start time.',
+    calErrDurationMax: 'Duration cannot exceed 16 hours.',
+    calErrTimeConflict: 'Time conflict with:',
+
+    // Task error messages
+    taskErrTitle: 'Enter a task title.',
+    taskErrDurationMin: 'Duration must be at least 5 minutes.',
+    taskErrDurationMax: 'Duration cannot exceed 8 hours.',
+    taskErrDuplicate: 'A task named',
+    taskErrDuplicateSuffix: 'already exists.',
+
+    // Settings extras
+    settingsWeekday: 'Weekday',
+    settingsWeekend: 'Weekend',
+
+    // Calendar stats
+    calBlock: 'block',
+    calBlocks: 'blocks',
+    calDay: 'day',
+    calDaysUnit: 'days',
+    calHScheduled: 'h scheduled',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: 'Accuracy',
+    calibSpeedLabel: 'Speed',
+    calibConsistencyLabel: 'Consistency',
+    calibLapsesLabel: 'Lapses',
+    calibInterferenceLabel: 'Stroop Interference',
+    calibLapsesDetail: 'attention lapses',
+
+    // More calendar
+    calConflictsWith: 'Conflicts with',
+    calMore: 'more',
   },
 
   'zh-CN': {

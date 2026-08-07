@@ -1,21 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Trash2, Star, Clock, Calendar, AlertCircle, Edit3, X, ChevronUp, ChevronDown, BarChart3 } from 'lucide-react';
 
-const TYPES = [
-  { value: 'academic', label: 'Academic', color: '#3b82f6' },
-  { value: 'sports', label: 'Sports', color: '#22c55e' },
-  { value: 'arts', label: 'Arts', color: '#8b5cf6' },
-  { value: 'other', label: 'Other', color: '#6b7280' },
-];
-
-const PRIORITIES = [
-  { value: 'high', label: 'High', color: '#ef4444' },
-  { value: 'medium', label: 'Medium', color: '#fbbf24' },
-  { value: 'low', label: 'Low', color: '#6b7280' },
-];
-
 const QUICK_DURATIONS = [15, 30, 60, 90, 120];
-const DIFFICULTY_LABELS = ['', 'Very Easy', 'Easy', 'Medium', 'Hard', 'Very Hard'];
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -46,6 +32,19 @@ function isPastDeadline(iso) {
 // -- Component ----------------------------------------------------------------
 
 export default function TaskInputForm({ tasks = [], onChange, T }) {
+  const TYPES = [
+    { value: 'academic', label: T.typeAcademic, color: '#3b82f6' },
+    { value: 'sports', label: T.typeSports, color: '#22c55e' },
+    { value: 'arts', label: T.typeArts, color: '#8b5cf6' },
+    { value: 'other', label: T.typeOther, color: '#6b7280' },
+  ];
+  const PRIORITIES = [
+    { value: 'high', label: T.priorityHigh, color: '#ef4444' },
+    { value: 'medium', label: T.priorityMedium, color: '#fbbf24' },
+    { value: 'low', label: T.priorityLow, color: '#6b7280' },
+  ];
+  const DIFFICULTY_LABELS = ['', T.diffVeryEasy, T.diffEasy, T.diffMedium, T.diffHard, T.diffVeryHard];
+
   const [title, setTitle] = useState('');
   const [type, setType] = useState('academic');
   const [difficulty, setDifficulty] = useState(3);
@@ -85,12 +84,11 @@ export default function TaskInputForm({ tasks = [], onChange, T }) {
   };
 
   const validate = () => {
-    if (!title.trim()) return 'Enter a task title.';
-    if (durationMins < 5) return 'Duration must be at least 5 minutes.';
-    if (durationMins > 480) return 'Duration cannot exceed 8 hours.';
-    // Duplicate title check (skip when editing the same task)
+    if (!title.trim()) return T.taskErrTitle;
+    if (durationMins < 5) return T.taskErrDurationMin;
+    if (durationMins > 480) return T.taskErrDurationMax;
     const dup = tasks.find(t => t.title.toLowerCase() === title.trim().toLowerCase() && t.id !== editingId);
-    if (dup) return `A task named "${dup.title}" already exists.`;
+    if (dup) return `${T.taskErrDuplicate} "${dup.title}" ${T.taskErrDuplicateSuffix}`;
     return null;
   };
 

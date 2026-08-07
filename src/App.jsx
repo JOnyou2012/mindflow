@@ -391,7 +391,7 @@ export default function App() {
             {/* Daily hours */}
             <div className="flex items-center gap-2">
               <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsWeekdayHours}</span>
-              <span className="text-mindflow-muted text-[10px]">Weekday</span>
+              <span className="text-mindflow-muted text-[10px]">{T.settingsWeekday}</span>
               <input type="number" value={settings.maxHoursPerDay} min={1} max={16}
                 onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
                 className="w-14 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none" />

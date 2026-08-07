@@ -432,26 +432,26 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
-            <span className="text-mindflow-muted">Accuracy ({((results.accuracy * 100).toFixed(0))}%)</span>
+            <span className="text-mindflow-muted">{T.calibAccuracyLabel} ({((results.accuracy * 100).toFixed(0))}%)</span>
             <span className="text-mindflow-heading">{(results.accuracy * 30).toFixed(1)} / 30</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-mindflow-muted">Speed ({results.avgResponseTimeMs}ms avg)</span>
+            <span className="text-mindflow-muted">{T.calibSpeedLabel} ({results.avgResponseTimeMs}ms)</span>
             <span className="text-mindflow-heading">{Math.max(0, (25 - (results.avgResponseTimeMs - 400) / 40)).toFixed(1)} / 25</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-mindflow-muted">Consistency (SD {results.rtVariabilityMs}ms)</span>
+            <span className="text-mindflow-muted">{T.calibConsistencyLabel} (SD {results.rtVariabilityMs}ms)</span>
             <span className="text-mindflow-heading">{Math.max(0, (25 - results.rtVariabilityMs / 16)).toFixed(1)} / 25</span>
           </div>
           {results.lapses > 0 && (
             <div className="flex justify-between text-xs">
-              <span className="text-mindflow-warning">Lapses ({results.lapses} × &gt;1.5s)</span>
+              <span className="text-mindflow-warning">{T.calibLapsesLabel} ({results.lapses} × &gt;1.5s)</span>
               <span className="text-mindflow-warning">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
             </div>
           )}
           {results.interferenceMs > 30 && (
             <div className="flex justify-between text-xs">
-              <span className="text-mindflow-muted">Stroop Interference ({results.interferenceMs}ms)</span>
+              <span className="text-mindflow-muted">{T.calibInterferenceLabel} ({results.interferenceMs}ms)</span>
               <span className="text-mindflow-warning">−{Math.min(20, results.interferenceMs / 10).toFixed(0)}</span>
             </div>
           )}

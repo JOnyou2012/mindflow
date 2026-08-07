@@ -5,11 +5,11 @@ const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri'];
 const START_H = 6, END_H = 22, TOTAL_H = END_H - START_H, ROW_H = 48;
 
-const TYPE_CFG = {
-  academic: { color: '#3b82f6', icon: School, label: 'Academic' },
-  sports:   { color: '#22c55e', icon: Dumbbell, label: 'Sports' },
-  arts:     { color: '#8b5cf6', icon: Palette, label: 'Arts' },
-  other:    { color: '#6b7280', icon: Ellipsis, label: 'Other' },
+const TYPE_ICONS = {
+  academic: { color: '#3b82f6', icon: School },
+  sports:   { color: '#22c55e', icon: Dumbbell },
+  arts:     { color: '#8b5cf6', icon: Palette },
+  other:    { color: '#6b7280', icon: Ellipsis },
 };
 
 // Generate time options: 6:00, 6:30, 7:00, ... 21:30
@@ -36,15 +36,23 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && bStart < aEnd;
 }
 
-const QUICK_PRESETS = [
-  { label: 'School Day', type: 'academic', start: 8, end: 15, days: WEEKDAYS },
-  { label: 'Half Day', type: 'academic', start: 8, end: 12, days: WEEKDAYS },
-  { label: 'Dinner', type: 'other', start: 18, end: 19, days: DAYS },
-  { label: 'Sleep', type: 'other', start: 22, end: 6, days: DAYS },
-  { label: 'Sports Practice', type: 'sports', start: 15, end: 17, days: ['Mon','Wed','Fri'] },
-];
-
 export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null, T }) {
+  // Build TYPE_CFG with translated labels
+  const TYPE_CFG = {
+    academic: { ...TYPE_ICONS.academic, label: T.typeAcademic },
+    sports:   { ...TYPE_ICONS.sports, label: T.typeSports },
+    arts:     { ...TYPE_ICONS.arts, label: T.typeArts },
+    other:    { ...TYPE_ICONS.other, label: T.typeOther },
+  };
+
+  const QUICK_PRESETS = [
+    { label: T.presetSchool, type: 'academic', start: 8, end: 15, days: WEEKDAYS },
+    { label: T.presetHalf, type: 'academic', start: 8, end: 12, days: WEEKDAYS },
+    { label: T.presetDinner, type: 'other', start: 18, end: 19, days: DAYS },
+    { label: T.presetSleep, type: 'other', start: 22, end: 6, days: DAYS },
+    { label: T.presetSports, type: 'sports', start: 15, end: 17, days: ['Mon','Wed','Fri'] },
+  ];
+
   // Compute dates for day headers (timezone-safe)
   const getDayDate = (dayName) => {
     if (!weekStart) return '';
@@ -79,11 +87,11 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
 
   // -- Add event --
   const handleAdd = () => {
-    if (!label.trim()) { setError('Enter an event name.'); return; }
-    if (selectedDays.length === 0) { setError('Select at least one day.'); return; }
+    if (!label.trim()) { setError(T.calErrEventName); return; }
+    if (selectedDays.length === 0) { setError(T.calErrSelectDay); return; }
     const dur = endTime - startTime;
-    if (dur <= 0) { setError('End time must be after start time.'); return; }
-    if (dur > 16) { setError('Duration cannot exceed 16 hours.'); return; }
+    if (dur <= 0) { setError(T.calErrEndAfterStart); return; }
+    if (dur > 16) { setError(T.calErrDurationMax); return; }
 
     // Check for overlaps on each selected day
     const conflicts = [];
@@ -96,7 +104,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
       }
     }
     if (conflicts.length > 0) {
-      setError(`Time conflict with: ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? ` +${conflicts.length - 3} more` : ''}. Adjust the time or remove the conflicting block first.`);
+      setError(`${T.calErrTimeConflict} ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? ` +${conflicts.length - 3} more` : ''}`);
       return;
     }
 
@@ -156,14 +164,14 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
   const saveEdit = () => {
     if (!popLabel.trim()) return;
     const dur = popEnd - popStart;
-    if (dur <= 0) { setPopMsg('End time must be after start time.'); return; }
+    if (dur <= 0) { setPopMsg(T.calErrEndAfterStart); return; }
 
     const conflicts = blocks.filter(b =>
       b.day === pop.day && b.id !== pop.id &&
       overlaps(popStart, popEnd, b.startHour, b.startHour + b.durationHours)
     );
     if (conflicts.length > 0) {
-      setPopMsg(`Conflicts with: ${conflicts.map(b => b.label).join(', ')}`);
+      setPopMsg(`${T.calConflictsWith} ${conflicts.map(b => b.label).join(', ')}`);
       return;
     }
 
@@ -390,7 +398,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
         <div className="flex items-center justify-between text-xs text-mindflow-muted">
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {stats.totalHours}h scheduled · {stats.totalBlocks} block{stats.totalBlocks !== 1 ? 's' : ''} · {stats.daysUsed} day{stats.daysUsed !== 1 ? 's' : ''}
+            {stats.totalHours}{T.calHScheduled} · {stats.totalBlocks} {stats.totalBlocks !== 1 ? T.calBlocks : T.calBlock} · {stats.daysUsed} {stats.daysUsed !== 1 ? T.calDaysUnit : T.calDay}
           </span>
           <button
             type="button"
