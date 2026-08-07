@@ -54,9 +54,12 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
-> **2026-08-07:** Language/i18n complete — 6 languages (EN/ZH-CN/ZH-TW/ES/HI/AR) with
-> full translation maps (101 keys each), language selector dropdown in settings panel,
-> persisted to localStorage. Build 0 errors, 0 new lint warnings.
+> **2026-08-07:** Language/i18n **complete** — 6 languages (EN/ZH-CN/ZH-TW/ES/HI/AR)
+> with 130+ translation keys each, covering every UI string across all 6 components.
+> Language selector dropdown in settings panel persists to localStorage. Per-key
+> English fallback for untranslated strings. All type labels, priority labels,
+> difficulty labels, presets, error messages, calendar stats, and settings labels
+> are fully translated. Build 0 errors, 0 new lint warnings.
 >
 > **2026-08-06:** Settings panel built (theme toggle, accent color picker, chronotype,
 > hours/day, reset). Google Calendar integration coded but removed after causing
@@ -89,8 +92,9 @@
 > 0 lint warnings. 0 build errors. 0 npm vulns.
 >
 > **Known gaps:** Backend (main.py) not yet upgraded to v3 engine math (still uses
-> single-exponential recovery, no flow collapse/momentum/capacity). No UI components
-> exist yet (steps 27-65). App.jsx is prototype only.
+> single-exponential recovery, no flow collapse/momentum/capacity). Google Calendar
+> integration (steps 86–94, 0/9) pending — coded but removed due to runtime crash,
+> needs proper error boundaries.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Read the AI Agent Rules at the top, then check the checklist. What's our
@@ -184,13 +188,16 @@ TOTAL                           85/94   90.4%
 > - `src/components/SessionChart.jsx`: stacked area chart (Flow/Distracted/Fatigue/
 >   Recovery), useId() gradients, burnout reference line, compact mode
 > - `src/App.jsx`: screen flow (Welcome→Stroop→Calendar→Tasks), live fatigue
->   preview using real alpha, localStorage persistence, settings panel (theme
->   toggle, 6 accent colors, chronotype, daily/hour caps, reset)
+>   preview using real alpha, localStorage persistence, settings panel (language
+>   selector, theme toggle, 6 accent colors, chronotype, daily/hour caps, reset)
+> - `src/utils/i18n.js`: 6-language i18n system (EN/ZH-CN/ZH-TW/ES/HI/AR), 130+
+>   keys per language, per-key English fallback, persisted to localStorage
 > - 1,957+ tests across 4 suites, 0 failures, 0 build errors
-> - Settings: language complete (6 languages, 101 keys each), Google Calendar pending
+> - Settings: language complete (130+ keys, all UI strings translated), Google
+>   Calendar pending (code built but removed due to runtime crash)
 >   (code built but removed due to runtime crash)
 >
-> **Next:** Stage 4 — Integration verification walkthrough (steps 75–85)
+> **Next:** Stage 5 — Google Calendar integration (steps 86–94)
 
 ---
 
