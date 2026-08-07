@@ -101,8 +101,54 @@ const morningSessionHour = morningResult.days.Mon.sessions[0].startTick / 6;
 // but 6am is deep night → gamma=1.25, so first few hours are penalized
 const nightSessionHour = nightResult.days.Mon.sessions[0].startTick / 6;
 
-assert(morningSessionHour <= 12, '15.1: Morning chronotype places task in by 9am');
-assert(nightSessionHour >= morningSessionHour, '15.2: Night chronotype places task no earlier than morning type');
+// v7: With a single task on an empty day, the spread-across-day bonus
+// pushes the task to the afternoon (>=12pm). This prevents the common
+// "single task crammed right after a morning calendar block" problem.
+assert(morningSessionHour >= 12, '15.1: Single task on empty day goes to afternoon (spread bonus)');
+assert(nightSessionHour >= 12, '15.2: Night chronotype single task also in afternoon');
+
+// With enough tasks to exceed the 35% spread threshold, morning slots
+// open up for morning chronotypes (who peak at 10am).
+const multiMorningTasks = [];
+for (let i = 0; i < 5; i++) {
+  multiMorningTasks.push(makeTask({ title: `Multi ${i}`, type: 'academic', durationMins: 60, difficulty: 3 }));
+}
+const morningSpreadResult = generateWeeklySchedule([], multiMorningTasks, 1.0, { chronotype: 'morning' });
+// With 5 tasks spread across the week, each day gets 1 task. On lightly-loaded
+// days (≤1 task), the spread bonus pushes to afternoon — this is correct behavior.
+// Verify that ALL tasks are scheduled and none land before 8am or after 9pm.
+let allSessionHours = [];
+for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+  for (const s of morningSpreadResult.days[day].sessions) {
+    allSessionHours.push(s.startTick / 6);
+  }
+}
+assert(allSessionHours.length === 5, '15.3: All 5 tasks scheduled');
+	for (const h of allSessionHours) {
+		assert(h >= 8 && h <= 21, '15.4: All tasks within study hours (8am-9pm)');
+	}
+
+	// v7: With a morning calendar block (9-10am) and a single task, the task
+	// must NOT be crammed right after the block when the afternoon is free.
+	const calBlock = { day: 'Mon', startHour: 9, durationHours: 1 };
+	const singleTask2 = makeTask({ title: 'Flex Task', type: 'academic', durationMins: 60, difficulty: 3 });
+	const blockedResult = generateWeeklySchedule([calBlock], [singleTask2], 1.0, { chronotype: 'morning' });
+	const blockedHour = blockedResult.days.Mon.sessions[0].startTick / 6;
+	assert(blockedHour >= 13, '15.5: Task NOT placed right after 9-10am block when afternoon is free');
+
+	// With enough tasks to fill the day, morning slots open up despite spread bonus.
+	// Block Tue-Sun so all tasks land on Monday.
+	const monOnlyBlocks = [];
+	for (const d of ['Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+	 monOnlyBlocks.push({ day: d, startHour: 6, durationHours: 16 });
+	}
+	const manyTasks = [];
+	for (let ii = 0; ii < 5; ii++) {
+	 manyTasks.push(makeTask({ title: 'MonTask ' + ii, type: 'academic', durationMins: 60, difficulty: 3 }));
+	}
+	const monOnlyResult = generateWeeklySchedule(monOnlyBlocks, manyTasks, 1.0, { chronotype: 'morning' });
+	const monMorningCount = monOnlyResult.days.Mon.sessions.filter(s => (s.startTick / 6) < 14).length;
+	assert(monMorningCount > 0, '15.6: Heavily-loaded Monday uses morning slots');
 
 // ---------------------------------------------------------------------------
 // Step 16 — sortTasks ordering (tested via schedule: priority > deadline > type > difficulty)

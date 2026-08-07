@@ -415,7 +415,8 @@ function slotBeforeDeadline(slotEndTick, task, day, weekStartDate) {
  */
 function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins, settings,
                     lastTaskType = null, prevDayStrain = 0, difficulty = 3,
-                    dayDifficultyLoad = 0, task = null, weekStartDate = null) {
+                    dayDifficultyLoad = 0, task = null, weekStartDate = null,
+                    dayTotalUsedTicks = 0) {
   const hour = slot.startHour + (slot.usedTicks / 6);
 
   // Process C: circadian gamma
@@ -526,13 +527,29 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   else if (slotHour < 21) timeOfDayScore = 0.10;    // 7-9pm: slight penalty
   else timeOfDayScore = 0.8;                         // after 9pm: blocked by clamp
 
+  // v7: Spread-across-day incentive — when a day is lightly loaded, push the
+  // first task(s) toward the afternoon instead of clustering them right after
+  // morning calendar blocks. Without this, a single task always lands at
+  // 10am (best circadian gamma + best time-of-day score) even when the entire
+  // afternoon is free. The penalty decays as the day fills up, so multi-task
+  // days still use morning slots naturally.
+  //
+  // At 0% day utilization: 0.40 penalty for morning slots → overcomes the
+  // ~0.13 morning circadian advantage, pushing the first task to afternoon.
+  // At 35%+ utilization: 0 penalty → morning slots open up for later tasks.
+  let daySpreadBonus = 0;
+  const dayTotalUtilization = dayMaxTicks > 0 ? dayTotalUsedTicks / dayMaxTicks : 1;
+  if (slot.startHour < 14 && dayTotalUtilization < 0.35) {
+    daySpreadBonus = (0.35 - dayTotalUtilization) * (0.40 / 0.35);
+  }
+
   // Position tiebreaker
   const positionTiebreaker = slot.usedTicks / 1000;
 
   return fatigueFactor + congestionPenalty + freshDayBonus + sameDayPenalty
        + difficultySpreadPenalty + weekendPenalty + crossDayPenalty
        + sequencingScore + flowBlockScore + positionTiebreaker
-       + deadlineWeekScore + timeOfDayScore;
+       + deadlineWeekScore + timeOfDayScore + daySpreadBonus;
 }
 
 // ===========================================================================
@@ -935,9 +952,15 @@ export default function generateWeeklySchedule(
     return mon.toISOString().split('T')[0];
   })();
 
-  // Today's date for blocking past days (only when real dates are in play)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
+  // Today's date for blocking past days (only when real dates are in play).
+  // IMPORTANT: must use local date parts, NOT toISOString() which is UTC —
+  // in timezones behind UTC (Americas), toISOString returns tomorrow's date
+  // and incorrectly classifies today as a past day.
+  const nowDate = new Date();
+  const todayStr = nowDate.getFullYear() + '-' +
+    String(nowDate.getMonth() + 1).padStart(2, '0') + '-' +
+    String(nowDate.getDate()).padStart(2, '0');
+  const nowHour = nowDate.getHours() + nowDate.getMinutes() / 60;
 
   // Only enforce past-day blocking when caller passes real week dates
   const enforceRealDates = !!weekStartDate;
@@ -1119,6 +1142,14 @@ export default function generateWeeklySchedule(
       // Check deadline time: slot must end before the specific deadline hour
       if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
 
+      // v7: Per-day capacity check — uses the day-aggregate usedTicks
+      // (not the per-slot counter) to prevent exceeding daily caps when
+      // tasks are distributed across multiple same-day slots.
+      const dayMaxTicks = WEEKEND_DAYS.has(slot.day)
+        ? (s.maxHoursWeekend ?? 4) * 6
+        : (s.maxHoursPerDay ?? 8) * 6;
+      if (dayUsedTicks[slot.day] + taskTicks > dayMaxTicks) continue;
+
       const ticksSinceLastTask = Math.max(0,
         (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
       const breakMinsSinceLastTask = ticksSinceLastTask * 10;
@@ -1141,6 +1172,7 @@ export default function generateWeeklySchedule(
         dayDifficultyLoad[slot.day] || 0,
         task,
         wsDate,
+        dayUsedTicks[slot.day],
       );
 
       if (score < bestScore) { bestScore = score; bestSlot = slot; }
@@ -1178,6 +1210,11 @@ export default function generateWeeklySchedule(
       if (taskTicks > slot.durationTicks) continue;
       if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
       if (slot === bestSlot) continue;
+      // v7: Per-day cap for alternative counting
+      const altDayMaxTicks = WEEKEND_DAYS.has(slot.day)
+        ? (s.maxHoursWeekend ?? 4) * 6
+        : (s.maxHoursPerDay ?? 8) * 6;
+      if (dayUsedTicks[slot.day] + taskTicks > altDayMaxTicks) continue;
       validAlternatives++;
     }
 
@@ -1316,6 +1353,12 @@ export default function generateWeeklySchedule(
         if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
         if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
 
+        // v7: Per-day capacity check for refinement pass
+        const refDayMaxTicks = WEEKEND_DAYS.has(slot.day)
+          ? (s.maxHoursWeekend ?? 4) * 6
+          : (s.maxHoursPerDay ?? 8) * 6;
+        if (dayUsedTicks[slot.day] + taskTicks > refDayMaxTicks) continue;
+
         // Relaxed scoring: gamma only, no congestion, no Process S penalty
         // v5: difficulty still matters even in refinement — hard tasks get
         // preference for better circadian times
@@ -1325,7 +1368,17 @@ export default function generateWeeklySchedule(
         const difficultySpreadPenalty = (dayDifficultyLoad[slot.day] || 0) > MAX_DIFFICULTY_PER_DAY
           ? ((dayDifficultyLoad[slot.day] - MAX_DIFFICULTY_PER_DAY) / MAX_DIFFICULTY_PER_DAY) * 0.5
           : 0;
-        const score = gamma * diffFactor + difficultySpreadPenalty + (slot.usedTicks / 1000);
+        // v7: day-spread incentive for refinement pass — same logic as primary
+        const dayCap = WEEKEND_DAYS.has(slot.day)
+          ? (s.maxHoursWeekend ?? 4)
+          : (s.maxHoursPerDay ?? 8);
+        const dayMaxTicks = dayCap * 6;
+        const dayTotalUtil = dayMaxTicks > 0 ? dayUsedTicks[slot.day] / dayMaxTicks : 1;
+        let daySpreadBonus = 0;
+        if (slot.startHour < 14 && dayTotalUtil < 0.35) {
+          daySpreadBonus = (0.35 - dayTotalUtil) * (0.40 / 0.35);
+        }
+        const score = gamma * diffFactor + difficultySpreadPenalty + daySpreadBonus + (slot.usedTicks / 1000);
 
         if (score < bestScore) { bestScore = score; bestSlot = slot; }
       }

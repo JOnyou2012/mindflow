@@ -33,19 +33,56 @@ function dayInfo(ws, dayName) {
 
 /**
  * Results page — Google Calendar-style week view of the generated plan.
- * One week at a time with prev/next navigation; fixed commitments render as
- * solid chips, generated study sessions as tinted, bordered chips.
+ * One week at a time with prev/next navigation across past and future weeks.
+ * Fixed commitments render as solid chips, generated study sessions as tinted,
+ * bordered chips. Weeks without generated results still show the calendar grid.
  */
 export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, onRegenerate, T }) {
-  const weekStarts = useMemo(() => Object.keys(weekResults).sort(), [weekResults]);
-  const [selIdx, setSelIdx] = useState(0);
-  const idx = Math.min(selIdx, weekStarts.length - 1);
-  const ws = weekStarts[idx];
-  const result = weekResults[ws];
+  // Build all navigable weeks: 2 weeks before today through 8 weeks after
+  const allWeeks = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+    const weeks = [];
+    for (let i = -2; i <= 8; i++) {
+      const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i * 7);
+      weeks.push(
+        d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0')
+      );
+    }
+    return weeks;
+  }, []);
 
-  if (!ws || !result) return null;
+  // Today's week index (for the Today button)
+  const todayIdx = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+    const todayWs =
+      mon.getFullYear() + '-' +
+      String(mon.getMonth() + 1).padStart(2, '0') + '-' +
+      String(mon.getDate()).padStart(2, '0');
+    const idx = allWeeks.indexOf(todayWs);
+    return idx >= 0 ? idx : 2; // fallback to "today" position
+  }, [allWeeks]);
 
-  const stats = result.stats;
+  // Default to the first week that has results, otherwise today's week
+  const defaultIdx = useMemo(() => {
+    const firstWithResults = allWeeks.findIndex(ws => weekResults[ws]);
+    return firstWithResults >= 0 ? firstWithResults : todayIdx;
+  }, [allWeeks, weekResults, todayIdx]);
+
+  const [selIdx, setSelIdx] = useState(defaultIdx);
+  const idx = Math.max(0, Math.min(selIdx, allWeeks.length - 1));
+  const ws = allWeeks[idx];
+  const result = weekResults[ws] || null;
+  const isEmpty = !result || (result.days && Object.values(result.days).every(d => !d.sessions || d.sessions.length === 0));
+
+  const stats = result?.stats;
   const statCells = stats ? [
     [stats.totalScheduledHours + 'h', T.scheduled],
     [stats.utilizationPct + '%', T.capacity],
@@ -73,7 +110,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
       {/* Toolbar — Today / prev / next / range + legend */}
       <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={() => setSelIdx(0)}
+          onClick={() => setSelIdx(todayIdx)}
           className="rounded-full border border-mindflow-border px-4 py-1.5 text-sm font-medium text-mindflow-text hover:bg-mindflow-surface-alt"
         >
           {T.today}
@@ -88,8 +125,8 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setSelIdx(i => Math.min(weekStarts.length - 1, i + 1))}
-            disabled={idx >= weekStarts.length - 1}
+            onClick={() => setSelIdx(i => Math.min(allWeeks.length - 1, i + 1))}
+            disabled={idx >= allWeeks.length - 1}
             aria-label="Next week"
             className="rounded-full p-1.5 text-mindflow-muted hover:bg-mindflow-surface-alt disabled:opacity-30"
           >
@@ -122,8 +159,16 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         </div>
       )}
 
+      {/* Empty week notice — no sessions scheduled for this week */}
+      {isEmpty && (
+        <div className="flex items-center gap-3 rounded-lg border border-mindflow-border bg-mindflow-surface-alt px-4 py-3">
+          <CalendarX2 className="w-4 h-4 shrink-0 text-mindflow-muted" />
+          <p className="text-sm text-mindflow-muted">{T.noSessionsThisWeek || 'No study sessions scheduled for this week.'}</p>
+        </div>
+      )}
+
       {/* Warnings */}
-      {result.warnings?.length > 0 && (
+      {result?.warnings?.length > 0 && (
         <div className="space-y-1.5">
           {result.warnings.map((w, i) => (
             <div key={i} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
@@ -201,7 +246,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
                 })}
 
                 {/* Generated study sessions — tinted, bordered chips */}
-                {(result.days[day]?.sessions || []).map((s, i) => {
+                {(result?.days?.[day]?.sessions || []).map((s, i) => {
                   const c = typeColor(s.task.type);
                   const sh = s.startTick / 6, eh = s.endTick / 6;
                   const top = (sh - START_H) * ROW_H;
@@ -226,7 +271,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
       </div>
 
       {/* Unscheduled */}
-      {result.unscheduled?.length > 0 && (
+      {result?.unscheduled?.length > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-mindflow-warning/40 bg-mindflow-warning/10 px-4 py-3">
           <CalendarX2 className="w-4 h-4 mt-0.5 shrink-0 text-mindflow-warning" />
           <div>

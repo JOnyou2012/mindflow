@@ -246,6 +246,7 @@ const t = {
     planTitle: 'Your optimized week',
     planLegendFixed: 'Fixed commitment',
     planLegendSession: 'Study session',
+    noSessionsThisWeek: 'No study sessions scheduled for this week.',
     calStepDesc: 'Take a 60-second focus test so MindFlow can model your brain — or skip and use the average.',
     tasksStepDesc: 'Add everything you need to get done. MindFlow fits it around your fixed schedule.',
 
@@ -386,6 +387,7 @@ const t = {
     planTitle: '你的优化周计划',
     planLegendFixed: '固定日程',
     planLegendSession: '学习时段',
+    noSessionsThisWeek: '本周无学习时段安排。',
     calStepDesc: '进行 60 秒专注力测试，让 MindFlow 建立你的大脑模型——或跳过并使用平均值。',
     tasksStepDesc: '添加你需要完成的所有事项，MindFlow 会将它们安排在你的固定日程之外。',
 
@@ -526,6 +528,7 @@ const t = {
     planTitle: '你的最佳化週計畫',
     planLegendFixed: '固定行程',
     planLegendSession: '學習時段',
+    noSessionsThisWeek: '本週無學習時段安排。',
     calStepDesc: '進行 60 秒專注力測試，讓 MindFlow 建立你的大腦模型——或跳過並使用平均值。',
     tasksStepDesc: '新增你需要完成的所有事項，MindFlow 會將它們安排在你的固定日程之外。',
 
@@ -666,6 +669,7 @@ const t = {
     planTitle: 'Tu semana optimizada',
     planLegendFixed: 'Compromiso fijo',
     planLegendSession: 'Sesión de estudio',
+    noSessionsThisWeek: 'No hay sesiones de estudio programadas para esta semana.',
     calStepDesc: 'Haz una prueba de concentración de 60 segundos para que MindFlow modele tu cerebro, o sáltala y usa el promedio.',
     tasksStepDesc: 'Añade todo lo que necesitas hacer. MindFlow lo encajará alrededor de tu horario fijo.',
 
@@ -806,6 +810,7 @@ const t = {
     planTitle: 'आपका अनुकूलित सप्ताह',
     planLegendFixed: 'निश्चित कार्यक्रम',
     planLegendSession: 'अध्ययन सत्र',
+    noSessionsThisWeek: 'इस सप्ताह के लिए कोई अध्ययन सत्र निर्धारित नहीं है।',
     calStepDesc: '60-सेकंड का फ़ोकस टेस्ट लें ताकि MindFlow आपके दिमाग का मॉडल बना सके — या छोड़कर औसत इस्तेमाल करें।',
     tasksStepDesc: 'जो कुछ भी करना है उसे जोड़ें। MindFlow इसे आपके तय शेड्यूल के इर्द-गिर्द फिट करेगा।',
 
@@ -946,6 +951,7 @@ const t = {
     planTitle: 'أسبوعك المحسّن',
     planLegendFixed: 'التزام ثابت',
     planLegendSession: 'جلسة دراسة',
+    noSessionsThisWeek: 'لا توجد جلسات دراسية مجدولة لهذا الأسبوع.',
     calStepDesc: 'أجرِ اختبار تركيز لمدة 60 ثانية ليتمكن MindFlow من نمذجة دماغك — أو تخطَّ واستخدم المتوسط.',
     tasksStepDesc: 'أضف كل ما تحتاج إنجازه، وسيوزعه MindFlow حول جدولك الثابت.',
 
