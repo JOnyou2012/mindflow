@@ -12,6 +12,7 @@ import {
   saveSettings, loadSettings,
   clearAll,
 } from './utils/storage.js';
+import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
 const TYPE_COLORS = { academic: '#3b82f6', sports: '#22c55e', arts: '#8b5cf6', other: '#6b7280' };
 
@@ -64,6 +65,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mindflow_theme') || 'dark'; } catch { return 'dark'; }});
   const [accent, setAccent] = useState(() => { try { return localStorage.getItem('mindflow_accent') || '#8b5cf6'; } catch { return '#8b5cf6'; }});
+  const [lang, setLang] = useState(() => getStoredLang());
+
+  // Translations for current language
+  const T = useMemo(() => getTranslations(lang), [lang]);
 
   // Persist theme + accent
   useEffect(() => { try { localStorage.setItem('mindflow_theme', theme); } catch {} }, [theme]);
@@ -165,6 +170,7 @@ export default function App() {
       clearAll();
       try { localStorage.removeItem('mindflow_theme'); } catch {}
       try { localStorage.removeItem('mindflow_accent'); } catch {}
+      try { localStorage.removeItem('mindflow_lang'); } catch {}
       window.location.reload();
     }
   };
@@ -340,6 +346,20 @@ export default function App() {
       {showSettings && (
         <div className="bg-mindflow-surface border-b border-mindflow-border px-6 py-4 animate-fade-in">
           <div className="max-w-2xl mx-auto space-y-4 text-sm">
+            {/* Language */}
+            <div className="flex items-center gap-2">
+              <span className="text-mindflow-muted text-xs w-20 shrink-0">{T.settingsLanguage}</span>
+              <select
+                value={lang}
+                onChange={e => { setLang(e.target.value); setStoredLang(e.target.value); }}
+                className="bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-1.5 text-mindflow-text text-xs focus:border-mindflow-accent focus:outline-none"
+              >
+                {LANGUAGES.map(l => (
+                  <option key={l.code} value={l.code}>{l.native} — {l.label}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Theme */}
             <div className="flex items-center gap-2">
               <span className="text-mindflow-muted text-xs w-20 shrink-0">Theme</span>
