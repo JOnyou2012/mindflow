@@ -54,6 +54,28 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
+> **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
+> one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
+> slide transitions (0.22s), auto-advance on single-choice answers, Enter to
+> advance text inputs, Skip on optional questions, progress bar + back chevron,
+> "Add another?" decision screen after each add. Calendar grid, task list, edit
+> popover, and quick presets unchanged in behavior. Wizard footer hides while a
+> flow is active. New flow strings translated in all 6 languages.
+>
+> **2026-08-07 (revamp):** Complete UX + visual overhaul. The single scrolling
+> page is now a 4-step wizard — Calibrate → Schedule → Tasks → Your plan — one
+> phase per page, with a stepper, per-page footer nav, and a dedicated results
+> page (`src/components/PlanView.jsx`: GCal-style week view, Today/prev/next
+> week navigation, stats strip, warnings, unscheduled callout, stale-regenerate
+> banner). Visual identity replaced with a Google Calendar register: light mode
+> default (dark kept as a settings toggle), Roboto, #1a73e8 primary, hairline
+> borders, solid event chips, circular date headers. Removed WelcomeScreen.jsx,
+> MarkovAnalyticsDashboard.jsx, SessionChart.jsx (dead/vibecoded), the accent
+> picker, Playfair/Inter, gradients, glass, and glow effects. Settings is now a
+> dialog. Shared colors centralized in `src/utils/theme.js`; design tokens
+> documented in DESIGN.md; product facts in PRODUCT.md. New i18n keys
+> translated in all 6 languages. All ~1,970 tests pass, build 0 errors.
+>
 > **2026-08-07:** Language/i18n **complete** — 6 languages (EN/ZH-CN/ZH-TW/ES/HI/AR)
 > with 130+ translation keys each, covering every UI string across all 6 components.
 > Language selector dropdown in settings panel persists to localStorage. Per-key
@@ -230,15 +252,15 @@ Pure JavaScript. localStorage for persistence. No backend.
 ## User Journey
 
 ```
-Welcome → Calibrate (or skip) → Add schedule + tasks → Generate → Dashboard → Iterate
+Calibrate (or skip) → Schedule → Tasks → Generate → Plan → Iterate
 ```
 
-1. **Welcome screen** — 10-second intro explaining the value prop
-2. **Calibration** — 30-second Stroop color game → alpha focus score (or skip → alpha = 1.0)
-3. **Schedule** — add weekly class timetable + homework tasks with type, difficulty, duration, deadline, priority
+1. **Calibrate** — 60-second Stroop color game → alpha focus score (or skip → alpha = 1.0)
+2. **Schedule** — add weekly fixed commitments (classes, work, meals)
+3. **Tasks** — add homework/study tasks with type, difficulty, duration, deadline, priority
 4. **Generate** — scheduler finds best slots across all 7 days, runs Markov simulations, inserts recovery breaks
-5. **Dashboard** — fatigue charts per day, session cards with mini charts, unscheduled tasks with suggestions, calendar blocks shown on timeline
-6. **Iterate** — change tasks, adjust settings, regenerate. All data saved to localStorage (survives page refresh)
+5. **Plan** — dedicated results page: GCal-style week view with week navigation, stats, warnings, unscheduled tasks
+6. **Iterate** — change tasks, adjust settings, regenerate. All input data saved to localStorage (survives page refresh)
 
 ---
 
@@ -436,7 +458,15 @@ carryover = strain_prev × 0.30 × e^(−8h / 2.0h)
 
 # Part 4: Design System
 
-## Color Tokens
+**Superseded by `DESIGN.md` (2026-08-07 revamp).** The app is now light-first
+in a Google Calendar register: white surfaces, `#dadce0` hairlines, `#1a73e8`
+primary, Roboto, pill CTAs, solid event chips. Tokens live in `src/index.css`
+(`@theme` + `html.dark` overrides); event/priority colors in
+`src/utils/theme.js`. The dark palette below is kept for historical reference
+only — do not use it in new code.
+
+<details>
+<summary>Legacy pre-revamp dark palette (historical)</summary>
 
 | Token | Hex | Usage |
 |-------|-----|-------|
@@ -451,15 +481,7 @@ carryover = strain_prev × 0.30 × e^(−8h / 2.0h)
 | `mindflow-warning` | `#fbbf24` | Yellow — warnings |
 | `mindflow-danger` | `#f87171` | Red — fatigue, errors |
 
-## CSS Class Patterns
-
-```
-Card:     bg-mindflow-surface border border-mindflow-border rounded-xl p-4
-Primary:  bg-mindflow-accent text-white px-4 py-2 rounded-lg font-medium hover:opacity-90
-Secondary: border border-mindflow-border text-mindflow-text px-4 py-2 rounded-lg hover:bg-mindflow-surface
-Input:    bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5 text-mindflow-text placeholder-mindflow-muted focus:border-mindflow-accent focus:outline-none
-Layout:   max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8, sections use space-y-6
-```
+</details>
 
 ---
 

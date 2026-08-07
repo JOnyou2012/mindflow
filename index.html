@@ -5,12 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MindFlow — Dynamic Markov Chain Study Optimizer</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
+    <!--
+      DIRECTION CONTRACT — MindFlow revamp (SEED: CANON:google-calendar, user-pinned via standing exit)
+      THESIS: A study planner that reads like the calendar students already live in; refuses the dark,
+        glow-accented "focus app" costume this category ships by default.
+      OWN-WORLD: Google Calendar, played straight — white ground, #dadce0 hairlines, #1a73e8 primary,
+        Roboto/system stack, solid event chips, circular date headers, quiet grays. Dark mode as a
+        secondary theme in Google's dark register, never the default.
+      STORY: The visitor is guided, not dumped: Calibrate → Schedule → Tasks → Plan, one phase per
+        page, and the plan is a real week view they already know how to read.
+      FIRST VIEWPORT: GCal-style app bar (mark + wordmark left, settings right), a four-step stepper,
+        one focused task below; primary action is a blue pill at bottom right.
+      FORM: wizard shell over a week-grid results page; category canon chosen explicitly by the user.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the
+        verdict, and DESIGN.md.
+    -->
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

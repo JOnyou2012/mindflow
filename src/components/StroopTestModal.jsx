@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Brain, Zap, Clock, RefreshCw, Target, Keyboard } from 'lucide-react';
+import { Brain, RefreshCw, Target } from 'lucide-react';
 
 // 4 colors mapped to 4 keyboard keys — user must learn this mapping
 const COLORS = [
@@ -242,26 +242,26 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
   // ===========================================================================
   if (phase === 'intro') return (
     <div className="flex flex-col items-center gap-6 py-12 animate-fade-in">
-      <div className="bg-mindflow-surface p-5 rounded-full border border-mindflow-border">
-        <Brain className="w-16 h-16 text-mindflow-accent" />
+      <div className="w-14 h-14 rounded-full bg-mindflow-accent-soft flex items-center justify-center">
+        <Brain className="w-7 h-7 text-mindflow-accent" />
       </div>
 
       <div className="text-center space-y-2 max-w-lg">
-        <h2 className="text-2xl font-bold text-mindflow-heading">{T.calibTitle}</h2>
-        <p className="text-mindflow-text">{T.calibDesc}</p>
+        <h2 className="text-2xl font-normal text-mindflow-heading">{T.calibTitle}</h2>
+        <p className="text-sm text-mindflow-text">{T.calibDesc}</p>
       </div>
 
       {/* Key mapping */}
       <div className="w-full max-w-sm">
-        <p className="text-[10px] text-mindflow-muted uppercase tracking-widest text-center mb-4">{T.calibKeyMapping}</p>
+        <p className="text-xs font-medium text-mindflow-muted text-center mb-3">{T.calibKeyMapping}</p>
         <div className="grid grid-cols-4 gap-3">
           {COLORS.map(c => (
             <div key={c.key} className="text-center">
-              <div className="w-14 h-14 rounded-xl mx-auto flex items-center justify-center text-xl font-bold shadow-sm"
-                style={{ backgroundColor: c.hex, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+              <div className="w-14 h-14 rounded-lg mx-auto flex items-center justify-center text-xl font-medium"
+                style={{ backgroundColor: c.hex, color: '#fff' }}>
                 {c.key.toUpperCase()}
               </div>
-              <p className="text-[10px] text-mindflow-muted mt-1.5">{c.name}</p>
+              <p className="text-xs text-mindflow-muted mt-1.5">{c.name}</p>
             </div>
           ))}
         </div>
@@ -269,8 +269,8 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
       {/* Example */}
       <div className="text-center max-w-sm">
-        <p className="text-[10px] text-mindflow-muted uppercase tracking-widest mb-3">{T.calibExample}</p>
-        <p className="text-5xl font-bold mb-2" style={{ color: '#7eb8a0', fontFamily: "'Playfair Display', serif" }}>{T.calibExampleWord}</p>
+        <p className="text-xs font-medium text-mindflow-muted mb-3">{T.calibExample}</p>
+        <p className="text-5xl font-medium mb-2" style={{ color: '#7eb8a0' }}>{T.calibExampleWord}</p>
         <p className="text-xs text-mindflow-muted leading-relaxed">{T.calibExampleDesc}</p>
       </div>
 
@@ -278,18 +278,20 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         <div className="bg-mindflow-surface border border-mindflow-border rounded-xl px-4 py-3 flex items-center gap-3">
           <Target className="w-5 h-5 text-mindflow-muted" />
           <span className="text-sm text-mindflow-text">{T.calibPreviousScore}</span>
-          <span className={`text-sm font-bold ${alphaColor(existingCalibration.alphaScore)}`}>
+          <span className={`text-sm font-medium tabular-nums ${alphaColor(existingCalibration.alphaScore)}`}>
             {existingCalibration.alphaScore.toFixed(2)}
           </span>
         </div>
       )}
 
-      <button onClick={start} className="bg-mindflow-accent text-white px-10 py-3.5 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25">
-        {T.calibStart}
-      </button>
-      <button onClick={handleSkip} className="text-mindflow-muted hover:text-mindflow-text text-sm underline underline-offset-4 transition-colors">
-        {T.calibSkip}
-      </button>
+      <div className="flex items-center gap-3">
+        <button onClick={handleSkip} className="rounded-full px-5 py-2 text-sm font-medium text-mindflow-accent hover:bg-mindflow-accent-soft">
+          {T.calibSkip}
+        </button>
+        <button onClick={start} className="rounded-full bg-mindflow-accent text-mindflow-onaccent px-6 py-2 text-sm font-medium hover:bg-mindflow-accent-hover shadow-sm">
+          {T.calibStart}
+        </button>
+      </div>
       <p className="text-xs text-mindflow-muted">
         {GAME_SECS}s · {T.calibCountdownHint}
       </p>
@@ -301,10 +303,9 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
   // ===========================================================================
   if (phase === 'countdown') return (
     <div className="flex items-center justify-center py-40">
-      <div className="text-center space-y-6">
-        <p className="text-mindflow-muted text-sm uppercase tracking-[0.2em]">{T.calibCountdown}</p>
-        <span className="text-[9rem] font-bold text-mindflow-accent animate-pulse leading-none"
-          style={{ fontFamily: "'Playfair Display', serif" }}>{countdown}</span>
+      <div className="text-center space-y-4">
+        <p className="text-xs font-medium text-mindflow-muted">{T.calibCountdown}</p>
+        <span className="block text-8xl font-normal text-mindflow-heading tabular-nums leading-none">{countdown}</span>
         <p className="text-xs text-mindflow-muted">{T.calibCountdownHint}</p>
       </div>
     </div>
@@ -317,7 +318,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     if (!currentWord) {
       return (
         <div className="flex items-center justify-center py-32">
-          <p className="text-mindflow-muted text-sm animate-pulse">{T.calibStarting}</p>
+          <p className="text-sm text-mindflow-muted">{T.calibStarting}</p>
         </div>
       );
     }
@@ -328,12 +329,12 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     return (
       <div className="flex flex-col items-center gap-6 py-8 select-none">
         {/* Timer + progress */}
-        <div className="w-full max-w-md space-y-1">
-          <div className="flex justify-between text-xs text-mindflow-muted">
+        <div className="w-full max-w-md space-y-1.5">
+          <div className="flex justify-between text-xs text-mindflow-muted tabular-nums">
             <span>{(timeLeft / 1000).toFixed(0)}s</span>
             <span>{trialsRef.current.length} {T.calibTrials}</span>
           </div>
-          <div className="w-full h-2 bg-mindflow-bg rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-mindflow-surface-alt rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-100 ${barColor}`}
               style={{ width: pct + '%' }} />
           </div>
@@ -342,23 +343,23 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         {/* The word — shown in ink color, user presses key for ink color */}
         <div className="relative">
           <div
-            className={`bg-mindflow-surface border-2 rounded-2xl px-20 py-14 transition-colors duration-150
-              ${lastFeedback === 'correct' ? 'border-mindflow-success shadow-lg shadow-mindflow-success/20' :
-                lastFeedback === 'wrong' ? 'border-mindflow-danger shadow-lg shadow-mindflow-danger/20' :
-                lastFeedback === 'lapse' ? 'border-mindflow-warning shadow-lg shadow-mindflow-warning/20' :
+            className={`bg-mindflow-surface border-2 rounded-xl px-20 py-14 transition-colors duration-150
+              ${lastFeedback === 'correct' ? 'border-mindflow-success' :
+                lastFeedback === 'wrong' ? 'border-mindflow-danger' :
+                lastFeedback === 'lapse' ? 'border-mindflow-warning' :
                 'border-mindflow-border'}`}
           >
             <p
-              className="text-7xl font-black tracking-tight text-center"
+              className="text-6xl font-medium tracking-tight text-center"
               style={{ color: currentWord.hex }}
             >
               {currentWord.name.toUpperCase()}
             </p>
           </div>
 
-          {/* Feedback flash */}
+          {/* Feedback badge */}
           {lastFeedback && (
-            <div className={`absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-xs font-bold
+            <div className={`absolute -top-2.5 -right-2.5 px-2 py-0.5 rounded-full text-xs font-medium
               ${lastFeedback === 'correct' ? 'bg-mindflow-success text-white' :
                 lastFeedback === 'wrong' ? 'bg-mindflow-danger text-white' :
                 'bg-mindflow-warning text-black'}`}>
@@ -371,11 +372,11 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         <div className="flex gap-3">
           {COLORS.map(c => (
             <div key={c.key} className="flex flex-col items-center gap-1">
-              <kbd className="px-3 py-2 rounded-lg bg-mindflow-bg border border-mindflow-border
-                               text-mindflow-heading font-bold text-lg min-w-[2.5rem] text-center">
+              <kbd className="px-3 py-1.5 rounded-md bg-mindflow-surface border border-mindflow-border
+                               text-mindflow-heading font-medium text-base min-w-[2.5rem] text-center shadow-sm">
                 {c.key.toUpperCase()}
               </kbd>
-              <span className="text-[10px] text-mindflow-muted">{c.name}</span>
+              <span className="text-xs text-mindflow-muted">{c.name}</span>
             </div>
           ))}
         </div>
@@ -394,9 +395,8 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     <div className="flex flex-col items-center gap-8 py-10 animate-fade-in">
       {/* Hero alpha score */}
       <div className="text-center">
-        <p className="text-xs text-mindflow-muted uppercase tracking-widest mb-2">{T.calibFocusScore}</p>
-        <p className={`text-7xl font-bold tracking-tight ${alphaColor(results.alphaScore)}`}
-          style={{ fontFamily: "'Playfair Display', serif" }}>
+        <p className="text-xs font-medium text-mindflow-muted mb-2">{T.calibFocusScore}</p>
+        <p className={`text-6xl font-normal tabular-nums ${alphaColor(results.alphaScore)}`}>
           {results.alphaScore.toFixed(2)}
         </p>
         <p className="text-sm text-mindflow-muted mt-2">
@@ -404,56 +404,55 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         </p>
       </div>
 
-      {/* Secondary metrics */}
-      <div className="grid grid-cols-3 gap-4 w-full max-w-md">
+      {/* Secondary metrics — stats strip with hairline dividers */}
+      <div className="grid grid-cols-3 gap-px w-full max-w-md bg-mindflow-border rounded-xl border border-mindflow-border overflow-hidden">
         {[
-          { val: (results.accuracy * 100).toFixed(0) + '%', label: T.calibAccuracy, color: '#7eb8a0' },
-          { val: results.avgResponseTimeMs + 'ms', label: T.calibSpeed, color: '#e0b870' },
-          { val: 'SD ' + results.rtVariabilityMs, label: T.calibConsistency, color: '#d4a574' },
+          { val: (results.accuracy * 100).toFixed(0) + '%', label: T.calibAccuracy },
+          { val: results.avgResponseTimeMs + 'ms', label: T.calibSpeed },
+          { val: 'SD ' + results.rtVariabilityMs, label: T.calibConsistency },
         ].map((m, i) => (
-          <div key={i} className="text-center py-3 px-2 rounded-lg"
-            style={{ borderLeft: '2px solid ' + m.color, backgroundColor: m.color + '0d' }}>
-            <p className="text-xl font-bold text-mindflow-heading">{m.val}</p>
-            <p className="text-[10px] text-mindflow-muted mt-0.5">{m.label}</p>
+          <div key={i} className="bg-mindflow-surface text-center py-3 px-2">
+            <p className="text-xl font-normal tabular-nums text-mindflow-heading">{m.val}</p>
+            <p className="text-xs text-mindflow-muted mt-0.5">{m.label}</p>
           </div>
         ))}
       </div>
 
       {/* Detailed breakdown */}
-      <div className="max-w-md w-full space-y-2 text-sm p-4 rounded-xl border border-mindflow-border/40">
-        <p className="font-medium text-mindflow-heading text-xs uppercase tracking-wide">{T.calibScoreBreakdown}</p>
+      <div className="max-w-md w-full space-y-2 text-sm p-4 rounded-xl border border-mindflow-border bg-mindflow-surface">
+        <p className="font-medium text-mindflow-heading text-xs">{T.calibScoreBreakdown}</p>
 
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibAccuracyLabel} ({((results.accuracy * 100).toFixed(0))}%)</span>
-            <span className="text-mindflow-heading">{(results.accuracy * 30).toFixed(1)} / 30</span>
+            <span className="text-mindflow-heading tabular-nums">{(results.accuracy * 30).toFixed(1)} / 30</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibSpeedLabel} ({results.avgResponseTimeMs}ms)</span>
-            <span className="text-mindflow-heading">{Math.max(0, (25 - (results.avgResponseTimeMs - 400) / 40)).toFixed(1)} / 25</span>
+            <span className="text-mindflow-heading tabular-nums">{Math.max(0, (25 - (results.avgResponseTimeMs - 400) / 40)).toFixed(1)} / 25</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibConsistencyLabel} (SD {results.rtVariabilityMs}ms)</span>
-            <span className="text-mindflow-heading">{Math.max(0, (25 - results.rtVariabilityMs / 16)).toFixed(1)} / 25</span>
+            <span className="text-mindflow-heading tabular-nums">{Math.max(0, (25 - results.rtVariabilityMs / 16)).toFixed(1)} / 25</span>
           </div>
           {results.lapses > 0 && (
             <div className="flex justify-between text-xs">
               <span className="text-mindflow-warning">{T.calibLapsesLabel} ({results.lapses} × &gt;1.5s)</span>
-              <span className="text-mindflow-warning">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
+              <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
             </div>
           )}
           {results.interferenceMs > 30 && (
             <div className="flex justify-between text-xs">
               <span className="text-mindflow-muted">{T.calibInterferenceLabel} ({results.interferenceMs}ms)</span>
-              <span className="text-mindflow-warning">−{Math.min(20, results.interferenceMs / 10).toFixed(0)}</span>
+              <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.interferenceMs / 10).toFixed(0)}</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Interpretation */}
-      <div className="max-w-md w-full text-sm text-mindflow-text p-4 rounded-r-lg border-l-2" style={{ borderLeftColor: '#d4a574', backgroundColor: 'rgba(212,165,116,0.04)' }}>
-        <p className="font-medium text-mindflow-heading mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>{T.calibWhatMeans}</p>
+      <div className="max-w-md w-full text-sm text-mindflow-text p-4 rounded-xl bg-mindflow-surface-alt">
+        <p className="font-medium text-mindflow-heading mb-2">{T.calibWhatMeans}</p>
         {results.alphaScore >= 1.2 && (
           <p>{T.calibInterpretExcellent}</p>
         )}
@@ -468,22 +467,22 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         )}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => { setResults(null); trialsRef.current = []; setPhase('intro'); }}
+          className="rounded-full border border-mindflow-border px-5 py-2 text-sm font-medium text-mindflow-text hover:bg-mindflow-surface-alt flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />{T.calibRetake}
+        </button>
         <button
           onClick={() => onComplete({
             stroopAccuracy: results.accuracy,
             avgResponseTimeMs: results.avgResponseTimeMs,
             alphaScore: results.alphaScore,
           })}
-          className="bg-mindflow-accent text-white px-8 py-3 rounded-xl text-lg font-semibold hover:opacity-90 shadow-lg shadow-mindflow-accent/25"
+          className="rounded-full bg-mindflow-accent text-mindflow-onaccent px-6 py-2 text-sm font-medium hover:bg-mindflow-accent-hover shadow-sm"
         >
           {T.calibSave}
-        </button>
-        <button
-          onClick={() => { setResults(null); trialsRef.current = []; setPhase('intro'); }}
-          className="border border-mindflow-border text-mindflow-text px-6 py-3 rounded-xl text-sm hover:bg-mindflow-surface transition-colors flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />{T.calibRetake}
         </button>
       </div>
     </div>
