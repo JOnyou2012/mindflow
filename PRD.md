@@ -94,6 +94,20 @@
 > unscheduled list instead of vanishing. Added regression tests 15.7 (time-including
 > deadline) and 15.8 (date-only deadline). All 1,998 tests pass, build 0 errors.
 >
+> **2026-08-08 (scheduler audit):** Comprehensive audit of the smart scheduler
+> algorithm across extreme and edge-case scenarios. Two real bugs found and fixed:
+> **1) Deadline-day blocked** — `deadlineAllowsDay()` normalized day dates to
+> end-of-day (23:59:59.999) and compared `<=` against deadlines (time 23:59:00),
+> so `23:59:59.999 <= 23:59:00` was always false — no task could be scheduled on
+> its deadline day. Fixed by normalizing both dates to midnight for a pure date
+> comparison. **2) Timezone-unsafe wsDate** — the default week-start-date used
+> `toISOString()` (UTC), shifting the entire week by one day in timezones ahead
+> of UTC (Asia, Australia). Fixed with local date parts matching the existing
+> `todayStr` pattern. Added `tests/scheduler-extreme.test.js` with ~1,400 tests
+> covering deadline boundaries, capacity edges, structural invariants, two-process
+> model math, 100-task bulk stress, null/NaN safety, timezone independence, and
+> determinism. All 2,553 tests pass, build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task
