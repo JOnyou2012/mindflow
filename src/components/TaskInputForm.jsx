@@ -301,7 +301,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
   // ================================================================
   if (view === 'added') {
     return (
-      <div className="flex flex-col items-center justify-center text-center animate-fade-in" style={{ minHeight: 'min(60vh, 560px)' }}>
+      <div className="flex flex-col items-center justify-center text-center animate-fade-in" style={{ minHeight: 'calc(100vh - 220px)' }}>
         <CheckCircle2 className="w-10 h-10 text-mindflow-success mb-4" />
         <p className="text-sm text-mindflow-muted">{T.flowAddedTaskHint}</p>
         <h2 className="text-2xl sm:text-3xl font-normal text-mindflow-heading mt-2">{T.flowAddAnother}</h2>

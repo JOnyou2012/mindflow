@@ -72,9 +72,9 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
   }, [index]);
 
   return (
-    <div className="flex flex-col" style={{ minHeight: 'min(60vh, 560px)' }}>
+    <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
       {/* Progress + back */}
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-6">
         <button
           onClick={goBack}
           disabled={index === 0}

@@ -112,8 +112,8 @@ body {
   from { opacity: 0; transform: translateX(-36px); }
   to { opacity: 1; transform: translateX(0); }
 }
-.animate-stage-in-right { animation: stage-in-right 0.22s cubic-bezier(0.2, 0.9, 0.25, 1); }
-.animate-stage-in-left { animation: stage-in-left 0.22s cubic-bezier(0.2, 0.9, 0.25, 1); }
+.animate-stage-in-right { animation: stage-in-right 0.18s cubic-bezier(0.1, 0.85, 0.2, 1); }
+.animate-stage-in-left { animation: stage-in-left 0.18s cubic-bezier(0.1, 0.85, 0.2, 1); }
 
 /* ── Transitions ───────────────────────────────────────────────────── */
 
