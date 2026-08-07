@@ -458,7 +458,9 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // Tasks due far in the future get penalized for being scheduled too early.
   let deadlineWeekScore = 0;
   if (task.deadline && weekStartDate) {
-    const dl = new Date(task.deadline + 'T00:00:00');
+    // Deadline may already include time (e.g. '2026-08-15T23:59')
+    const dlStr = task.deadline.includes('T') ? task.deadline : task.deadline + 'T23:59';
+    const dl = new Date(dlStr);
     if (!isNaN(dl.getTime())) {
       const slotDate = new Date(weekStartDate + 'T00:00:00');
       slotDate.setDate(slotDate.getDate() + DAY_INDEX[slot.day]);

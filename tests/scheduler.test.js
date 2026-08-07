@@ -150,6 +150,20 @@ assert(allSessionHours.length === 5, '15.3: All 5 tasks scheduled');
 	const monMorningCount = monOnlyResult.days.Mon.sessions.filter(s => (s.startTick / 6) < 14).length;
 	assert(monMorningCount > 0, '15.6: Heavily-loaded Monday uses morning slots');
 
+// v7: Deadline with time component (as produced by the task form) must
+// not break date parsing. The form stores deadlines as 'YYYY-MM-DDTHH:MM'.
+// Appending 'T00:00:00' blindly creates '...THH:MMT00:00:00' → Invalid Date.
+const timedDeadlineTask = makeTask({ title: 'Timed Deadline', type: 'academic', durationMins: 60, difficulty: 3, deadline: '2026-08-15T23:59' });
+const timedResult = generateWeeklySchedule([], [timedDeadlineTask], 1.0, { chronotype: 'morning' });
+const timedScheduled = Object.values(timedResult.days).some(d => d.sessions.length > 0);
+assert(timedScheduled, '15.7: Task with time-including deadline is scheduled (not lost in deferred)');
+
+// Date-only deadline should also work (backward compatibility)
+const dateOnlyTask = makeTask({ title: 'Date Deadline', type: 'academic', durationMins: 60, difficulty: 3, deadline: '2026-08-15' });
+const dateResult = generateWeeklySchedule([], [dateOnlyTask], 1.0, { chronotype: 'morning' });
+const dateScheduled = Object.values(dateResult.days).some(d => d.sessions.length > 0);
+assert(dateScheduled, '15.8: Task with date-only deadline is scheduled');
+
 // ---------------------------------------------------------------------------
 // Step 16 — sortTasks ordering (tested via schedule: priority > deadline > type > difficulty)
 // ---------------------------------------------------------------------------

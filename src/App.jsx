@@ -91,7 +91,9 @@ export default function App() {
           weekEndDate.setDate(weekEndDate.getDate() + 6);
           const eligible = remaining.filter(t => {
             if (!t.deadline) return true;
-            const dl = new Date(t.deadline + 'T00:00:00');
+            // Deadline may already include time (e.g. '2026-08-15T23:59')
+            const dlStr = t.deadline.includes('T') ? t.deadline : t.deadline + 'T23:59';
+            const dl = new Date(dlStr);
             return !isNaN(dl.getTime()) && dl <= new Date(weekEndDate.getTime() + 10 * 86400000);
           });
           const deferred = remaining.filter(t => !eligible.includes(t));
