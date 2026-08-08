@@ -157,7 +157,13 @@
 > and the manual `MDFLOW_FRONTEND_ORIGIN` setup requirement.
 > **6) backend __main__ comment clarified** — added note that Render's
 > startCommand overrides the local `127.0.0.1` binding.
-> All ~1,929 tests pass, build 0 errors (320 KB JS + 47 KB CSS, gzipped 97+9 KB).
+> **7) Stroop interference display mismatch** — the scoring formula was
+> updated to `interferenceMs / 12, max 15` (v5) but the results-display
+> formula still used the old `interferenceMs / 10, max 20`. Users saw a
+> different penalty value than what was actually applied to their score.
+> Also lowered the display threshold from 30ms to 0ms so all applied
+> penalties are visible. All ~1,929 tests pass, build 0 errors
+> (320 KB JS + 47 KB CSS, gzipped 97+9 KB).
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias

@@ -441,10 +441,10 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
               <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
             </div>
           )}
-          {results.interferenceMs > 30 && (
+          {results.interferenceMs > 0 && (
             <div className="flex justify-between text-xs">
               <span className="text-mindflow-muted">{T.calibInterferenceLabel} ({results.interferenceMs}ms)</span>
-              <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.interferenceMs / 10).toFixed(0)}</span>
+              <span className="text-mindflow-warning tabular-nums">−{Math.min(15, results.interferenceMs / 12).toFixed(0)}</span>
             </div>
           )}
         </div>
