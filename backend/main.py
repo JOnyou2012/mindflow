@@ -20,9 +20,20 @@ from typing import Optional
 app = FastAPI(title="MindFlow API", version="0.2.0")
 
 # CORS: local dev (Vite) + deployed production frontend.
-# On Netlify the site is at https://<project>.netlify.app; on Render at
-# https://<project>.onrender.com.  Set MDFLOW_FRONTEND_ORIGIN to the
-# deployed frontend URL to allow it without editing this file.
+#
+# The frontend runs client-side by default (no API calls), but if you
+# import api.js and call these endpoints, the browser enforces CORS.
+# Origins allowed:
+#   1. localhost:5173 / 127.0.0.1:5173 — Vite dev server
+#   2. MDFLOW_FRONTEND_ORIGIN env var — your deployed frontend URL
+#      (e.g. https://myapp.netlify.app).  Set this in the Render
+#      dashboard (render.yaml declares it with sync:false).
+#   3. RENDER_EXTERNAL_URL — auto-set by Render; covers the case
+#      where both frontend and backend are on the same Render project.
+#
+# ⚠️  MDFLOW_FRONTEND_ORIGIN *must* be set manually when the frontend
+# is on Netlify/Vercel/etc. — there is no way for the backend to
+# auto-discover a separately-deployed frontend's URL.
 import os as _os
 _cors_origins = [
     "http://localhost:5173",
@@ -31,8 +42,6 @@ _cors_origins = [
 _frontend_env = _os.environ.get("MDFLOW_FRONTEND_ORIGIN", "")
 if _frontend_env:
     _cors_origins.append(_frontend_env)
-# Also add the Render default domain pattern (.onrender.com) and
-# Netlify default (.netlify.app) if no explicit env var is set.
 _render_url = _os.environ.get("RENDER_EXTERNAL_URL", "")
 if _render_url:
     _cors_origins.append(_render_url)

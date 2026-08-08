@@ -48,7 +48,10 @@ const API_ORIGIN =
 export async function api(path, body = undefined) {
   const url = API_ORIGIN + path;
   const init = {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
   };
   if (body !== undefined) {
     init.method = 'POST';

@@ -135,22 +135,29 @@
 > deploy. All 2,553 tests pass, build 0 errors, backend imports OK.
 >
 > **2026-08-09 (deployment follow-up):** Second-pass audit of the 7 deployment-bug
-> fixes from 2026-08-08. **4 refinements applied:**
+> fixes from 2026-08-08. **6 refinements across 2 commits:**
 > **1) api.js documented as optional infrastructure** — the module was created but
 > never imported; the app runs fully client-side (JS markov engine + scheduler in
 > the browser). Added comprehensive JSDoc explaining api.js is ready-to-use
 > infrastructure for offloading simulation to the Python backend when needed.
+> Also added `Accept: application/json` header for proper content negotiation.
 > **2) netlify.toml VITE_API_ORIGIN clarified** — comment now explains the env var
 > is for api.js (optional backend integration), not a required setting.
-> **3) OG image + Twitter Card tags** — `index.html` was missing `og:image` and
-> Twitter Card meta tags; social previews would show auto-generated snippets.
-> Added `og:image` (pointing to favicon.svg), `twitter:card`, `twitter:title`,
-> and `twitter:description`.
+> **3) Twitter Card tags + og:image evaluated** — added `twitter:card`,
+> `twitter:title`, `twitter:description` for Twitter sharing. Evaluated `og:image`
+> but removed it: most social platforms (Facebook, LinkedIn) don't support SVG
+> images; a broken image is worse than a text-only card.
 > **4) console.error production-safe** — three `console.error()` calls in
 > `App.jsx` and `scheduler.js` leaked stack traces in production builds. Wrapped
 > with `import.meta.env.DEV` guards so Vite strips them at build time. Verified:
-> 0 of our console.error calls remain in the production bundle (the 3 that remain
-> are React internal error handlers). All ~1,929 tests pass, build 0 errors.
+> 0 of our console.error calls remain in the production bundle.
+> **5) CORS comment corrected** — the original comment claimed auto-detection of
+> `.netlify.app` domains but the code only added `RENDER_EXTERNAL_URL` (the
+> backend's own URL). Fixed comment to accurately document the 3 allowed origins
+> and the manual `MDFLOW_FRONTEND_ORIGIN` setup requirement.
+> **6) backend __main__ comment clarified** — added note that Render's
+> startCommand overrides the local `127.0.0.1` binding.
+> All ~1,929 tests pass, build 0 errors (320 KB JS + 47 KB CSS, gzipped 97+9 KB).
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
