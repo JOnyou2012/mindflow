@@ -1340,7 +1340,7 @@ export default function generateWeeklySchedule(
         }
       }
     } catch (err) {
-      console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
+      if (import.meta.env.DEV) console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
       unscheduled.push(task);
     }
   }
@@ -1494,7 +1494,7 @@ export default function generateWeeklySchedule(
           }
         }
       } catch (err) {
-        console.error(`Scheduler refinement: failed for "${task.title}"`, err);
+        if (import.meta.env.DEV) console.error(`Scheduler refinement: failed for "${task.title}"`, err);
         stillUnschedule.push(task);
       }
     }

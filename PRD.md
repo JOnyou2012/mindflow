@@ -134,6 +134,24 @@
 > (`public/_redirects`, `netlify.toml`) + `render.yaml` for one-click backend
 > deploy. All 2,553 tests pass, build 0 errors, backend imports OK.
 >
+> **2026-08-09 (deployment follow-up):** Second-pass audit of the 7 deployment-bug
+> fixes from 2026-08-08. **4 refinements applied:**
+> **1) api.js documented as optional infrastructure** — the module was created but
+> never imported; the app runs fully client-side (JS markov engine + scheduler in
+> the browser). Added comprehensive JSDoc explaining api.js is ready-to-use
+> infrastructure for offloading simulation to the Python backend when needed.
+> **2) netlify.toml VITE_API_ORIGIN clarified** — comment now explains the env var
+> is for api.js (optional backend integration), not a required setting.
+> **3) OG image + Twitter Card tags** — `index.html` was missing `og:image` and
+> Twitter Card meta tags; social previews would show auto-generated snippets.
+> Added `og:image` (pointing to favicon.svg), `twitter:card`, `twitter:title`,
+> and `twitter:description`.
+> **4) console.error production-safe** — three `console.error()` calls in
+> `App.jsx` and `scheduler.js` leaked stack traces in production builds. Wrapped
+> with `import.meta.env.DEV` guards so Vite strips them at build time. Verified:
+> 0 of our console.error calls remain in the production bundle (the 3 that remain
+> are React internal error handlers). All ~1,929 tests pass, build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task

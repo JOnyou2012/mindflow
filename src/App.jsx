@@ -118,7 +118,7 @@ export default function App() {
         setIsCalculating(false);
         if (onDone) onDone();
       } catch (err) {
-        console.error(err);
+        if (import.meta.env.DEV) console.error('Schedule generation failed:', err);
         setError('Failed to generate schedule.');
         setIsCalculating(false);
       }

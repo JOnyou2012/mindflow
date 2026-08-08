@@ -345,4 +345,7 @@ def recovery_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
+    # Bind to 0.0.0.0 in production (Render sets PORT), 127.0.0.1 locally.
+    # Render's startCommand overrides this entirely — this is only for
+    # `python main.py` during local development.
     uvicorn.run(app, host="127.0.0.1", port=8000)
