@@ -108,6 +108,32 @@
 > model math, 100-task bulk stress, null/NaN safety, timezone independence, and
 > determinism. All 2,553 tests pass, build 0 errors.
 >
+> **2026-08-08 (deployment audit):** Pre-launch audit of every file for bugs that
+> only appear after deployment. **7 bugs found and fixed:**
+> **1) CORS locked to localhost** — backend `allow_origins` only listed
+> `localhost:5173`; deployed frontend on Netlify/Vercel would get CORS-blocked on
+> every API call. Added `MDFLOW_FRONTEND_ORIGIN` env var + `RENDER_EXTERNAL_URL`
+> auto-detection (`backend/main.py`).
+> **2) API proxy missing in production** — Vite's dev proxy (`/api` → `:8000`) is
+> stripped at `vite build`; deployed frontend would 404 on every `/api/*` call.
+> Created `src/utils/api.js` with `VITE_API_ORIGIN` env var; auto-selects
+> empty-string (Vite proxy) in dev, Render URL in production.
+> **3 & 4) formatDeadline / isPastDeadline T00:00:00 double-append** — same bug
+> pattern already fixed in the scheduler pipeline (commit `0bc2e12`): time-including
+> deadlines like `2026-08-15T23:59` became `2026-08-15T23:59T00:00:00` → Invalid
+> Date. Missed in the earlier fix because these two functions live in
+> `TaskInputForm.jsx`, not the scheduler. Fixed with `includes('T')` guard.
+> **5) toISOString() in deadline fallback** — `TaskInputForm.jsx` used
+> `new Date().toISOString()` as default date for the deadline picker; in timezones
+> ahead of UTC shows yesterday's date. Replaced with local date parts.
+> **6) No meta/OG tags** — `index.html` had no `<meta name="description">` or Open
+> Graph tags; Google and social previews would show auto-generated junk. Added
+> description, theme-color, og:title, og:description, og:type.
+> **7) No SPA redirect config** — without `_redirects` or `netlify.toml`,
+> refreshing any page or deep-linking shows a Netlify 404. Created both files
+> (`public/_redirects`, `netlify.toml`) + `render.yaml` for one-click backend
+> deploy. All 2,553 tests pass, build 0 errors, backend imports OK.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task
