@@ -135,7 +135,7 @@
 > deploy. All 2,553 tests pass, build 0 errors, backend imports OK.
 >
 > **2026-08-09 (deployment follow-up):** Second-pass audit of the 7 deployment-bug
-> fixes from 2026-08-08. **6 refinements across 2 commits:**
+> fixes from 2026-08-08. **7 refinements across 3 commits:**
 > **1) api.js documented as optional infrastructure** — the module was created but
 > never imported; the app runs fully client-side (JS markov engine + scheduler in
 > the browser). Added comprehensive JSDoc explaining api.js is ready-to-use
