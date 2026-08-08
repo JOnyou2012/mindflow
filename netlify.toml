@@ -1,0 +1,10 @@
+# Netlify build & deploy configuration
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# The _redirects file in public/ handles SPA routing.
+# Set VITE_API_ORIGIN here so the deployed frontend knows
+# where the Render backend lives.
+[build.environment]
+  VITE_API_ORIGIN = "https://mindflow-api.onrender.com"

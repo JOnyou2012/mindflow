@@ -1,0 +1,3 @@
+# Netlify SPA redirect — all routes serve index.html so React Router
+# (or direct URL visits) don't get a 404.
+/*    /index.html   200

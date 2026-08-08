@@ -17,7 +17,10 @@ function formatMinutes(mins) {
 function formatDeadline(iso) {
   if (!iso) return null;
   try {
-    const d = new Date(iso + 'T00:00:00');
+    // Deadline may already include time (e.g. '2026-08-15T23:59') —
+    // don't blindly append T00:00:00 which produces an invalid date.
+    const dlStr = iso.includes('T') ? iso : iso + 'T00:00:00';
+    const d = new Date(dlStr);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return iso; }
@@ -27,7 +30,8 @@ function isPastDeadline(iso) {
   if (!iso) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dl = new Date(iso + 'T00:00:00');
+  const dlStr = iso.includes('T') ? iso : iso + 'T00:00:00';
+  const dl = new Date(dlStr);
   return !isNaN(dl.getTime()) && dl < today;
 }
 
@@ -224,7 +228,14 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
               type="time"
               value={timePart}
               onChange={e => {
-                const d = datePart || new Date().toISOString().split('T')[0];
+                // Use local date parts, NOT toISOString() which is UTC —
+                // in timezones ahead of UTC it returns yesterday's date.
+                const now = new Date();
+                const d = datePart || (
+                  now.getFullYear() + '-' +
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(now.getDate()).padStart(2, '0')
+                );
                 set(d + 'T' + e.target.value);
               }}
               className="w-32 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2.5 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none"

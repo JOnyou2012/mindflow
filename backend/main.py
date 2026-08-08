@@ -19,9 +19,27 @@ from typing import Optional
 
 app = FastAPI(title="MindFlow API", version="0.2.0")
 
+# CORS: local dev (Vite) + deployed production frontend.
+# On Netlify the site is at https://<project>.netlify.app; on Render at
+# https://<project>.onrender.com.  Set MDFLOW_FRONTEND_ORIGIN to the
+# deployed frontend URL to allow it without editing this file.
+import os as _os
+_cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_frontend_env = _os.environ.get("MDFLOW_FRONTEND_ORIGIN", "")
+if _frontend_env:
+    _cors_origins.append(_frontend_env)
+# Also add the Render default domain pattern (.onrender.com) and
+# Netlify default (.netlify.app) if no explicit env var is set.
+_render_url = _os.environ.get("RENDER_EXTERNAL_URL", "")
+if _render_url:
+    _cors_origins.append(_render_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
