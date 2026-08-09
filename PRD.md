@@ -179,7 +179,7 @@
 > On Sundays with 2 simple tasks, the user now sees next week's full schedule
 > instead of "2 tasks could not fit." All ~2,000 tests pass, build 0 errors.
 >
-> **2026-08-09 (defensive hardening):** Seven additional bugs found and fixed:
+> **2026-08-09 (defensive hardening):** Eight bugs found and fixed:
 > **1) Overdue tasks permanently dropped** — `deadlineAllowsDay()` returned
 > false for every day when the deadline was in the past, so overdue tasks were
 > never scheduled. Now treats past-deadline tasks as urgent (allowed on any
@@ -200,6 +200,13 @@
 > with English fallbacks.
 > **7) localStorage save failures now warn** — save functions return false and
 > log warnings in dev when QuotaExceededError occurs (previously silent).
+> **8) Far-future deadlines permanently deferred** — the cascade eligibility
+> filter used `deadline <= weekEnd + 10 days`, permanently excluding tasks
+> due more than 10 days beyond any generated week. Tasks due in December
+> were ineligible for all 8 cascade weeks and showed as "could not fit."
+> Changed to allow any task whose deadline hasn't already passed before
+> the week starts; far-future tasks are eligible but deprioritized by the
+> scheduler's deadline-week scoring penalty.
 > All ~2,000 tests pass, build 0 errors.
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
