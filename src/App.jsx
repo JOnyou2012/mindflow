@@ -99,13 +99,19 @@ export default function App() {
           weekEndDate.setDate(weekEndDate.getDate() + 6);
           const eligible = remaining.filter(t => {
             if (!t.deadline) return true;
-            // Deadline may already include time (e.g. '2026-08-15T23:59').
-            // Also strip trailing 'T' from corrupted data (e.g. '2026-08-15T').
+            // Normalize deadline (handles date-only, datetime, trailing-T).
             let dlStr = t.deadline;
             if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
             if (!dlStr.includes('T')) dlStr += 'T23:59';
             const dl = new Date(dlStr);
-            return !isNaN(dl.getTime()) && dl <= new Date(weekEndDate.getTime() + 10 * 86400000);
+            if (isNaN(dl.getTime())) return true;
+            // Task is eligible if its deadline hasn't already passed before
+            // this week starts.  Overdue tasks are always eligible (schedule
+            // ASAP).  Far-future tasks are eligible but score lower via the
+            // scheduler's deadline-week penalty — they naturally drift to
+            // later weeks without being forced there by the filter.
+            const weekStartDate = new Date(ws + 'T00:00:00');
+            return dl >= weekStartDate || dl < new Date();
           });
           const deferred = remaining.filter(t => !eligible.includes(t));
           const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
