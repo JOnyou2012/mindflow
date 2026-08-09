@@ -59,7 +59,13 @@ export default function App() {
   // Leaving a step resets any active sub-flow
   useEffect(() => { setSubView('overview'); }, [step]);
 
+  // Clean up the generate timer on unmount
+  useEffect(() => () => {
+    if (generateTimerRef.current) clearTimeout(generateTimerRef.current);
+  }, []);
+
   const dataVersionRef = useRef(0);
+  const generateTimerRef = useRef(null);
   const isStale = Object.keys(weekResults).length > 0 && dataVersionRef.current > 0;
 
   const setCalibration = (cal) => { setCalibrationState(cal); saveCalibration(cal); };
@@ -76,7 +82,9 @@ export default function App() {
     }
     if (tasks.length === 0) { setError(T.noTasks); return; }
     setIsCalculating(true);
-    setTimeout(() => {
+    if (generateTimerRef.current) clearTimeout(generateTimerRef.current);
+    generateTimerRef.current = setTimeout(() => {
+      generateTimerRef.current = null;
       try {
         const results = {};
         let remaining = [...tasks];
@@ -91,8 +99,11 @@ export default function App() {
           weekEndDate.setDate(weekEndDate.getDate() + 6);
           const eligible = remaining.filter(t => {
             if (!t.deadline) return true;
-            // Deadline may already include time (e.g. '2026-08-15T23:59')
-            const dlStr = t.deadline.includes('T') ? t.deadline : t.deadline + 'T23:59';
+            // Deadline may already include time (e.g. '2026-08-15T23:59').
+            // Also strip trailing 'T' from corrupted data (e.g. '2026-08-15T').
+            let dlStr = t.deadline;
+            if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
+            if (!dlStr.includes('T')) dlStr += 'T23:59';
             const dl = new Date(dlStr);
             return !isNaN(dl.getTime()) && dl <= new Date(weekEndDate.getTime() + 10 * 86400000);
           });
@@ -119,7 +130,7 @@ export default function App() {
         if (onDone) onDone();
       } catch (err) {
         if (import.meta.env.DEV) console.error('Schedule generation failed:', err);
-        setError('Failed to generate schedule.');
+        setError(T.scheduleGenFailed || 'Failed to generate schedule.');
         setIsCalculating(false);
       }
     }, 100);

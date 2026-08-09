@@ -25,6 +25,7 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
   const answersRef = useRef(initial); // always-current mirror (auto stages set+advance in one click)
 
   const stage = stages[index];
+  if (!stage) return null; // guard against empty/malformed stages array
   const value = answers[stage.key];
 
   const set = useCallback((v) => {

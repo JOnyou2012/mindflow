@@ -101,7 +101,7 @@ export default function WeeklyCalendar({ blocks = [], onChange, weekStart = null
           type="text"
           value={value || ''}
           onChange={e => set(e.target.value)}
-          placeholder="e.g. Physics 101, Work shift, Dinner"
+          placeholder={T.calEventPlaceholder || 'e.g. Physics 101, Work shift, Dinner'}
           className="w-full bg-transparent border-b-2 border-mindflow-border focus:border-mindflow-accent focus:outline-none text-xl text-mindflow-heading placeholder-mindflow-muted py-2 text-center"
         />
       ),

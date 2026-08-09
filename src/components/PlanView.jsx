@@ -54,7 +54,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
       );
     }
     return weeks;
-  }, []);
+  }, [weekResults]);
 
   // Today's week index (for the Today button)
   const todayIdx = useMemo(() => {
@@ -68,7 +68,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
       String(mon.getDate()).padStart(2, '0');
     const idx = allWeeks.indexOf(todayWs);
     return idx >= 0 ? idx : 2; // fallback to "today" position
-  }, [allWeeks]);
+  }, [allWeeks, weekResults]);
 
   // Default to the first week that actually has scheduled sessions.
   // If every week is empty (all tasks unscheduled), fall back to the

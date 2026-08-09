@@ -179,6 +179,29 @@
 > On Sundays with 2 simple tasks, the user now sees next week's full schedule
 > instead of "2 tasks could not fit." All ~2,000 tests pass, build 0 errors.
 >
+> **2026-08-09 (defensive hardening):** Seven additional bugs found and fixed:
+> **1) Overdue tasks permanently dropped** — `deadlineAllowsDay()` returned
+> false for every day when the deadline was in the past, so overdue tasks were
+> never scheduled. Now treats past-deadline tasks as urgent (allowed on any
+> remaining day).
+> **2) Trailing-T deadline corruption** — deadline strings ending in `T` (e.g.
+> `2026-08-15T` from corrupted localStorage) produced Invalid Date across 5+
+> parsing locations. Added `normalizeDeadline()` helper in scheduler.js and
+> trailing-T guards in TaskInputForm.jsx + App.jsx eligibility check.
+> **3) PlanView stale "today"** — `allWeeks` and `todayIdx` had empty useMemo
+> deps, so the Today highlight stuck after midnight. Added `weekResults` to
+> dependency arrays.
+> **4) QuestionFlow empty-stages guard** — missing null-check on `stages[index]`
+> would crash if stages array was ever empty. Added defensive null return.
+> **5) setTimeout cleanup** — App.jsx generate timer wasn't captured or cleared
+> on unmount. Added ref tracking + cleanup effect.
+> **6) Hardcoded English strings** — 3 locations bypassed i18n: schedule error
+> message, task delete confirmation, calendar placeholder. Routed through T.*
+> with English fallbacks.
+> **7) localStorage save failures now warn** — save functions return false and
+> log warnings in dev when QuotaExceededError occurs (previously silent).
+> All ~2,000 tests pass, build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task

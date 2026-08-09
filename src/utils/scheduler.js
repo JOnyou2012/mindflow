@@ -234,6 +234,21 @@ function effectiveAlpha(alpha, strain) {
 // Task Sorting
 // ===========================================================================
 
+/**
+ * Normalize a deadline string to a parseable ISO format.
+ * Handles: '2026-08-15' → '2026-08-15T23:59'
+ *          '2026-08-15T14:30' → '2026-08-15T14:30'
+ *          '2026-08-15T' → '2026-08-15T23:59' (corrupted trailing-T)
+ *          null/undefined → null
+ */
+function normalizeDeadline(deadline) {
+  if (!deadline) return null;
+  let s = deadline;
+  if (s.endsWith('T')) s = s.slice(0, -1);
+  if (!s.includes('T')) s += 'T23:59';
+  return s;
+}
+
 export function sortTasks(tasks) {
   return [...tasks].sort((a, b) => {
     const pa = PRIORITY_ORDER[a.priority || 'medium'];
@@ -244,7 +259,7 @@ export function sortTasks(tasks) {
     if (!a.deadline && b.deadline) return 1;
 
     if (a.deadline && b.deadline) {
-      const da = new Date(a.deadline), db = new Date(b.deadline);
+      const da = new Date(normalizeDeadline(a.deadline)), db = new Date(normalizeDeadline(b.deadline));
       if (isNaN(da.getTime())) return 1;
       if (isNaN(db.getTime())) return -1;
       if (da < db) return -1;
@@ -349,7 +364,7 @@ function deadlineAllowsDay(task, day, weekStartDate) {
   if (!task.deadline) return true;
 
   // Parse deadline — may include time (e.g. '2026-08-15T15:00')
-  const dlStr = task.deadline.includes('T') ? task.deadline : task.deadline + 'T23:59';
+  const dlStr = normalizeDeadline(task.deadline);
   const deadlineDt = new Date(dlStr);
   if (isNaN(deadlineDt.getTime())) return true;
 
@@ -363,6 +378,9 @@ function deadlineAllowsDay(task, day, weekStartDate) {
   deadlineDt.setHours(0, 0, 0, 0);
 
   // Task can be on this day if the day is before or on the deadline date.
+  // Overdue tasks (deadline already past) are treated as urgent —
+  // allow them on any remaining day rather than dropping them.
+  if (deadlineDt < dayDate && deadlineDt < new Date()) return true;
   return dayDate <= deadlineDt;
 }
 
@@ -461,7 +479,7 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   let deadlineWeekScore = 0;
   if (task.deadline && weekStartDate) {
     // Deadline may already include time (e.g. '2026-08-15T23:59')
-    const dlStr = task.deadline.includes('T') ? task.deadline : task.deadline + 'T23:59';
+    const dlStr = normalizeDeadline(task.deadline);
     const dl = new Date(dlStr);
     if (!isNaN(dl.getTime())) {
       const slotDate = new Date(weekStartDate + 'T00:00:00');

@@ -19,7 +19,11 @@ function formatDeadline(iso) {
   try {
     // Deadline may already include time (e.g. '2026-08-15T23:59') —
     // don't blindly append T00:00:00 which produces an invalid date.
-    const dlStr = iso.includes('T') ? iso : iso + 'T00:00:00';
+    // Also strip trailing 'T' (e.g. '2026-08-15T') — an edge case
+    // that can arise from corrupted localStorage.
+    let dlStr = iso;
+    if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
+    if (!dlStr.includes('T')) dlStr += 'T00:00:00';
     const d = new Date(dlStr);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -30,7 +34,9 @@ function isPastDeadline(iso) {
   if (!iso) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dlStr = iso.includes('T') ? iso : iso + 'T00:00:00';
+  let dlStr = iso;
+  if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
+  if (!dlStr.includes('T')) dlStr += 'T00:00:00';
   const dl = new Date(dlStr);
   return !isNaN(dl.getTime()) && dl < today;
 }
@@ -278,7 +284,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
 
   const handleClearAll = () => {
     if (tasks.length === 0) return;
-    if (window.confirm(`Delete all ${tasks.length} task${tasks.length !== 1 ? 's' : ''}? This cannot be undone.`)) {
+    if (window.confirm(T.taskConfirmDeleteAll || `Delete all ${tasks.length} task${tasks.length !== 1 ? 's' : ''}? This cannot be undone.`)) {
       onChange([]);
     }
   };

@@ -6,28 +6,28 @@ const KEYS = {
 };
 
 export function saveCalibration(cal) {
-  try { if (cal) localStorage.setItem(KEYS.CALIBRATION, JSON.stringify(cal)); } catch {}
+  try { if (cal) localStorage.setItem(KEYS.CALIBRATION, JSON.stringify(cal)); } catch (e) { if (import.meta.env.DEV) console.warn('localStorage full, calibration not saved:', e); return false; } return true;
 }
 export function loadCalibration() {
   try { const d = localStorage.getItem(KEYS.CALIBRATION); return d ? JSON.parse(d) : null; } catch { return null; }
 }
 
 export function saveCalendar(blocks) {
-  try { localStorage.setItem(KEYS.CALENDAR, JSON.stringify(blocks)); } catch {}
+  try { localStorage.setItem(KEYS.CALENDAR, JSON.stringify(blocks)); } catch (e) { if (import.meta.env.DEV) console.warn('localStorage full, calendar not saved:', e); return false; } return true;
 }
 export function loadCalendar() {
   try { const d = localStorage.getItem(KEYS.CALENDAR); if (!d) return []; const p = JSON.parse(d); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 
 export function saveTasks(tasks) {
-  try { localStorage.setItem(KEYS.TASKS, JSON.stringify(tasks)); } catch {}
+  try { localStorage.setItem(KEYS.TASKS, JSON.stringify(tasks)); } catch (e) { if (import.meta.env.DEV) console.warn('localStorage full, tasks not saved:', e); return false; } return true;
 }
 export function loadTasks() {
   try { const d = localStorage.getItem(KEYS.TASKS); if (!d) return []; const p = JSON.parse(d); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 
 export function saveSettings(settings) {
-  try { localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings)); } catch {}
+  try { localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings)); } catch (e) { if (import.meta.env.DEV) console.warn('localStorage full, settings not saved:', e); return false; } return true;
 }
 export function loadSettings() {
   try {
