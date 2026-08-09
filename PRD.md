@@ -171,6 +171,14 @@
 > (`/assets/*` + `*.svg`), and production security headers (X-Content-Type-Options,
 > X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy). Build 0 errors.
 >
+> **2026-08-09 (PlanView default-week fix):** When the scheduler runs late in the
+> week (Thursday–Sunday), most days of the current week are already past. Tasks
+> correctly cascade to the next full week, but PlanView was showing the first
+> week with *any* result — even one where all tasks were unscheduled. Fixed
+> `defaultIdx` to find the first week that actually has scheduled sessions.
+> On Sundays with 2 simple tasks, the user now sees next week's full schedule
+> instead of "2 tasks could not fit." All ~2,000 tests pass, build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task

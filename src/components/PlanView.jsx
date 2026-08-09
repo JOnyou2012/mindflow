@@ -70,8 +70,16 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
     return idx >= 0 ? idx : 2; // fallback to "today" position
   }, [allWeeks]);
 
-  // Default to the first week that has results, otherwise today's week
+  // Default to the first week that actually has scheduled sessions.
+  // If every week is empty (all tasks unscheduled), fall back to the
+  // first week with any result, then to today's week.
   const defaultIdx = useMemo(() => {
+    const firstWithSessions = allWeeks.findIndex(ws => {
+      const r = weekResults[ws];
+      if (!r?.days) return false;
+      return Object.values(r.days).some(d => d.sessions?.length > 0);
+    });
+    if (firstWithSessions >= 0) return firstWithSessions;
     const firstWithResults = allWeeks.findIndex(ws => weekResults[ws]);
     return firstWithResults >= 0 ? firstWithResults : todayIdx;
   }, [allWeeks, weekResults, todayIdx]);
