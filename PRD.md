@@ -54,6 +54,9 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): 0/9 = 0%**
 >
+> **⚠️ 2026-08-09 audit: 35+ bugs documented, 0 fixed.** See audit log below
+> (Tiers 1–5). Tier 1 (7 crash/data-loss bugs) must be fixed before deployment.
+>
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
 > slide transitions (0.22s), auto-advance on single-choice answers, Enter to
@@ -208,6 +211,325 @@
 > the week starts; far-future tasks are eligible but deprioritized by the
 > scheduler's deadline-week scoring penalty.
 > All ~2,000 tests pass, build 0 errors.
+>
+> **2026-08-09 (pre-deployment production audit):** Comprehensive adversarial audit
+> of all 18 source files, config, build output, and test suite. 35+ bugs found,
+> organized below by severity tier. **None have been fixed yet — this entry is
+> the audit record.**
+>
+> ---
+>
+> ### 🔴 TIER 1 — Crashes & Data Loss (7 bugs)
+>
+> **C1 — `deadlineToDay()` T00:00:00 double-append** (`scheduler.js:345`):
+> Same bug already fixed in 3 other locations but MISSED here. The function does
+> `new Date(isoDate + 'T00:00:00')`. When `isoDate` already contains a time
+> component (e.g. `'2026-08-15T23:59'`), the concatenation produces
+> `'2026-08-15T23:59T00:00:00'` → Invalid Date → returns `null` silently.
+> Called at 3 sites: deadline pressure alpha boost (line 1151), day-relative
+> boost refinement (line 1220), deadline buffer warnings (line 844). All three
+> are silently disabled for any task with a time-including deadline.
+> **Fix:** Replace `isoDate + 'T00:00:00'` with `normalizeDeadline(isoDate)`
+> (already defined at line 244 of the same file).
+>
+> **C2 — Session double-booking** (`scheduler.js:1085-1325`):
+> The scheduler creates multiple candidate start times from each free window
+> (one per hour). Each candidate is a SEPARATE slot object with independent
+> `usedTicks`. When Task A is placed in the 8am slot, only that slot object
+> is mutated. The 9am, 10am, etc. slots remain untouched. Task B can then
+> be placed at 9am even though Task A occupies 8:00–9:30 — there is no
+> overlap check across candidate slots derived from the same window.
+> **Fix:** Track `dayOccupiedIntervals` (startTick/endTick pairs) and check
+> each candidate placement against occupied intervals before assigning.
+>
+> **C3 — `calibration.alphaScore.toFixed(2)` crashes on old data** (`App.jsx:250`):
+> The render path `step === 1 && calibration` calls `.toFixed(2)` on
+> `calibration.alphaScore`. If localStorage contains calibration from an older
+> version that lacks `alphaScore`, or `alphaScore` is `undefined`/`null`, this
+> throws `TypeError: Cannot read properties of undefined (reading 'toFixed')`.
+> No ErrorBoundary exists → white screen.
+> **Fix:** Guard with `calibration?.alphaScore != null ? calibration.alphaScore.toFixed(2) : '—'`.
+> Same pattern at `StroopTestModal.jsx:282` (existingCalibration.alphaScore).
+>
+> **C4 — NaN alpha passes validation** (`App.jsx:79`):
+> `typeof NaN === 'number'` evaluates to `true`. If alphaScore is NaN (from
+> corrupted localStorage or a buggy calibration computation), the guard at
+> line 79 passes. NaN propagates into `generateWeeklySchedule()` where every
+> mathematical operation produces NaN, corrupting the entire schedule silently.
+> **Fix:** Change to `!calibration || typeof calibration.alphaScore !== 'number' || !Number.isFinite(calibration.alphaScore)`.
+>
+> **C5 — `crypto.randomUUID()` crashes on HTTP / old browsers** (3 sites):
+> `TaskInputForm.jsx:269`, `WeeklyCalendar.jsx:211,233`. `crypto.randomUUID()`
+> requires a secure context (HTTPS or localhost). Plain HTTP deployments throw
+> `TypeError`. Also unsupported in Safari < 15.4, Firefox < 95. No fallback.
+> **Fix:** Wrap in try/catch with fallback:
+> `() => { try { return crypto.randomUUID(); } catch { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); } }`.
+> Extract as a shared `uuid()` helper in a new `src/utils/uuid.js`.
+>
+> **C6 — localStorage save failures silent in production** (`storage.js:9-30`):
+> All save functions catch `QuotaExceededError` but only log in DEV mode
+> (`if (import.meta.env.DEV) console.warn(...)`). In production the error is
+> swallowed. The function returns `false`, but no caller in App.jsx checks
+> the return value. User adds tasks, sees them in UI, closes tab, reopens →
+> all data gone with zero notification.
+> **Fix:** Check return values in App.jsx setter wrappers (lines 71-74) and call
+> `setError()` when a save fails. Always `console.warn` in production (not gated
+> by DEV).
+>
+> **C7 — `setSettings` doesn't increment `dataVersionRef`** (`App.jsx:74`):
+> `setCalendarBlocks` and `setTasks` both do `dataVersionRef.current++` to mark
+> results as stale. `setSettings` does NOT. User generates schedule, then changes
+> chronotype from "morning" to "night" → `isStale` stays `false` → no "Regenerate"
+> banner appears → user sees schedule computed with wrong chronotype settings.
+> **Fix:** Add `dataVersionRef.current++` to `setSettings` at line 74.
+>
+> ---
+>
+> ### 🟠 TIER 2 — Broken i18n & Non-English UX (6 bugs)
+>
+> **H1 — 71 i18n keys exist in `en` but missing from ALL 5 non-English languages**
+> (`i18n.js`): The non-English blocks (zh-CN, zh-TW, es, hi, ar) each have only
+> 134 keys while `en` has 205. The 71 missing keys include:
+> - Type labels: `typeAcademic`, `typeSports`, `typeArts`, `typeOther`
+> - Priority labels: `priorityHigh`, `priorityMedium`, `priorityLow`
+> - Difficulty labels: `diffVeryEasy`, `diffEasy`, `diffMedium`, `diffHard`, `diffVeryHard`
+> - Preset names: `presetSchool`, `presetHalf`, `presetDinner`, `presetSleep`, `presetSports`
+> - Calendar error messages: `calErrEventName`, `calErrSelectDay`, `calErrEndAfterStart`, `calErrDurationMax`, `calErrTimeConflict`
+> - Task error messages: `taskErrTitle`, `taskErrDurationMin`, `taskErrDurationMax`, `taskErrDuplicate`, `taskErrDuplicateSuffix`
+> - Calibration detail: `calibAccuracyLabel`, `calibSpeedLabel`, `calibConsistencyLabel`, `calibLapsesLabel`, `calibInterferenceLabel`, `calibScoreBreakdown`, `calibWhatMeans`, `calibInterpretExcellent`, `calibInterpretGood`, `calibInterpretModerate`, `calibInterpretLow`, `calibPreviousScore`, `calibStarting`, `calibTrials`
+> - Misc: `regen`, `scheduleChanged`, `dismiss`, `couldNotFit`, `tryReducing`, `yourTasks`, `noEvents`, `freeDay`, `hoursScheduled`, `confirmDeleteAll`, `clearAllEvents`, `confirmRemoveAll`, `calTo`, `calDuration`, `calEditEvent`, `calLabel`, `calSaveChanges`, `calDelete`, `calFree`, `calDescription`, `settingsWeekday`, `settingsWeekend`, `calBlock`, `calBlocks`, `calDay`, `calDaysUnit`, `calHScheduled`, `calibLapsesDetail`, `calConflictsWith`, `calMore`
+> `getTranslations()` falls back to English for missing keys, so non-English
+> users see a mix of translated and English text throughout the entire UI.
+> **Fix:** Add all 71 keys to each non-English language block with translations.
+>
+> **H2 — 3 i18n keys completely absent (not even in `en`)** (`i18n.js`):
+> `scheduleGenFailed` (App.jsx:139), `taskConfirmDeleteAll` (TaskInputForm.jsx:287),
+> `calEventPlaceholder` (WeeklyCalendar.jsx:104). These keys are used in components
+> with `||` fallbacks, so they don't crash, but they can never be translated.
+> **Fix:** Add all 3 keys to all 6 language blocks.
+>
+> **H3 — Wrong i18n key name: `taskConfirmDeleteAll` vs `confirmDeleteAll`**
+> (`TaskInputForm.jsx:287`): Component uses `T.taskConfirmDeleteAll` but i18n
+> defines the key as `confirmDeleteAll` (line 160). The correct translation
+> exists but is never accessed. The delete confirmation always shows the
+> hardcoded English fallback string.
+> **Fix:** Change `T.taskConfirmDeleteAll` to `T.confirmDeleteAll` at
+> TaskInputForm.jsx:287, OR add `taskConfirmDeleteAll` as an alias in i18n.js.
+>
+> **H4 — 4× hardcoded `'en-US'` locale in date formatting**:
+> `PlanView.jsx:21-22` (weekLabel, 2 calls), `TaskInputForm.jsx:29` (formatDeadline),
+> `WeeklyCalendar.jsx:367` (today detection). All use `toLocaleDateString('en-US', ...)`.
+> Dates always display in English month abbreviations regardless of user's language.
+> **Fix:** Pass the user's `lang` parameter to these functions, or use
+> `navigator.language` as default. For WeeklyCalendar line 367, use
+> `toLocaleDateString(lang, { weekday: 'short' })` and compare against the
+> DAYS array by index rather than by matching English abbreviations.
+>
+> **H5 — Stroop color words hardcoded to English** (`StroopTestModal.jsx:5-10,356`):
+> The `COLORS` array uses `name: 'Red'/'Green'/'Blue'/'Yellow'`. During gameplay
+> (line 356), `currentWord.name.toUpperCase()` displays the English color name.
+> For a Chinese user seeing the English word "RED" in green ink, the Stroop
+> interference measurement is contaminated by language-processing time —
+> the test measures reading-a-foreign-word AND resolving the color conflict,
+> not pure cognitive interference.
+> **Fix:** Add translated color names to i18n (`stroopRed`, `stroopGreen`, etc.)
+> and use them in COLORS based on the current language.
+>
+> **H6 — 3 deadline parsing sites not using `normalizeDeadline()`**
+> (`scheduler.js:393,690,396`): `slotBeforeDeadline` (line 393) uses raw
+> `task.deadline.includes('T')` then `new Date(task.deadline)` without
+> normalization. `analyzeTasks` (line 690) uses raw `new Date(t.deadline)`.
+> Both vulnerable to trailing-T corruption (e.g. `'2026-08-15T'`).
+> **Fix:** Replace with `const dlStr = normalizeDeadline(task.deadline);`
+> at both sites.
+>
+> ---
+>
+> ### 🟡 TIER 3 — Scheduler Logic Bugs (3 bugs)
+>
+> **M1 — Flow-block bonus uses total slot consumption, not same-type time**
+> (`scheduler.js:533-537`): `slot.usedTicks` is cumulative for ALL task types.
+> Three short tasks of different types (academic→sports→arts) accumulate
+> `usedTicks`, and the fourth task gets a flow-block bonus for "extending a
+> flow block" that never existed.
+> **Fix:** Track `slot.lastTaskType` and only apply `FLOW_BLOCK_BONUS` when
+> the current task's type matches the previous task's type in that slot.
+>
+> **M2 — DST transitions skew `daysUntilDeadline`** (`scheduler.js:487`):
+> Division by constant `86400000` (24h in ms) assumes every calendar day is
+> exactly 24 hours. During DST spring-forward (23h day) or fall-back (25h day),
+> `daysUntilDeadline` can be off by ±1, causing tasks near the boundary to get
+> wrong deadline-week scores and pressure boosts.
+> **Fix:** Use date-only comparison: compute calendar days between two midnight
+> dates via `(date1.getTime() - date2.getTime()) / 86400000` then `Math.round()`,
+> or compare year/month/day fields directly.
+>
+> **M3 — `deadlineAllowsDay` for past deadlines compares against `new Date()`**
+> (`scheduler.js:383`): The condition `deadlineDt < dayDate && deadlineDt < new Date()`
+> re-evaluates real wall-clock time. If the user regenerates at 11:59pm, a
+> task due that same day at 10am would be considered "overdue" and allowed
+> on all remaining days. But at 12:01am (next day), the same task is no longer
+> considered overdue by the second clause (deadlineDt is now yesterday, but it's
+> still `< new Date()`). The logic is correct but feels fragile — consider
+> whether this should be `deadlineDt < dayDate` alone for overdue detection.
+>
+> ---
+>
+> ### 🔵 TIER 4 — UX, Accessibility, Fragility (11 bugs)
+>
+> **L1 — No ErrorBoundary anywhere** (entire codebase): Any unhandled render
+> exception white-screens the entire app. No `componentDidCatch`, no
+> `getDerivedStateFromError`, no fallback UI.
+> **Fix:** Create `src/components/ErrorBoundary.jsx` with a "Something went
+> wrong — please reload" fallback. Wrap `<App>` in `main.jsx`.
+>
+> **L2 — Flash of wrong theme (FOWT)** (`App.jsx:55-57`): Dark mode is applied
+> via React `useEffect`, which runs after first paint. Dark-mode users see a
+> white flash before the `html.dark` class is added.
+> **Fix:** Add a blocking `<script>` in `index.html` `<head>` that reads
+> `localStorage.getItem('mindflow_theme')` and applies `classList.add('dark')`
+> synchronously before the first paint.
+>
+> **L3 — `color-scheme: light` missing on `:root`** (`index.css`): Only
+> `html.dark` has `color-scheme: dark`. The light mode has no `color-scheme`
+> declaration, so browsers don't know light mode is supported.
+> **Fix:** Add `color-scheme: light;` to the `html` rule at line 73-74.
+>
+> **L4 — All production error logging stripped by DEV guards** (3 sites):
+> `App.jsx:138`, `scheduler.js:1361`, `scheduler.js:1515` all wrap
+> `console.error` in `if (import.meta.env.DEV)`. In production, schedule
+> generation failures, per-task simulation errors, and refinement failures
+> produce zero diagnostics — impossible to debug user-reported issues.
+> **Fix:** Always `console.error` in production. Or add structured error
+> capture (e.g. an in-memory ring buffer of recent errors displayed in
+> the settings dialog).
+>
+> **L5 — `useState(defaultIdx)` never re-syncs on async results** (`PlanView.jsx:87`):
+> `defaultIdx` is a `useMemo` that changes when `weekResults` changes. But
+> `selIdx` state is only initialized from `defaultIdx` on mount. If results
+> load asynchronously (or user regenerates), `defaultIdx` changes but `selIdx`
+> stays on whatever week was last navigated to.
+> **Fix:** Add `useEffect(() => { setSelIdx(defaultIdx); }, [defaultIdx])`.
+>
+> **L6 — Task delete button invisible on touch devices** (`TaskInputForm.jsx:441-452`):
+> Edit/delete icons use `opacity-0 group-hover:opacity-100`. Touch devices have
+> no persistent hover state. Tapping the row opens the edit flow, so the delete
+> button is unreachable on mobile. The only way to delete a task is "Clear all."
+> **Fix:** Always show delete icon on touch devices via `@media (hover: none)`
+> or add a swipe-to-delete pattern, or show a delete button inside the edit view.
+>
+> **L7 — `formatMinutes` crashes on undefined duration** (`TaskInputForm.jsx:10-15`):
+> `Math.floor(undefined)` is `NaN`, `NaN < 60` is `false`, renders `"NaNh NaNm"`.
+> **Fix:** Add `if (mins == null || !Number.isFinite(mins)) return '—';` guard.
+>
+> **L8 — No `prefers-reduced-motion` support** (`index.css:101-116`): All
+> animations (`animate-fade-in`, `animate-stage-in-right`, `animate-stage-in-left`)
+> run unconditionally. Motion-sensitive users cannot disable them.
+> **Fix:** Wrap all `@keyframes`-based animation classes in:
+> `@media (prefers-reduced-motion: no-preference) { ... }`.
+>
+> **L9 — `<button>` elements missing `type="button"`** (PlanView.jsx:108,120,128,136):
+> If these buttons ever render inside a `<form>`, they default to `type="submit"`
+> and trigger form submission instead of navigating weeks.
+> **Fix:** Add `type="button"` to all buttons that are not submit buttons.
+>
+> **L10 — Edit popover not keyboard accessible** (`WeeklyCalendar.jsx:461-531`):
+> Missing `role="dialog"`, `aria-modal="true"`, focus trap, and Escape key handler.
+> Keyboard users cannot dismiss it. Close button has no `aria-label`.
+> Label element has no `htmlFor` connecting it to the input.
+> **Fix:** Add dialog ARIA attributes, an Escape keydown listener, `htmlFor`
+> on labels, and `aria-label` on the close button.
+>
+> **L11 — Stat cells render `"undefinedh"` / `"undefined%"`** (`PlanView.jsx:95-98`):
+> `stats.totalScheduledHours + 'h'` — if the key is missing from the stats
+> object (malformed response), the cell displays the string `"undefinedh"`.
+> Only `avgFatigue` has a `|| 0` fallback.
+> **Fix:** Add `|| '—'` fallback for each stat value.
+>
+> ---
+>
+> ### ⚪ TIER 5 — Markov Engine (low impact, math is already solid)
+>
+> **E1 — Binary search lower bound prevents convergence** (`markovEngine.js:176`):
+> `invertBiexponentialDecay` sets `lo = 1` but the biexponential decay
+> evaluates to at most ~0.838 for t ≥ 1. If ratio > 0.84, the binary search
+> collapses to `lo=hi=1` instead of finding the correct sub-1-minute answer.
+> **Fix:** Set `lo = 0`.
+>
+> **E2 — `disableFlowInertia`/`disableMomentum` are dead parameters**
+> (`markovEngine.js:95-96,500-554`): Documented in JSDoc, accepted in options
+> object, but never passed into `buildDynamicMatrix`. The function signature
+> takes only 9 numeric params with no options object. These flags are silently
+> ignored — flow inertia and momentum are always active.
+> **Fix:** Either wire the options through to `buildDynamicMatrix`, or remove
+> the dead documentation and unused destructuring.
+>
+> **E3 — `applyAttentionResidue` hardcodes `newType='other'`** (`markovEngine.js:329`):
+> Always computes residue as `prevType → 'other'`, ignoring the actual new task
+> type. Same-domain transitions (academic→academic, which should have 5% residue)
+> get 12% residue instead (the academic→other value).
+> **Fix:** Accept `newType` as a parameter and pass it from the caller.
+>
+> **E4 — `sigmoid()` returns NaN on NaN input** (`markovEngine.js:598-604`):
+> NaN comparisons always return false, so the overflow guards are bypassed.
+> `1 / (1 + Math.exp(NaN))` = NaN, which propagates through all downstream math.
+> **Fix:** Add `if (Number.isNaN(x) || Number.isNaN(center) || Number.isNaN(steepness)) return 0.5;`
+> at the top of `sigmoid()`.
+>
+> **E5 — `computeOptimalBreakDuration` returns NaN for malformed timeline**
+> (`markovEngine.js:206-213`): If `state.fatigue` is `undefined` (corrupted
+> timeline entry), `undefined <= 0.30` is false, `0.30 / undefined` = NaN,
+> and NaN passes through the ratio guards. The function returns NaN break
+> duration instead of a fallback.
+> **Fix:** Add `if (typeof currentFatigue !== 'number' || !Number.isFinite(currentFatigue)) return 5;`
+> at the top.
+>
+> **E6 — `clamp()` breaks sum-to-1 invariant** (`markovEngine.js:631-637`):
+> When negative values are clamped to 0, the remaining components no longer sum
+> to 1.0. No re-normalization follows. Also silently zeroes components below
+> 1e-10 without redistributing their probability mass.
+> **Fix:** After clamping, re-normalize: divide each component by the new sum.
+>
+> **E7 — No input validation on `steps` (negative/NaN)** (`markovEngine.js:100,500`):
+> Passing `steps = -1` or `steps = NaN` returns an empty timeline `[]` —
+> downstream code accessing `timeline[0]` or `original.length - 1` crashes.
+> **Fix:** Add `if (!Number.isFinite(steps) || steps < 1) return [{ tick: 0, timeLabel: '0h00', flow: 1, distracted: 0, fatigue: 0, recovery: 0 }];`
+> at the top of `calculateMarkovTimeline`.
+>
+> **E8 — No validation on negative `breakMinutes`** (`markovEngine.js:246-253`):
+> `Math.exp(-(-10) / 2) = Math.exp(5) ≈ 148` — negative break minutes INVERT
+> the recovery (fatigue increases instead of decreasing).
+> **Fix:** Add `if (breakMinutes < 0) breakMinutes = 5;` at the top of
+> `computeRecoveryState`.
+>
+> **E9 — Wasted final transition computation** (`markovEngine.js:527-539`):
+> On the last loop iteration (`t === steps`), the code computes `next = v * P`
+> (transition to step+1) which is never used — the timeline only records up to
+> tick `steps`. Trivial CPU waste, not a correctness bug.
+> **Fix:** Guard with `if (t < steps)` before computing the next state.
+>
+> ---
+>
+> ### ✅ Confirmed Production-Safe
+>
+> - Build: 0 errors, 320KB JS + 47KB CSS (97KB + 9KB gzipped)
+> - All ~2,000 tests pass across 5 test suites
+> - Markov engine: strong numerical safety (NaN/Inf guards, clamp, overflow
+>   protection at `Math.exp(>709)`, `Number.isFinite` checks throughout)
+> - Security headers in `vercel.json` (X-Content-Type-Options, X-Frame-Options
+>   DENY, X-XSS-Protection, Referrer-Policy)
+> - SPA redirects configured for both Netlify (`_redirects`) and Vercel
+>   (`vercel.json` rewrites)
+> - `font-display: swap` IS configured in the Google Fonts URL (no FOIT)
+> - No XSS vectors (zero `dangerouslySetInnerHTML`, `innerHTML`, or `eval`)
+> - Focus rings, selection styling, scrollbar styling properly scoped
+> - Most deadline parsing already uses `normalizeDeadline()` — only 3 sites
+>   missed (C1, H6)
+>
+> > **Next:** Fix all Tier 1 (C1–C7) bugs first — these are the ones that can
+> > crash the app or cause silent data loss in production. Then Tier 2 (H1–H6)
+> > for i18n completeness. Then Tier 3 (M1–M3) for scheduler correctness.
+> > Tier 4 and 5 are polish and low-risk math edge cases.
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
