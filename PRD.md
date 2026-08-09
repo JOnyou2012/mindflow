@@ -165,6 +165,12 @@
 > penalties are visible. All ~1,929 tests pass, build 0 errors
 > (320 KB JS + 47 KB CSS, gzipped 97+9 KB).
 >
+> **2026-08-09 (Vercel config):** Added `vercel.json` — the project now supports
+> both Netlify and Vercel for frontend hosting. Config includes SPA rewrites
+> (`/(.*)` → `/index.html`), 1-year immutable cache for hashed assets
+> (`/assets/*` + `*.svg`), and production security headers (X-Content-Type-Options,
+> X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy). Build 0 errors.
+>
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
 > toward morning slots (best circadian gamma + best time-of-day score). A single task
