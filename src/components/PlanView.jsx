@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2 } from 'lucide-react';
 import { typeColor, typeTextColor } from '../utils/theme.js';
+import { getStoredLang, langToLocale } from '../utils/i18n.js';
 import GoogleCalendarExport from './GoogleCalendarExport.jsx';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -9,9 +10,12 @@ const HOUR_LINES = Array.from({ length: TOTAL_H + 1 }, (_, i) => i);
 
 function fmtHr(h) {
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
-  const p = hh >= 12 ? 'pm' : 'am';
-  const d = hh > 12 ? hh - 12 : (hh === 0 ? 12 : hh);
-  return mm > 0 ? `${d}:${String(mm).padStart(2, '0')}${p}` : `${d}${p}`;
+  const loc = langToLocale(getStoredLang());
+  const d = new Date(2026, 0, 1, hh, mm);
+  if (mm > 0) {
+    return d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' });
+  }
+  return d.toLocaleTimeString(loc, { hour: 'numeric' });
 }
 
 function weekLabel(ws) {
@@ -19,8 +23,9 @@ function weekLabel(ws) {
   const start = new Date(y, m - 1, d);
   const end = new Date(y, m - 1, d + 6);
   const sameMonth = start.getMonth() === end.getMonth();
-  const s = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const e = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' });
+  const loc = langToLocale(getStoredLang());
+  const s = start.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+  const e = end.toLocaleDateString(loc, sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' });
   return `${s} – ${e}, ${end.getFullYear()}`;
 }
 
@@ -134,7 +139,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
             type="button"
             onClick={() => setSelIdx(i => Math.max(0, i - 1))}
             disabled={idx === 0}
-            aria-label="Previous week"
+            aria-label={T.ariaPrevWeek || 'Previous week'}
             className="rounded-full p-1.5 text-mindflow-muted hover:bg-mindflow-surface-alt disabled:opacity-30"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -143,7 +148,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
             type="button"
             onClick={() => setSelIdx(i => Math.min(allWeeks.length - 1, i + 1))}
             disabled={idx >= allWeeks.length - 1}
-            aria-label="Next week"
+            aria-label={T.ariaNextWeek || 'Next week'}
             className="rounded-full p-1.5 text-mindflow-muted hover:bg-mindflow-surface-alt disabled:opacity-30"
           >
             <ChevronRight className="w-5 h-5" />
@@ -298,7 +303,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
           <CalendarX2 className="w-4 h-4 mt-0.5 shrink-0 text-mindflow-warning" />
           <div>
             <p className="text-sm font-medium text-mindflow-heading">
-              {result.unscheduled.length} task{result.unscheduled.length !== 1 ? 's' : ''} {T.couldNotFit}
+              {result.unscheduled.length} {result.unscheduled.length === 1 ? 'task' : 'tasks'} {T.couldNotFit}
             </p>
             <p className="mt-0.5 text-xs text-mindflow-muted">
               {result.unscheduled.map(t => t.title).join(', ')} — {T.tryReducing}

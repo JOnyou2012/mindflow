@@ -11,7 +11,15 @@ export function saveCalibration(cal) {
   try { if (cal) localStorage.setItem(KEYS.CALIBRATION, JSON.stringify(cal)); } catch (e) { console.warn('localStorage full, calibration not saved:', e); return false; } return true;
 }
 export function loadCalibration() {
-  try { const d = localStorage.getItem(KEYS.CALIBRATION); return d ? JSON.parse(d) : null; } catch { return null; }
+  try {
+    const d = localStorage.getItem(KEYS.CALIBRATION);
+    if (!d) return null;
+    const p = JSON.parse(d);
+    // Structural validation: must be an object with a numeric alphaScore.
+    // Rejects primitives, arrays, and objects missing alphaScore (corrupted data).
+    if (p && typeof p === 'object' && !Array.isArray(p) && typeof p.alphaScore === 'number' && Number.isFinite(p.alphaScore)) return p;
+    return null;
+  } catch { return null; }
 }
 
 export function saveCalendar(blocks) {

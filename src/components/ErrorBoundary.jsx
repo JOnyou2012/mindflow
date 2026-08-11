@@ -30,9 +30,19 @@ export default class ErrorBoundary extends Component {
               </svg>
             </div>
             <h2 className="text-xl font-normal text-mindflow-heading mb-2">Something went wrong</h2>
-            <p className="text-sm text-mindflow-muted mb-6">
+            <p className="text-sm text-mindflow-muted mb-3">
               An unexpected error occurred. Your data is saved locally and should be safe.
             </p>
+            {this.state.error && (
+              <details className="mb-5 text-left">
+                <summary className="text-xs text-mindflow-muted cursor-pointer hover:text-mindflow-text">
+                  Error details (for debugging)
+                </summary>
+                <pre className="mt-2 bg-mindflow-surface-alt rounded-lg p-3 text-xs text-mindflow-text overflow-auto max-h-32">
+                  {this.state.error.message || String(this.state.error)}
+                </pre>
+              </details>
+            )}
             <button
               type="button"
               onClick={() => window.location.reload()}

@@ -61,6 +61,12 @@ export default function App() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
+  // Sync <html lang> and dir for screen readers / search engines
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
+
   // Leaving a step resets any active sub-flow
   useEffect(() => { setSubView('overview'); }, [step]);
 
@@ -147,12 +153,20 @@ export default function App() {
         setIsCalculating(false);
         if (onDone) onDone();
       } catch (err) {
-        console.error('Schedule generation failed:', err);
+        console.error('Schedule generation failed:', err, {
+          taskCount: tasks.length,
+          blockCount: calendarBlocks.length,
+          googleBlockCount: googleBlocks.length,
+          alpha: calibration?.alphaScore,
+          chronotype: settings?.chronotype,
+          maxHoursPerDay: settings?.maxHoursPerDay,
+          timestamp: new Date().toISOString(),
+        });
         setError(T.scheduleGenFailed || 'Failed to generate schedule.');
         setIsCalculating(false);
       }
     }, 100);
-  }, [calibration, calendarBlocks, tasks, settings, isCalculating, T]);
+  }, [calibration, calendarBlocks, tasks, googleBlocks, settings, isCalculating, T]);
 
   const handleCalibrationComplete = (cal) => { setCalibration(cal); setStep(2); };
   const handleSkipCalibration = () => {
@@ -174,7 +188,7 @@ export default function App() {
 
   const STEPS = [
     { n: 1, label: T.stepCalibrate, done: !!calibration },
-    { n: 2, label: T.stepSchedule, done: calendarBlocks.length > 0 },
+    { n: 2, label: T.stepSchedule, done: (calendarBlocks.length + googleBlocks.length) > 0 },
     { n: 3, label: T.stepTasks, done: tasks.length > 0 },
     { n: 4, label: T.stepPlan, done: hasResults },
   ];
@@ -337,8 +351,11 @@ export default function App() {
 
       {/* ── Settings dialog ── */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowSettings(false)}>
-          <div className="w-full max-w-lg rounded-xl bg-mindflow-surface shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowSettings(false)}
+          onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setShowSettings(false); } }}>
+          <div role="dialog" aria-modal="true" aria-label={T.settings}
+            className="w-full max-w-lg rounded-xl bg-mindflow-surface shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-mindflow-border-light">
               <h2 className="text-lg text-mindflow-heading font-normal">{T.settings}</h2>
               <button onClick={() => setShowSettings(false)} aria-label={T.navDone} className="p-1.5 rounded-full text-mindflow-muted hover:bg-mindflow-surface-alt">
@@ -383,15 +400,17 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <span className="text-sm text-mindflow-text w-28 shrink-0">{T.settingsChronotype}</span>
                   <div className="flex rounded-lg border border-mindflow-border overflow-hidden">
-                    {['morning', 'neutral', 'night'].map(c => (
+                    {['morning', 'neutral', 'night'].map(c => {
+                      const labels = { morning: T.chronotypeMorning || 'Morning', neutral: T.chronotypeNeutral || 'Neutral', night: T.chronotypeNight || 'Night' };
+                      return (
                       <button
                         key={c}
                         onClick={() => setSettings(s => ({ ...s, chronotype: c }))}
-                        className={`px-3 py-1.5 text-sm capitalize ${settings.chronotype === c ? 'bg-mindflow-accent-soft text-mindflow-accent font-medium' : 'text-mindflow-muted hover:text-mindflow-text'}`}
+                        className={`px-3 py-1.5 text-sm ${settings.chronotype === c ? 'bg-mindflow-accent-soft text-mindflow-accent font-medium' : 'text-mindflow-muted hover:text-mindflow-text'}`}
                       >
-                        {c}
-                      </button>
-                    ))}
+                        {labels[c]}
+                      </button>);
+                    })}
                   </div>
                 </div>
 

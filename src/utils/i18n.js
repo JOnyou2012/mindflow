@@ -238,6 +238,12 @@ const t = {
     calConflictsWith: 'Conflicts with',
     calMore: 'more',
 
+    // Stroop test color names (must match user's language for accurate measurement)
+    stroopRed: 'Red',
+    stroopGreen: 'Green',
+    stroopBlue: 'Blue',
+    stroopYellow: 'Yellow',
+
     // Wizard (revamp)
     stepCalibrate: 'Calibrate',
     stepSchedule: 'Schedule',
@@ -303,6 +309,19 @@ const t = {
     gcalRateLimited: 'Too many requests. Please wait a moment.',
     gcalNetworkError: 'Network error. Check your connection.',
     gcalUnknownError: 'An unexpected error occurred. Please try again.',
+
+    // Accessibility
+    ariaPrevWeek: 'Previous week',
+    ariaNextWeek: 'Next week',
+    ariaClose: 'Close',
+
+    // Stroop test
+    stroopSlow: 'SLOW',
+
+    // Chronotype labels (settings)
+    chronotypeMorning: 'Morning',
+    chronotypeNeutral: 'Neutral',
+    chronotypeNight: 'Night',
   },
 
   'zh-CN': {
@@ -444,6 +463,142 @@ const t = {
     flowReviewTasks: '查看我的任务',
     flowEmptyCalendar: '你的一周空空如也。',
     flowEmptyCalendarHint: '添加你的固定日程——课程、工作、用餐——排程器会绕开它们安排学习。',
+    stroopRed: '红色',
+    stroopGreen: '绿色',
+    stroopBlue: '蓝色',
+    stroopYellow: '黄色',
+
+    // Error / status messages
+    scheduleGenFailed: '生成计划失败。',
+    saveFailed: '保存数据失败。存储空间可能已满。',
+    calEventPlaceholder: '例如：物理101，工作班次，晚餐',
+
+    // Calibration extras
+    calibPreviousScore: '上次得分',
+    calibStarting: '正在开始...',
+    calibTrials: '次尝试',
+    calibScoreBreakdown: '得分详情',
+    calibWhatMeans: '这是什么意思？',
+    calibInterpretExcellent: '出色的专注力——你在压力下仍能保持专注',
+    calibInterpretGood: '良好的专注力——高于平均水平',
+    calibInterpretModerate: '中等专注力——大多数人的典型水平',
+    calibInterpretLow: '低于平均的专注力——尝试在更安静的环境中测试',
+
+    // App extras
+    regen: '重新生成',
+    scheduleChanged: '计划已过期。重新生成？',
+    dismiss: '忽略',
+    couldNotFit: '无法安排',
+    tryReducing: '尝试减少任务或增加可用时间。',
+    yourTasks: '你的任务',
+    noEvents: '本周无事件',
+    freeDay: '空闲日',
+    hoursScheduled: '小时已安排',
+    confirmDeleteAll: '删除所有任务？',
+    clearAllEvents: '清除所有事件',
+    confirmRemoveAll: '移除所有固定事件？此操作不可撤销。',
+
+    // Calendar extras
+    calTo: '至',
+    calDuration: '时长',
+    calEditEvent: '编辑事件',
+    calLabel: '标签',
+    calSaveChanges: '保存更改',
+    calDelete: '删除',
+    calFree: '空闲',
+    calDescription: '描述',
+
+    // Type labels
+    typeAcademic: '学术',
+    typeSports: '运动',
+    typeArts: '艺术',
+    typeOther: '其他',
+
+    // Priority labels
+    priorityHigh: '高',
+    priorityMedium: '中',
+    priorityLow: '低',
+
+    // Difficulty labels
+    diffVeryEasy: '非常简单',
+    diffEasy: '简单',
+    diffMedium: '中等',
+    diffHard: '困难',
+    diffVeryHard: '非常困难',
+
+    // Quick presets
+    presetSchool: '学校',
+    presetHalf: '半天',
+    presetDinner: '晚餐',
+    presetSleep: '睡眠',
+    presetSports: '运动',
+
+    // Calendar error messages
+    calErrEventName: '请输入事件名称。',
+    calErrSelectDay: '请至少选择一天。',
+    calErrEndAfterStart: '结束时间必须晚于开始时间。',
+    calErrDurationMax: '最长持续时间为16小时。',
+    calErrTimeConflict: '与已有事件时间冲突。',
+
+    // Task error messages
+    taskErrTitle: '请输入任务标题。',
+    taskErrDurationMin: '最短持续时间为5分钟。',
+    taskErrDurationMax: '最长持续时间为8小时。',
+    taskErrDuplicate: '已存在相同标题的任务。',
+    taskErrDuplicateSuffix: '（添加备注以区分）',
+
+    // Settings extras
+    settingsWeekday: '工作日',
+    settingsWeekend: '周末',
+
+    // Calendar stats
+    calBlock: '个时间段',
+    calBlocks: '个时间段',
+    calDay: '天',
+    calDaysUnit: '天',
+    calHScheduled: '小时已安排',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: '准确度',
+    calibSpeedLabel: '速度',
+    calibConsistencyLabel: '一致性',
+    calibLapsesLabel: '注意力流失',
+    calibInterferenceLabel: '干扰',
+    calibLapsesDetail: '次注意力流失',
+
+    // More calendar
+    calConflictsWith: '与以下冲突',
+    calMore: '更多',
+
+    // Google Calendar
+    gcalConnect: '连接 Google 日历',
+    gcalConnecting: '连接中...',
+    gcalConnected: '已连接',
+    gcalSignOut: '退出登录',
+    gcalRefresh: '刷新',
+    gcalLastSync: '上次同步',
+    gcalGoogleBlockTooltip: '从 Google 日历同步',
+    gcalImportSuccess: '已从 {calendar} 导入 {n} 个事件。',
+    gcalImportError: '导入事件失败。请检查网络连接。',
+    gcalExport: '同步到 Google 日历',
+    gcalExportSync: '同步中...',
+    gcalExportProgress: '正在同步 {current}/{total} 个学习时段...',
+    gcalExportSuccess: '已同步 {n} 个学习时段到 Google 日历。',
+    gcalExportError: '同步失败。{detail}',
+    gcalUnsync: '移除',
+    gcalUnsyncConfirm: '从 Google 日历移除所有已同步的学习时段？',
+    gcalTokenExpired: 'Google 日历连接已过期。请重新登录。',
+    gcalPermissionDenied: '日历访问被拒绝。请授予权限。',
+    gcalRateLimited: '请求过多。请稍候。',
+    gcalNetworkError: '网络错误。请检查连接。',
+    gcalUnknownError: '发生意外错误。请重试。',
+    ariaPrevWeek: '上一周',
+    ariaNextWeek: '下一周',
+    ariaClose: '关闭',
+    stroopSlow: '慢',
+    chronotypeMorning: '早上型',
+    chronotypeNeutral: '中性型',
+    chronotypeNight: '夜间型',
   },
 
   'zh-TW': {
@@ -585,6 +740,142 @@ const t = {
     flowReviewTasks: '檢視我的任務',
     flowEmptyCalendar: '你的一週空空如也。',
     flowEmptyCalendarHint: '新增你的固定行程——課程、工作、用餐——排程器會繞開它們安排學習。',
+    stroopRed: '紅色',
+    stroopGreen: '綠色',
+    stroopBlue: '藍色',
+    stroopYellow: '黃色',
+
+    // Error / status messages
+    scheduleGenFailed: '生成計劃失敗。',
+    saveFailed: '儲存資料失敗。儲存空間可能已滿。',
+    calEventPlaceholder: '例如：物理101，工作班次，晚餐',
+
+    // Calibration extras
+    calibPreviousScore: '上次分數',
+    calibStarting: '正在開始...',
+    calibTrials: '次嘗試',
+    calibScoreBreakdown: '分數詳情',
+    calibWhatMeans: '這是什麼意思？',
+    calibInterpretExcellent: '出色的專注力——你在壓力下仍能保持專注',
+    calibInterpretGood: '良好的專注力——高於平均水平',
+    calibInterpretModerate: '中等專注力——大多數人的典型水平',
+    calibInterpretLow: '低於平均的專注力——嘗試在更安靜的環境中測試',
+
+    // App extras
+    regen: '重新生成',
+    scheduleChanged: '計劃已過期。重新生成？',
+    dismiss: '忽略',
+    couldNotFit: '無法安排',
+    tryReducing: '嘗試減少任務或增加可用時間。',
+    yourTasks: '你的任務',
+    noEvents: '本週無事件',
+    freeDay: '空閒日',
+    hoursScheduled: '小時已安排',
+    confirmDeleteAll: '刪除所有任務？',
+    clearAllEvents: '清除所有事件',
+    confirmRemoveAll: '移除所有固定事件？此操作無法復原。',
+
+    // Calendar extras
+    calTo: '至',
+    calDuration: '時長',
+    calEditEvent: '編輯事件',
+    calLabel: '標籤',
+    calSaveChanges: '儲存變更',
+    calDelete: '刪除',
+    calFree: '空閒',
+    calDescription: '描述',
+
+    // Type labels
+    typeAcademic: '學術',
+    typeSports: '運動',
+    typeArts: '藝術',
+    typeOther: '其他',
+
+    // Priority labels
+    priorityHigh: '高',
+    priorityMedium: '中',
+    priorityLow: '低',
+
+    // Difficulty labels
+    diffVeryEasy: '非常簡單',
+    diffEasy: '簡單',
+    diffMedium: '中等',
+    diffHard: '困難',
+    diffVeryHard: '非常困難',
+
+    // Quick presets
+    presetSchool: '學校',
+    presetHalf: '半天',
+    presetDinner: '晚餐',
+    presetSleep: '睡眠',
+    presetSports: '運動',
+
+    // Calendar error messages
+    calErrEventName: '請輸入事件名稱。',
+    calErrSelectDay: '請至少選擇一天。',
+    calErrEndAfterStart: '結束時間必須晚於開始時間。',
+    calErrDurationMax: '最長持續時間為16小時。',
+    calErrTimeConflict: '與既有事件時間衝突。',
+
+    // Task error messages
+    taskErrTitle: '請輸入任務標題。',
+    taskErrDurationMin: '最短持續時間為5分鐘。',
+    taskErrDurationMax: '最長持續時間為8小時。',
+    taskErrDuplicate: '已存在相同標題的任務。',
+    taskErrDuplicateSuffix: '（新增備註以區分）',
+
+    // Settings extras
+    settingsWeekday: '工作日',
+    settingsWeekend: '週末',
+
+    // Calendar stats
+    calBlock: '個時段',
+    calBlocks: '個時段',
+    calDay: '天',
+    calDaysUnit: '天',
+    calHScheduled: '小時已安排',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: '準確度',
+    calibSpeedLabel: '速度',
+    calibConsistencyLabel: '一致性',
+    calibLapsesLabel: '注意力流失',
+    calibInterferenceLabel: '干擾',
+    calibLapsesDetail: '次注意力流失',
+
+    // More calendar
+    calConflictsWith: '與以下衝突',
+    calMore: '更多',
+
+    // Google Calendar
+    gcalConnect: '連接 Google 日曆',
+    gcalConnecting: '連接中...',
+    gcalConnected: '已連接',
+    gcalSignOut: '登出',
+    gcalRefresh: '重新整理',
+    gcalLastSync: '上次同步',
+    gcalGoogleBlockTooltip: '從 Google 日曆同步',
+    gcalImportSuccess: '已從 {calendar} 匯入 {n} 個事件。',
+    gcalImportError: '匯入事件失敗。請檢查網路連線。',
+    gcalExport: '同步到 Google 日曆',
+    gcalExportSync: '同步中...',
+    gcalExportProgress: '正在同步 {current}/{total} 個學習時段...',
+    gcalExportSuccess: '已同步 {n} 個學習時段到 Google 日曆。',
+    gcalExportError: '同步失敗。{detail}',
+    gcalUnsync: '移除',
+    gcalUnsyncConfirm: '從 Google 日曆移除所有已同步的學習時段？',
+    gcalTokenExpired: 'Google 日曆連線已過期。請重新登入。',
+    gcalPermissionDenied: '日曆存取被拒絕。請授予權限。',
+    gcalRateLimited: '請求過多。請稍候。',
+    gcalNetworkError: '網路錯誤。請檢查連線。',
+    gcalUnknownError: '發生未預期錯誤。請重試。',
+    ariaPrevWeek: '上一週',
+    ariaNextWeek: '下一週',
+    ariaClose: '關閉',
+    stroopSlow: '慢',
+    chronotypeMorning: '早上型',
+    chronotypeNeutral: '中性型',
+    chronotypeNight: '夜間型',
   },
 
   es: {
@@ -726,6 +1017,142 @@ const t = {
     flowReviewTasks: 'Revisar mis tareas',
     flowEmptyCalendar: 'Tu semana está despejada.',
     flowEmptyCalendarHint: 'Añade tus compromisos fijos — clases, trabajo, comidas — y el planificador los respetará.',
+    stroopRed: 'Rojo',
+    stroopGreen: 'Verde',
+    stroopBlue: 'Azul',
+    stroopYellow: 'Amarillo',
+
+    // Error / status messages
+    scheduleGenFailed: 'Error al generar el horario.',
+    saveFailed: 'Error al guardar. El almacenamiento puede estar lleno.',
+    calEventPlaceholder: 'ej. Física 101, Turno de trabajo, Cena',
+
+    // Calibration extras
+    calibPreviousScore: 'Puntuación anterior',
+    calibStarting: 'Empezando...',
+    calibTrials: 'intentos',
+    calibScoreBreakdown: 'Desglose de puntuación',
+    calibWhatMeans: '¿Qué significa esto?',
+    calibInterpretExcellent: 'Enfoque excepcional — te mantienes concentrado bajo presión',
+    calibInterpretGood: 'Buen enfoque — por encima de la media',
+    calibInterpretModerate: 'Enfoque moderado — típico para la mayoría de las personas',
+    calibInterpretLow: 'Enfoque por debajo del promedio — intenta en un entorno más tranquilo',
+
+    // App extras
+    regen: 'Regenerar',
+    scheduleChanged: 'El horario está desactualizado. ¿Regenerar?',
+    dismiss: 'Descartar',
+    couldNotFit: 'No se pudo programar',
+    tryReducing: 'Intenta reducir la carga de tareas o aumentar las horas disponibles.',
+    yourTasks: 'Tus tareas',
+    noEvents: 'Sin eventos esta semana',
+    freeDay: 'Día libre',
+    hoursScheduled: 'horas programadas',
+    confirmDeleteAll: '¿Eliminar todas las tareas?',
+    clearAllEvents: 'Limpiar todos los eventos',
+    confirmRemoveAll: '¿Eliminar todos los eventos fijos? Esto no se puede deshacer.',
+
+    // Calendar extras
+    calTo: 'a',
+    calDuration: 'Duración',
+    calEditEvent: 'Editar evento',
+    calLabel: 'Etiqueta',
+    calSaveChanges: 'Guardar cambios',
+    calDelete: 'Eliminar',
+    calFree: 'Libre',
+    calDescription: 'Descripción',
+
+    // Type labels
+    typeAcademic: 'Académico',
+    typeSports: 'Deportes',
+    typeArts: 'Artes',
+    typeOther: 'Otro',
+
+    // Priority labels
+    priorityHigh: 'Alta',
+    priorityMedium: 'Media',
+    priorityLow: 'Baja',
+
+    // Difficulty labels
+    diffVeryEasy: 'Muy fácil',
+    diffEasy: 'Fácil',
+    diffMedium: 'Medio',
+    diffHard: 'Difícil',
+    diffVeryHard: 'Muy difícil',
+
+    // Quick presets
+    presetSchool: 'Escuela',
+    presetHalf: 'Medio día',
+    presetDinner: 'Cena',
+    presetSleep: 'Dormir',
+    presetSports: 'Deportes',
+
+    // Calendar error messages
+    calErrEventName: 'Por favor, introduce un nombre para el evento.',
+    calErrSelectDay: 'Selecciona al menos un día.',
+    calErrEndAfterStart: 'La hora de fin debe ser después de la de inicio.',
+    calErrDurationMax: 'Duración máxima 16 horas.',
+    calErrTimeConflict: 'Conflicto de horario con un evento existente.',
+
+    // Task error messages
+    taskErrTitle: 'Por favor, introduce un título para la tarea.',
+    taskErrDurationMin: 'La duración debe ser de al menos 5 minutos.',
+    taskErrDurationMax: 'La duración máxima es de 8 horas.',
+    taskErrDuplicate: 'Ya existe una tarea con este título.',
+    taskErrDuplicateSuffix: '(añade una nota para diferenciarlas)',
+
+    // Settings extras
+    settingsWeekday: 'Día laborable',
+    settingsWeekend: 'Fin de semana',
+
+    // Calendar stats
+    calBlock: 'bloque',
+    calBlocks: 'bloques',
+    calDay: 'día',
+    calDaysUnit: 'días',
+    calHScheduled: 'h programadas',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: 'Precisión',
+    calibSpeedLabel: 'Velocidad',
+    calibConsistencyLabel: 'Consistencia',
+    calibLapsesLabel: 'Lapsos de atención',
+    calibInterferenceLabel: 'Interferencia',
+    calibLapsesDetail: 'lapsos de atención',
+
+    // More calendar
+    calConflictsWith: 'Conflicto con',
+    calMore: 'más',
+
+    // Google Calendar
+    gcalConnect: 'Conectar Google Calendar',
+    gcalConnecting: 'Conectando...',
+    gcalConnected: 'Conectado',
+    gcalSignOut: 'Cerrar sesión',
+    gcalRefresh: 'Actualizar',
+    gcalLastSync: 'Última sincronización',
+    gcalGoogleBlockTooltip: 'sincronizado desde Google Calendar',
+    gcalImportSuccess: '{n} eventos importados de {calendar}.',
+    gcalImportError: 'Error al importar eventos. Verifica tu conexión.',
+    gcalExport: 'Sincronizar con Google Calendar',
+    gcalExportSync: 'Sincronizando...',
+    gcalExportProgress: 'Sincronizando {current} de {total} sesiones...',
+    gcalExportSuccess: '{n} sesiones sincronizadas con Google Calendar.',
+    gcalExportError: 'Error al sincronizar. {detail}',
+    gcalUnsync: 'Eliminar',
+    gcalUnsyncConfirm: '¿Eliminar todas las sesiones sincronizadas de Google Calendar?',
+    gcalTokenExpired: 'La conexión expiró. Inicia sesión de nuevo.',
+    gcalPermissionDenied: 'Acceso al calendario denegado. Concede el permiso.',
+    gcalRateLimited: 'Demasiadas solicitudes. Espera un momento.',
+    gcalNetworkError: 'Error de red. Verifica tu conexión.',
+    gcalUnknownError: 'Error inesperado. Inténtalo de nuevo.',
+    ariaPrevWeek: 'Semana anterior',
+    ariaNextWeek: 'Semana siguiente',
+    ariaClose: 'Cerrar',
+    stroopSlow: 'LENTO',
+    chronotypeMorning: 'Matutino',
+    chronotypeNeutral: 'Neutral',
+    chronotypeNight: 'Nocturno',
   },
 
   hi: {
@@ -867,6 +1294,142 @@ const t = {
     flowReviewTasks: 'मेरे कार्य देखें',
     flowEmptyCalendar: 'आपका सप्ताह पूरी तरह खाली है।',
     flowEmptyCalendarHint: 'अपने निश्चित कार्यक्रम जोड़ें — कक्षाएँ, काम, भोजन — और शेड्यूलर उनके इर्द-गिर्द काम करेगा।',
+    stroopRed: 'लाल',
+    stroopGreen: 'हरा',
+    stroopBlue: 'नीला',
+    stroopYellow: 'पीला',
+
+    // Error / status messages
+    scheduleGenFailed: 'शेड्यूल जनरेट करने में विफल।',
+    saveFailed: 'डेटा सहेजने में विफल। स्टोरेज भरा हो सकता है।',
+    calEventPlaceholder: 'जैसे भौतिकी 101, काम की शिफ्ट, रात का खाना',
+
+    // Calibration extras
+    calibPreviousScore: 'पिछला स्कोर',
+    calibStarting: 'शुरू हो रहा है...',
+    calibTrials: 'प्रयास',
+    calibScoreBreakdown: 'स्कोर विवरण',
+    calibWhatMeans: 'इसका क्या मतलब है?',
+    calibInterpretExcellent: 'असाधारण फोकस — आप दबाव में भी एकाग्र रहते हैं',
+    calibInterpretGood: 'अच्छा फोकस — औसत से ऊपर',
+    calibInterpretModerate: 'मध्यम फोकस — अधिकांश लोगों के लिए सामान्य',
+    calibInterpretLow: 'औसत से कम फोकस — शांत वातावरण में प्रयास करें',
+
+    // App extras
+    regen: 'पुनर्जनित करें',
+    scheduleChanged: 'शेड्यूल पुराना हो चुका है। पुनर्जनित करें?',
+    dismiss: 'खारिज करें',
+    couldNotFit: 'शेड्यूल नहीं कर सका',
+    tryReducing: 'कार्यभार कम करें या उपलब्ध घंटे बढ़ाएं।',
+    yourTasks: 'आपके कार्य',
+    noEvents: 'इस सप्ताह कोई कार्यक्रम नहीं',
+    freeDay: 'खाली दिन',
+    hoursScheduled: 'घंटे शेड्यूल किए गए',
+    confirmDeleteAll: 'सभी कार्य हटाएं?',
+    clearAllEvents: 'सभी कार्यक्रम हटाएं',
+    confirmRemoveAll: 'सभी निश्चित कार्यक्रम हटाएं? यह पूर्ववत नहीं किया जा सकता।',
+
+    // Calendar extras
+    calTo: 'से',
+    calDuration: 'अवधि',
+    calEditEvent: 'कार्यक्रम संपादित करें',
+    calLabel: 'लेबल',
+    calSaveChanges: 'परिवर्तन सहेजें',
+    calDelete: 'हटाएं',
+    calFree: 'खाली',
+    calDescription: 'विवरण',
+
+    // Type labels
+    typeAcademic: 'शैक्षणिक',
+    typeSports: 'खेल',
+    typeArts: 'कला',
+    typeOther: 'अन्य',
+
+    // Priority labels
+    priorityHigh: 'उच्च',
+    priorityMedium: 'मध्यम',
+    priorityLow: 'निम्न',
+
+    // Difficulty labels
+    diffVeryEasy: 'बहुत आसान',
+    diffEasy: 'आसान',
+    diffMedium: 'मध्यम',
+    diffHard: 'कठिन',
+    diffVeryHard: 'बहुत कठिन',
+
+    // Quick presets
+    presetSchool: 'स्कूल',
+    presetHalf: 'आधा दिन',
+    presetDinner: 'रात का खाना',
+    presetSleep: 'नींद',
+    presetSports: 'खेल',
+
+    // Calendar error messages
+    calErrEventName: 'कृपया कार्यक्रम का नाम दर्ज करें।',
+    calErrSelectDay: 'कम से कम एक दिन चुनें।',
+    calErrEndAfterStart: 'समाप्ति समय प्रारंभ समय के बाद होना चाहिए।',
+    calErrDurationMax: 'अधिकतम अवधि 16 घंटे।',
+    calErrTimeConflict: 'मौजूदा कार्यक्रम के साथ समय विरोध।',
+
+    // Task error messages
+    taskErrTitle: 'कृपया कार्य का शीर्षक दर्ज करें।',
+    taskErrDurationMin: 'न्यूनतम अवधि 5 मिनट।',
+    taskErrDurationMax: 'अधिकतम अवधि 8 घंटे।',
+    taskErrDuplicate: 'इस शीर्षक वाला कार्य पहले से मौजूद है।',
+    taskErrDuplicateSuffix: '(अंतर करने के लिए एक नोट जोड़ें)',
+
+    // Settings extras
+    settingsWeekday: 'कार्यदिवस',
+    settingsWeekend: 'सप्ताहांत',
+
+    // Calendar stats
+    calBlock: 'ब्लॉक',
+    calBlocks: 'ब्लॉक',
+    calDay: 'दिन',
+    calDaysUnit: 'दिन',
+    calHScheduled: 'घंटे शेड्यूल',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: 'सटीकता',
+    calibSpeedLabel: 'गति',
+    calibConsistencyLabel: 'निरंतरता',
+    calibLapsesLabel: 'ध्यान चूक',
+    calibInterferenceLabel: 'हस्तक्षेप',
+    calibLapsesDetail: 'ध्यान चूक',
+
+    // More calendar
+    calConflictsWith: 'विरोध',
+    calMore: 'और',
+
+    // Google Calendar
+    gcalConnect: 'Google Calendar कनेक्ट करें',
+    gcalConnecting: 'कनेक्ट हो रहा है...',
+    gcalConnected: 'कनेक्टेड',
+    gcalSignOut: 'साइन आउट',
+    gcalRefresh: 'रीफ्रेश',
+    gcalLastSync: 'अंतिम सिंक',
+    gcalGoogleBlockTooltip: 'Google Calendar से सिंक किया गया',
+    gcalImportSuccess: '{calendar} से {n} कार्यक्रम आयात किए गए।',
+    gcalImportError: 'कार्यक्रम आयात करने में विफल। अपना कनेक्शन जांचें।',
+    gcalExport: 'Google Calendar में सिंक करें',
+    gcalExportSync: 'सिंक हो रहा है...',
+    gcalExportProgress: '{current} में से {total} सत्र सिंक हो रहे हैं...',
+    gcalExportSuccess: '{n} सत्र Google Calendar में सिंक किए गए।',
+    gcalExportError: 'सिंक करने में विफल। {detail}',
+    gcalUnsync: 'हटाएं',
+    gcalUnsyncConfirm: 'सभी सिंक किए गए सत्र Google Calendar से हटाएं?',
+    gcalTokenExpired: 'Google Calendar कनेक्शन समाप्त हो गया। कृपया फिर से साइन इन करें।',
+    gcalPermissionDenied: 'कैलेंडर एक्सेस अस्वीकृत। कृपया अनुमति दें।',
+    gcalRateLimited: 'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
+    gcalNetworkError: 'नेटवर्क त्रुटि। अपना कनेक्शन जांचें।',
+    gcalUnknownError: 'अप्रत्याशित त्रुटि। कृपया पुनः प्रयास करें।',
+    ariaPrevWeek: 'पिछला सप्ताह',
+    ariaNextWeek: 'अगला सप्ताह',
+    ariaClose: 'बंद करें',
+    stroopSlow: 'धीमा',
+    chronotypeMorning: 'सुबह',
+    chronotypeNeutral: 'सामान्य',
+    chronotypeNight: 'रात',
   },
 
   ar: {
@@ -1008,50 +1571,142 @@ const t = {
     flowReviewTasks: 'مراجعة مهامي',
     flowEmptyCalendar: 'أسبوعك فارغ تمامًا.',
     flowEmptyCalendarHint: 'أضف التزاماتك الثابتة — الحصص، العمل، الوجبات — وسيتجنبها المجدول.',
-    gcalConnect: "連接 Google 日曆",
-    gcalConnecting: "連接中...",
-    gcalConnected: "已連接",
-    gcalSignOut: "登出",
-    gcalRefresh: "重新整理",
-    gcalLastSync: "上次同步",
-    gcalGoogleBlockTooltip: "從 Google 日曆同步",
-    gcalImportSuccess: "已從 {calendar} 匯入 {n} 個事件。",
-    gcalImportError: "匯入事件失敗。請檢查網路連線。",
-    gcalExport: "同步到 Google 日曆",
-    gcalExportSync: "同步中...",
-    gcalExportProgress: "正在同步 {current}/{total} 個學習時段...",
-    gcalExportSuccess: "已將 {n} 個學習時段同步到 Google 日曆。",
-    gcalExportError: "同步失敗。{detail}",
-    gcalUnsync: "移除",
-    gcalUnsyncConfirm: "從 Google 日曆中移除所有已同步的學習時段？",
-    gcalTokenExpired: "Google 日曆連線已過期。請重新登入。",
-    gcalPermissionDenied: "日曆存取被拒絕。請授予權限。",
-    gcalRateLimited: "請求過多。請稍候。",
-    gcalNetworkError: "網路錯誤。請檢查連線。",
-    gcalUnknownError: "發生未預期錯誤。請重試。",
+    stroopRed: 'أحمر',
+    stroopGreen: 'أخضر',
+    stroopBlue: 'أزرق',
+    stroopYellow: 'أصفر',
 
-    gcalConnect: "连接 Google 日历",
-    gcalConnecting: "连接中...",
-    gcalConnected: "已连接",
-    gcalSignOut: "退出",
-    gcalRefresh: "刷新",
-    gcalLastSync: "上次同步",
-    gcalGoogleBlockTooltip: "从 Google 日历同步",
-    gcalImportSuccess: "已从 {calendar} 导入 {n} 个事件。",
-    gcalImportError: "导入事件失败。请检查网络连接。",
-    gcalExport: "同步到 Google 日历",
-    gcalExportSync: "同步中...",
-    gcalExportProgress: "正在同步 {current}/{total} 个学习时段...",
-    gcalExportSuccess: "已将 {n} 个学习时段同步到 Google 日历。",
-    gcalExportError: "同步失败。{detail}",
-    gcalUnsync: "移除",
-    gcalUnsyncConfirm: "从 Google 日历中移除所有已同步的学习时段？",
-    gcalTokenExpired: "Google 日历连接已过期。请重新登录。",
-    gcalPermissionDenied: "日历访问被拒绝。请授予权限。",
-    gcalRateLimited: "请求过多。请稍候。",
-    gcalNetworkError: "网络错误。请检查连接。",
-    gcalUnknownError: "发生意外错误。请重试。",
+    // Error / status messages
+    scheduleGenFailed: 'فشل إنشاء الجدول.',
+    saveFailed: 'فشل حفظ البيانات. قد يكون التخزين ممتلئًا.',
+    calEventPlaceholder: 'مثال: فيزياء 101، وردية عمل، عشاء',
 
+    // Calibration extras
+    calibPreviousScore: 'النتيجة السابقة',
+    calibStarting: 'جارٍ البدء...',
+    calibTrials: 'محاولة',
+    calibScoreBreakdown: 'تفصيل النتيجة',
+    calibWhatMeans: 'ماذا يعني هذا؟',
+    calibInterpretExcellent: 'تركيز استثنائي — تبقى مركزًا تحت الضغط',
+    calibInterpretGood: 'تركيز جيد — فوق المتوسط',
+    calibInterpretModerate: 'تركيز متوسط — طبيعي لمعظم الناس',
+    calibInterpretLow: 'تركيز أقل من المتوسط — جرب في بيئة أكثر هدوءًا',
+
+    // App extras
+    regen: 'إعادة الإنشاء',
+    scheduleChanged: 'الجدول قديم. إعادة الإنشاء؟',
+    dismiss: 'تجاهل',
+    couldNotFit: 'لم يتمكن من الجدولة',
+    tryReducing: 'حاول تقليل المهام أو زيادة الساعات المتاحة.',
+    yourTasks: 'مهامك',
+    noEvents: 'لا توجد أحداث هذا الأسبوع',
+    freeDay: 'يوم حر',
+    hoursScheduled: 'ساعة مجدولة',
+    confirmDeleteAll: 'حذف جميع المهام؟',
+    clearAllEvents: 'مسح جميع الأحداث',
+    confirmRemoveAll: 'إزالة جميع الأحداث الثابتة؟ لا يمكن التراجع.',
+
+    // Calendar extras
+    calTo: 'إلى',
+    calDuration: 'المدة',
+    calEditEvent: 'تحرير الحدث',
+    calLabel: 'التسمية',
+    calSaveChanges: 'حفظ التغييرات',
+    calDelete: 'حذف',
+    calFree: 'حر',
+    calDescription: 'الوصف',
+
+    // Type labels
+    typeAcademic: 'أكاديمي',
+    typeSports: 'رياضة',
+    typeArts: 'فنون',
+    typeOther: 'أخرى',
+
+    // Priority labels
+    priorityHigh: 'عالي',
+    priorityMedium: 'متوسط',
+    priorityLow: 'منخفض',
+
+    // Difficulty labels
+    diffVeryEasy: 'سهل جدًا',
+    diffEasy: 'سهل',
+    diffMedium: 'متوسط',
+    diffHard: 'صعب',
+    diffVeryHard: 'صعب جدًا',
+
+    // Quick presets
+    presetSchool: 'مدرسة',
+    presetHalf: 'نصف يوم',
+    presetDinner: 'عشاء',
+    presetSleep: 'نوم',
+    presetSports: 'رياضة',
+
+    // Calendar error messages
+    calErrEventName: 'يرجى إدخال اسم الحدث.',
+    calErrSelectDay: 'اختر يومًا واحدًا على الأقل.',
+    calErrEndAfterStart: 'يجب أن يكون وقت الانتهاء بعد وقت البدء.',
+    calErrDurationMax: 'المدة القصوى 16 ساعة.',
+    calErrTimeConflict: 'تعارض في الوقت مع حدث موجود.',
+
+    // Task error messages
+    taskErrTitle: 'يرجى إدخال عنوان المهمة.',
+    taskErrDurationMin: 'الحد الأدنى للمدة 5 دقائق.',
+    taskErrDurationMax: 'المدة القصوى 8 ساعات.',
+    taskErrDuplicate: 'توجد مهمة بهذا العنوان بالفعل.',
+    taskErrDuplicateSuffix: '(أضف ملاحظة للتمييز)',
+
+    // Settings extras
+    settingsWeekday: 'يوم عمل',
+    settingsWeekend: 'عطلة نهاية الأسبوع',
+
+    // Calendar stats
+    calBlock: 'كتلة',
+    calBlocks: 'كتل',
+    calDay: 'يوم',
+    calDaysUnit: 'أيام',
+    calHScheduled: 'ساعة مجدولة',
+
+    // Stroop score breakdown
+    calibAccuracyLabel: 'الدقة',
+    calibSpeedLabel: 'السرعة',
+    calibConsistencyLabel: 'الاتساق',
+    calibLapsesLabel: 'فقدان الانتباه',
+    calibInterferenceLabel: 'التداخل',
+    calibLapsesDetail: 'فقدان انتباه',
+
+    // More calendar
+    calConflictsWith: 'يتعارض مع',
+    calMore: 'المزيد',
+
+    // Google Calendar
+    gcalConnect: 'ربط تقويم Google',
+    gcalConnecting: 'جارٍ الاتصال...',
+    gcalConnected: 'متصل',
+    gcalSignOut: 'تسجيل الخروج',
+    gcalRefresh: 'تحديث',
+    gcalLastSync: 'آخر مزامنة',
+    gcalGoogleBlockTooltip: 'تمت المزامنة من تقويم Google',
+    gcalImportSuccess: 'تم استيراد {n} أحداث من {calendar}.',
+    gcalImportError: 'فشل استيراد الأحداث. تحقق من اتصالك.',
+    gcalExport: 'مزامنة إلى تقويم Google',
+    gcalExportSync: 'جارٍ المزامنة...',
+    gcalExportProgress: 'جارٍ مزامنة {current} من {total} جلسة...',
+    gcalExportSuccess: 'تمت مزامنة {n} جلسة إلى تقويم Google.',
+    gcalExportError: 'فشلت المزامنة. {detail}',
+    gcalUnsync: 'إزالة',
+    gcalUnsyncConfirm: 'إزالة جميع الجلسات المتزامنة من تقويم Google؟',
+    gcalTokenExpired: 'انتهت صلاحية اتصال تقويم Google. يرجى تسجيل الدخول مرة أخرى.',
+    gcalPermissionDenied: 'تم رفض الوصول إلى التقويم. يرجى منح الإذن.',
+    gcalRateLimited: 'طلبات كثيرة جدًا. يرجى الانتظار.',
+    gcalNetworkError: 'خطأ في الشبكة. تحقق من اتصالك.',
+    gcalUnknownError: 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
+    ariaPrevWeek: 'الأسبوع السابق',
+    ariaNextWeek: 'الأسبوع التالي',
+    ariaClose: 'إغلاق',
+    stroopSlow: 'بطيء',
+    chronotypeMorning: 'صباحي',
+    chronotypeNeutral: 'محايد',
+    chronotypeNight: 'ليلي',
   },
 };
 
@@ -1065,4 +1720,13 @@ export function getStoredLang() {
 
 export function setStoredLang(code) {
   try { localStorage.setItem('mindflow_lang', code); } catch {}
+}
+
+/** Map internal lang code to BCP 47 locale for toLocaleDateString etc. */
+const LANG_TO_LOCALE = {
+  en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW',
+  es: 'es-ES', hi: 'hi-IN', ar: 'ar-SA',
+};
+export function langToLocale(lang) {
+  return LANG_TO_LOCALE[lang] || 'en-US';
 }

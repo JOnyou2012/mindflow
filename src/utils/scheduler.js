@@ -382,7 +382,11 @@ function deadlineAllowsDay(task, day, weekStartDate) {
   // Task can be on this day if the day is before or on the deadline date.
   // Overdue tasks (deadline already past) are treated as urgent —
   // allow them on any remaining day rather than dropping them.
-  if (deadlineDt < dayDate && deadlineDt < new Date()) return true;
+  // Compare against today's midnight explicitly (not wall-clock `new Date()`)
+  // so the intent is clear for future readers.
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  if (deadlineDt < dayDate && deadlineDt < todayMidnight) return true;
   return dayDate <= deadlineDt;
 }
 
@@ -532,8 +536,10 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   }
 
   // Flow-block preference: bonus for extending an existing block
+  // Only applies when the new task's type matches the type already in the slot —
+  // mixed-type slots (academic→sports→arts) should not get a false flow-block bonus.
   let flowBlockScore = 0;
-  if (slot.usedTicks >= FLOW_BLOCK_MIN_TICKS) {
+  if (slot.usedTicks >= FLOW_BLOCK_MIN_TICKS && slot.lastTaskType === task.type) {
     const extraHours = (slot.usedTicks - FLOW_BLOCK_MIN_TICKS) / 6;
     flowBlockScore = -FLOW_BLOCK_BONUS * Math.min(extraHours, 3);
   }
@@ -1105,6 +1111,7 @@ export default function generateWeeklySchedule(
           day,
           maxTicks: capTicks,
           usedTicks: 0,
+          lastTaskType: null,  // v8: track type for flow-block bonus gating
         });
       }
     }
@@ -1362,6 +1369,7 @@ export default function generateWeeklySchedule(
       dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
       dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
       dayLastTaskType[bestSlot.day] = task.type || 'other';
+      bestSlot.lastTaskType = task.type || 'other';  // v8: gate flow-block bonus on type match
 
       // Compute carryover state for next task on this day
       const hadBurnout = burnoutTick > 0;
@@ -1533,6 +1541,7 @@ export default function generateWeeklySchedule(
         dayTimeAwakeTicks[bestSlot.day] += fittedTicks;
         dayLastTaskEndTick[bestSlot.day] = absStart + fittedTicks;
         dayLastTaskType[bestSlot.day] = task.type || 'other';
+        bestSlot.lastTaskType = task.type || 'other';  // v8: gate flow-block bonus on type match
 
         // Compute carryover state for next task on this day
         const hadBurnout = burnoutTick > 0;
@@ -1554,7 +1563,7 @@ export default function generateWeeklySchedule(
           }
         }
       } catch (err) {
-        if (import.meta.env.DEV) console.error(`Scheduler refinement: failed for "${task.title}"`, err);
+        console.error(`Scheduler refinement: failed for "${task.title}"`, err);
         stillUnschedule.push(task);
       }
     }

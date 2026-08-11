@@ -16,6 +16,18 @@ import generateWeeklySchedule, {
   TAU_BUILD, TAU_DECAY, CIRCADIAN_AMPLITUDE, PROCESS_S_WEIGHT,
 } from '../src/utils/scheduler.js';
 
+// Future-proof Monday — always 4 weeks ahead so no days are past.
+function futureMonday() {
+  const d = new Date();
+  d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7) + 21);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 // ---------------------------------------------------------------------------
 // Test harness
 // ---------------------------------------------------------------------------
@@ -66,8 +78,8 @@ console.log('\n📋 1. Deadline boundary conditions');
 // 1a: Date-only deadline on same day (Monday)
 {
   const r = generateWeeklySchedule([], [
-    makeTask({ title: 'Due Mon', deadline: '2026-08-10', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due Mon', deadline: futureMonday(), durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   assert(r.days.Mon.sessions.length === 1,
     'D1.1: Date-only deadline on Monday → scheduled on Monday');
 }
@@ -75,8 +87,8 @@ console.log('\n📋 1. Deadline boundary conditions');
 // 1b: Time-including deadline on same day
 {
   const r = generateWeeklySchedule([], [
-    makeTask({ title: 'Due Mon 23:59', deadline: '2026-08-10T23:59', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due Mon 23:59', deadline: futureMonday() + 'T23:59', durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   assert(r.days.Mon.sessions.length === 1,
     'D1.2: Time-including deadline 23:59 → scheduled on Monday');
 }
@@ -84,8 +96,8 @@ console.log('\n📋 1. Deadline boundary conditions');
 // 1c: Time-specific deadline (3pm) — slot must end before 3pm
 {
   const r = generateWeeklySchedule([], [
-    makeTask({ title: 'Due 3pm', deadline: '2026-08-14T15:00', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due 3pm', deadline: addDays(futureMonday(), 4) + 'T15:00', durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   const friSessions = r.days.Fri.sessions;
   if (friSessions.length > 0) {
     assert(friSessions[0].endTick <= 90, // 3pm = tick 90
@@ -100,8 +112,8 @@ console.log('\n📋 1. Deadline boundary conditions');
     { day: 'Tue', startHour: 6, durationHours: 16 },
   ];
   const r = generateWeeklySchedule(blocks, [
-    makeTask({ title: 'Due Wed', deadline: '2026-08-12', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due Wed', deadline: addDays(futureMonday(), 2), durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   assert(r.days.Wed.sessions.length === 1,
     'D1.4: Mon-Tue full, due Wed → schedules on Wednesday');
   assert(r.days.Thu.sessions.length === 0,
@@ -115,8 +127,8 @@ console.log('\n📋 1. Deadline boundary conditions');
     blocks.push({ day, startHour: 6, durationHours: 16 });
   }
   const r = generateWeeklySchedule(blocks, [
-    makeTask({ title: 'Due Wed', deadline: '2026-08-12', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due Wed', deadline: addDays(futureMonday(), 2), durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   assert(r.unscheduled.length === 1, 'D1.6: Mon-Wed full, due Wed → unscheduled');
   assert(r.days.Thu.sessions.length === 0, 'D1.7: Not on Thursday');
   assert(r.days.Fri.sessions.length === 0, 'D1.8: Not on Friday');
@@ -125,8 +137,8 @@ console.log('\n📋 1. Deadline boundary conditions');
 // 1f: Deadline on Saturday → can schedule on Saturday (deadline day)
 {
   const r = generateWeeklySchedule([], [
-    makeTask({ title: 'Due Sat', deadline: '2026-08-15', durationMins: 60, priority: 'high' })
-  ], 1.0, {}, '2026-08-10');
+    makeTask({ title: 'Due Sat', deadline: addDays(futureMonday(), 5), durationMins: 60, priority: 'high' })
+  ], 1.0, {}, futureMonday());
   // Task can schedule on Saturday (deadline day). With the spread-across-day
   // bonus, a single task naturally lands in the afternoon on a valid day.
   const anyValidDaySession = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].some(
@@ -141,7 +153,7 @@ console.log('\n📋 1. Deadline boundary conditions');
 {
   const r = generateWeeklySchedule([], [
     makeTask({ title: 'Bad Date', deadline: 'not-a-real-date', durationMins: 60 })
-  ], 1.0, {}, '2026-08-10');
+  ], 1.0, {}, futureMonday());
   const anySession = Object.values(r.days).some(d => d.sessions.length > 0);
   assert(anySession, 'D1.10: Invalid deadline → treated as no deadline → scheduled');
 }
@@ -150,7 +162,7 @@ console.log('\n📋 1. Deadline boundary conditions');
 {
   const r = generateWeeklySchedule([], [
     makeTask({ title: 'Empty DL', deadline: '', durationMins: 60 })
-  ], 1.0, {}, '2026-08-10');
+  ], 1.0, {}, futureMonday());
   const anySession = Object.values(r.days).some(d => d.sessions.length > 0);
   assert(anySession, 'D1.11: Empty string deadline → scheduled');
 }
@@ -1027,7 +1039,7 @@ console.log('\n📋 15. Preflight analysis edge cases');
   const r = generateWeeklySchedule([], [
     // 0 days from now (no deadline)
     makeTask({ title: 'No DL', durationMins: 60 }),
-  ], 1.0, {}, '2026-08-10');
+  ], 1.0, {}, futureMonday());
   assert(r.preflight.urgentTaskCount === 0, 'P15.3: No deadline tasks → 0 urgent');
 }
 
@@ -1125,7 +1137,7 @@ console.log('\n📋 17. Week start date timezone safety');
 {
   const r = generateWeeklySchedule([], [
     makeTask({ title: 'ISO Date', durationMins: 60 })
-  ], 1.0, {}, '2026-08-10');
+  ], 1.0, {}, futureMonday());
   const any = Object.values(r.days).some(d => d.sessions.length > 0);
   assert(any, 'TZ17.2: Explicit ISO week start → valid schedule');
 }

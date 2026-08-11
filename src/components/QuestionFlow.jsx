@@ -25,14 +25,18 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
   const answersRef = useRef(initial); // always-current mirror (auto stages set+advance in one click)
 
   const stage = stages[index];
-  if (!stage) return null; // guard against empty/malformed stages array
-  const value = answers[stage.key];
+  // Guard against empty/malformed stages — must come AFTER all hooks.
+  // If placed before hooks, it would violate the Rules of Hooks by
+  // conditionally skipping useCallback/useEffect calls between renders.
+  const value = stage ? answers[stage.key] : undefined;
+
+  const stageKey = stage?.key ?? '';
 
   const set = useCallback((v) => {
-    answersRef.current = { ...answersRef.current, [stage.key]: v };
+    answersRef.current = { ...answersRef.current, [stageKey]: v };
     setAnswers(answersRef.current);
     setError('');
-  }, [stage.key]);
+  }, [stageKey]);
 
   const goBack = useCallback(() => {
     if (index === 0) return;
@@ -42,6 +46,7 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
   }, [index]);
 
   const advance = useCallback(() => {
+    if (!stage) return;
     const current = answersRef.current;
     const err = stage.validate ? stage.validate(current) : null;
     if (err) { setError(err); return; }
@@ -56,6 +61,7 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
 
   // Enter advances manual stages (guarded for IME composition)
   useEffect(() => {
+    if (!stage) return;
     const onKey = (e) => {
       if (e.key === 'Enter' && !e.isComposing && stage.manual) {
         e.preventDefault();
@@ -72,6 +78,10 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
     return () => clearTimeout(t);
   }, [index]);
 
+  // All hooks must run before this guard — otherwise empty stages cause
+  // "Rendered fewer hooks than expected" (Rules of Hooks violation).
+  if (!stage) return null;
+
   return (
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
       {/* Progress + back */}
@@ -80,7 +90,7 @@ export default function QuestionFlow({ stages, initial = {}, onComplete, T }) {
           onClick={goBack}
           disabled={index === 0}
           aria-label={T.navBack}
-          className="p-1.5 rounded-full text-mindflow-muted hover:bg-mindflow-surface-alt disabled:opacity-0"
+          className="p-1.5 rounded-full text-mindflow-muted hover:bg-mindflow-surface-alt disabled:opacity-0 disabled:pointer-events-none"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>

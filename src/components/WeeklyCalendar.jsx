@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, School, Dumbbell, Palette, Ellipsis, Trash2, AlertCircle, Plus, CheckCircle2, CalendarDays } from 'lucide-react';
 import { TYPE_COLORS, typeColor } from '../utils/theme.js';
+import { getStoredLang, langToLocale } from '../utils/i18n.js';
 import { uuid } from '../utils/uuid.js';
 import QuestionFlow from './QuestionFlow.jsx';
 import GoogleCalendarImport from './GoogleCalendarImport.jsx';
@@ -31,9 +32,12 @@ const TIME_OPTIONS = buildTimeOptions();
 function fmtHr(h) {
   const hh = Math.floor(h);
   const mm = Math.round((h - hh) * 60);
-  const p = hh >= 12 ? 'pm' : 'am';
-  const d = hh > 12 ? hh - 12 : (hh === 0 ? 12 : hh);
-  return mm > 0 ? `${d}:${mm.toString().padStart(2, '0')}${p}` : `${d}${p}`;
+  const loc = langToLocale(getStoredLang());
+  const d = new Date(2026, 0, 1, hh, mm);
+  if (mm > 0) {
+    return d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' });
+  }
+  return d.toLocaleTimeString(loc, { hour: 'numeric' });
 }
 
 function overlaps(aStart, aEnd, bStart, bEnd) {
@@ -104,7 +108,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
           value={value || ''}
           onChange={e => set(e.target.value)}
           placeholder={T.calEventPlaceholder || 'e.g. Physics 101, Work shift, Dinner'}
-          className="w-full bg-transparent border-b-2 border-mindflow-border focus:border-mindflow-accent focus:outline-none text-xl text-mindflow-heading placeholder-mindflow-muted py-2 text-center"
+          className="w-full bg-transparent border-b-2 border-mindflow-border focus:border-mindflow-accent focus:outline-none text-xl text-mindflow-heading placeholder:text-mindflow-muted py-2 text-center"
         />
       ),
     },
@@ -376,8 +380,11 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             <div className="flex border-b border-mindflow-border-light">
               <div className="w-14 shrink-0" />
               {DAYS.map(d => {
-                const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-                const isToday = d === todayStr.slice(0, 3);
+                // Index-based today detection — locale-independent.
+                // JS getDay(): Sun=0, Mon=1, ..., Sat=6.
+                // DAYS array: Mon=0, Tue=1, ..., Sun=6.
+                const todayIdx = (new Date().getDay() + 6) % 7;
+                const isToday = DAYS.indexOf(d) === todayIdx;
                 const dayNum = getDayNum(d);
                 return (
                   <div key={d} className="flex-1 min-w-[110px] px-2 py-2 text-center border-l border-mindflow-border-light">
@@ -422,8 +429,12 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                     return (
                       <div
                         key={b.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${b.label}, ${fmtHr(b.startHour)} to ${fmtHr(b.startHour + b.durationHours)}`}
                         onClick={() => openEdit(b)}
-                        className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden cursor-pointer hover:brightness-95"
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(b); } }}
+                        className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-white/60"
                         style={{
                           top: top + 1 + 'px',
                           height: blockH - 2 + 'px',
@@ -506,11 +517,16 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
       {/* EDIT POPOVER */}
       {/* ================================================================ */}
       {pop && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closePop}>
-          <div className="w-80 rounded-xl bg-mindflow-surface shadow-xl p-5 space-y-4 animate-fade-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={closePop}
+          onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); closePop(); } }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-title"
+            className="w-80 rounded-xl bg-mindflow-surface shadow-xl p-5 space-y-4 animate-fade-in"
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-mindflow-heading font-medium text-sm">{T.calEditEvent}</h3>
-              <button type="button" onClick={closePop} className="p-1 rounded-full text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface-alt transition-colors">
+              <h3 id="edit-title" className="text-mindflow-heading font-medium text-sm">{T.calEditEvent}</h3>
+              <button type="button" onClick={closePop} aria-label={T.ariaClose || 'Close'}
+                className="p-1 rounded-full text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface-alt transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -522,21 +538,21 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             </div>
 
             <div>
-              <label className="text-xs font-medium text-mindflow-muted block mb-1">{T.calLabel}</label>
-              <input type="text" value={popLabel} onChange={e => { setPopLabel(e.target.value); setPopMsg(''); }}
+              <label htmlFor="mf-event-name" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calLabel}</label>
+              <input id="mf-event-name" type="text" value={popLabel} onChange={e => { setPopLabel(e.target.value); setPopMsg(''); }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); saveEdit(); } }}
                 className="w-full bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none" autoFocus />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-mindflow-muted block mb-1">{T.calTime}</label>
+              <label htmlFor="mf-event-time-start" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calTime}</label>
               <div className="flex items-center gap-2">
-                <select value={popStart} onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
+                <select id="mf-event-time-start" value={popStart} onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
                   {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
                 <span className="text-mindflow-muted text-xs">{T.calTo}</span>
-                <select value={popEnd} onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
+                <select id="mf-event-time-end" value={popEnd} onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
                   {TIME_OPTIONS.filter(t => t > popStart).map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
@@ -544,10 +560,11 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             </div>
 
             <div>
-              <label className="text-xs font-medium text-mindflow-muted block mb-1">{T.calType}</label>
-              <div className="flex gap-2">
+              <span id="mf-event-type-label" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calType}</span>
+              <div role="radiogroup" aria-labelledby="mf-event-type-label" className="flex gap-2">
                 {Object.entries(TYPE_CFG).map(([k, c]) => (
-                  <button key={k} type="button" onClick={() => setPopType(k)}
+                  <button key={k} type="button" role="radio" aria-checked={popType === k}
+                    onClick={() => setPopType(k)}
                     className={`flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors
                       ${popType === k ? 'text-white' : 'border border-mindflow-border text-mindflow-muted hover:text-mindflow-text'}`}
                     style={popType === k ? { backgroundColor: c.color } : {}}>
@@ -558,7 +575,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             </div>
 
             {popMsg && (
-              <div className="flex items-start gap-2 text-xs text-mindflow-warning bg-mindflow-warning/10 rounded-lg px-3 py-2">
+              <div role="alert" className="flex items-start gap-2 text-xs text-mindflow-warning bg-mindflow-warning/10 rounded-lg px-3 py-2">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{popMsg}
               </div>
             )}
@@ -569,7 +586,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                            hover:bg-mindflow-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 {T.calSaveChanges}
               </button>
-              <button type="button" onClick={deleteBlock}
+              <button type="button" onClick={deleteBlock} aria-label={T.calDelete || 'Delete event'}
                 className="rounded-full px-3 py-2 text-mindflow-danger hover:bg-mindflow-danger/10 transition-colors">
                 <Trash2 className="w-4 h-4" />
               </button>

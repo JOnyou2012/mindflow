@@ -8,7 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="MindFlow uses a mathematical model of your brain to predict mental burnout and build a personalized weekly study schedule that puts hard tasks when you're freshest. Free, no account needed." />
-    <meta name="theme-color" content="#1a73e8" />
+    <meta name="theme-color" content="#1669d4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e1f20" />
     <meta property="og:title" content="MindFlow — Smart Study Scheduler" />
     <meta property="og:description" content="Predict burnout before it happens. A personalized weekly study plan powered by a Markov-chain cognitive model." />
     <meta property="og:type" content="website" />
@@ -17,12 +18,16 @@
     <meta name="twitter:description" content="Predict burnout before it happens. A personalized weekly study plan powered by a Markov-chain cognitive model." />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <title>MindFlow — Smart Study Scheduler</title>
-    <!-- Blocking script: apply dark theme before first paint to prevent FOWT -->
+    <!-- Blocking script: apply dark theme and language before first paint to
+         prevent FOWT (flash of wrong theme) and wrong screen-reader language. -->
     <script>
       (function() {
         try {
           var t = localStorage.getItem('mindflow_theme');
           if (t === 'dark') document.documentElement.classList.add('dark');
+          var l = localStorage.getItem('mindflow_lang');
+          if (l) document.documentElement.lang = l;
+          if (l === 'ar') document.documentElement.dir = 'rtl';
         } catch(e) {}
       })();
     </script>
@@ -44,6 +49,12 @@
         verdict, and DESIGN.md.
     -->
     <div id="root"></div>
+    <noscript>
+      <div style="font-family:system-ui,sans-serif;max-width:400px;margin:80px auto;padding:20px;text-align:center">
+        <h1 style="font-size:1.3rem;color:#202124">MindFlow</h1>
+        <p style="color:#5f6368">MindFlow requires JavaScript to run. Please enable JavaScript in your browser settings.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

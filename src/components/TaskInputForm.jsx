@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, Star, Clock, Calendar, Edit3, CheckCircle2, ListChecks } from 'lucide-react';
 import { TYPE_COLORS, TYPE_TEXT_COLORS, PRIORITY_COLORS, PRIORITY_TEXT_COLORS } from '../utils/theme.js';
 import { uuid } from '../utils/uuid.js';
+import { getStoredLang, langToLocale } from '../utils/i18n.js';
 import QuestionFlow from './QuestionFlow.jsx';
 
 const QUICK_DURATIONS = [15, 30, 60, 90, 120];
@@ -28,7 +29,7 @@ function formatDeadline(iso) {
     if (!dlStr.includes('T')) dlStr += 'T00:00:00';
     const d = new Date(dlStr);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString(langToLocale(getStoredLang()), { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return iso; }
 }
 
@@ -109,7 +110,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
           value={value || ''}
           onChange={e => set(e.target.value)}
           placeholder={T.taskTitle}
-          className="w-full bg-transparent border-b-2 border-mindflow-border focus:border-mindflow-accent focus:outline-none text-xl text-mindflow-heading placeholder-mindflow-muted py-2 text-center"
+          className="w-full bg-transparent border-b-2 border-mindflow-border focus:border-mindflow-accent focus:outline-none text-xl text-mindflow-heading placeholder:text-mindflow-muted py-2 text-center"
         />
       ),
     },
@@ -396,13 +397,17 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
             return (
               <div
                 key={task.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${task.title}, ${tm.label}, ${T.taskMinutes.replace('{n}', task.durationMins)}`}
                 onClick={() => startEdit(task)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(task); } }}
                 className="flex items-start justify-between gap-3 rounded-lg border border-mindflow-border-light bg-mindflow-surface px-4 py-3 hover:bg-mindflow-surface-alt cursor-pointer group transition-colors"
                 style={{ opacity: overdue ? 0.6 : 1 }}
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5"
-                  style={{ backgroundColor: overdue ? '#d93025' : tm.color }}
+                  style={{ backgroundColor: overdue ? 'var(--color-mindflow-danger)' : tm.color }}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

@@ -92,8 +92,6 @@ const RECOVERY_TAU_MINUTES = RECOVERY_TAU_SLOW;
  * @param {object}  [options]   Advanced options (see below)
  * @param {number}  [options.cumulativeLoad=0]    Total cognitive load so far today
  * @param {string}  [options.prevTaskType=null]   Previous task type for attention residue
- * @param {boolean} [options.disableFlowInertia]   Disable flow deepening/collapse
- * @param {boolean} [options.disableMomentum]      Disable cognitive momentum
  * @returns {MarkovTimePoint[]}
  */
 export function calculateMarkovTimeline(

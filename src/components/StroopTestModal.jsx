@@ -1,14 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Brain, RefreshCw, Target } from 'lucide-react';
 
-// 4 colors mapped to 4 keyboard keys — user must learn this mapping
-const COLORS = [
-  { name: 'Red',    hex: '#d4786e', key: 'r' },
-  { name: 'Green',  hex: '#7eb8a0', key: 'g' },
-  { name: 'Blue',   hex: '#7e9ab8', key: 'b' },
-  { name: 'Yellow', hex: '#e0b870', key: 'y' },
-];
-const COLOR_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c]));
+// 4 colors mapped to 4 keyboard keys — user must learn this mapping.
+// Color names are translated so non-English users see words in their own
+// language (the Stroop effect works in any language).
+function getColors(T) {
+  return [
+    { name: T.stroopRed || 'Red',       hex: '#d4786e', key: 'r' },
+    { name: T.stroopGreen || 'Green',   hex: '#7eb8a0', key: 'g' },
+    { name: T.stroopBlue || 'Blue',     hex: '#7e9ab8', key: 'b' },
+    { name: T.stroopYellow || 'Yellow', hex: '#e0b870', key: 'y' },
+  ];
+}
+function getColorByKey(T) {
+  return Object.fromEntries(getColors(T).map(c => [c.key, c]));
+}
 
 const GAME_SECS = 60;
 const GAME_MS = GAME_SECS * 1000;
@@ -48,12 +54,12 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
 
     let wordColor, inkColor;
     if (isCongruent) {
-      inkColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+      inkColor = getColors(T)[Math.floor(Math.random() * getColors(T).length)];
       wordColor = inkColor;
     } else {
-      inkColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+      inkColor = getColors(T)[Math.floor(Math.random() * getColors(T).length)];
       do {
-        wordColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+        wordColor = getColors(T)[Math.floor(Math.random() * getColors(T).length)];
       } while (wordColor.name === inkColor.name);
     }
 
@@ -64,7 +70,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       trialType: isCongruent ? TRIAL_TYPES.CONGRUENT : TRIAL_TYPES.INCONGRUENT,
     });
     trialStartRef.current = performance.now();
-  }, []);
+  }, [T]);
 
   // -- Keyboard handler -------------------------------------------------------
 
@@ -72,7 +78,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     if (phase !== 'playing') return;
 
     const key = e.key.toLowerCase();
-    const color = COLOR_BY_KEY[key];
+    const color = getColorByKey(T)[key];
     if (!color) return; // ignore non-color keys
 
     e.preventDefault();
@@ -255,7 +261,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
       <div className="w-full max-w-sm">
         <p className="text-xs font-medium text-mindflow-muted text-center mb-3">{T.calibKeyMapping}</p>
         <div className="grid grid-cols-4 gap-3">
-          {COLORS.map(c => (
+          {getColors(T).map(c => (
             <div key={c.key} className="text-center">
               <div className="w-14 h-14 rounded-lg mx-auto flex items-center justify-center text-xl font-medium"
                 style={{ backgroundColor: c.hex, color: '#fff' }}>
@@ -363,14 +369,14 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
               ${lastFeedback === 'correct' ? 'bg-mindflow-success text-white' :
                 lastFeedback === 'wrong' ? 'bg-mindflow-danger text-white' :
                 'bg-mindflow-warning text-black'}`}>
-              {lastFeedback === 'correct' ? '✓' : lastFeedback === 'wrong' ? '✗' : 'SLOW'}
+              {lastFeedback === 'correct' ? '✓' : lastFeedback === 'wrong' ? '✗' : (T.stroopSlow || 'SLOW')}
             </div>
           )}
         </div>
 
         {/* Key hints */}
         <div className="flex gap-3">
-          {COLORS.map(c => (
+          {getColors(T).map(c => (
             <div key={c.key} className="flex flex-col items-center gap-1">
               <kbd className="px-3 py-1.5 rounded-md bg-mindflow-surface border border-mindflow-border
                                text-mindflow-heading font-medium text-base min-w-[2.5rem] text-center shadow-sm">
@@ -437,7 +443,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
           </div>
           {results.lapses > 0 && (
             <div className="flex justify-between text-xs">
-              <span className="text-mindflow-warning">{T.calibLapsesLabel} ({results.lapses} × &gt;1.5s)</span>
+              <span className="text-mindflow-warning">{T.calibLapsesLabel} ({results.lapses} × {'>'}1.5s)</span>
               <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
             </div>
           )}

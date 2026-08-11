@@ -52,6 +52,7 @@ export async function fetchWeekEvents(accessToken, weekStartISO) {
 
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
@@ -212,6 +213,7 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
 
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) return [];
@@ -246,9 +248,9 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
   if (flat.length === 0) return { created: 0, skipped: 0, failed: 0, events: [] };
 
   // Find existing MindFlow events to skip (duplicate detection)
-  const earliest = weekStartISOs.sort()[0];
+  const earliest = [...weekStartISOs].sort()[0];
   const latest = (() => {
-    const d = new Date(weekStartISOs.sort().pop() + 'T00:00:00');
+    const d = new Date([...weekStartISOs].sort().pop() + 'T00:00:00');
     d.setDate(d.getDate() + 7);
     return d.toISOString().slice(0, 10);
   })();
@@ -295,6 +297,7 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(30000),
         });
 
         if (response.status === 401) throw new Error('token_expired');
@@ -309,6 +312,7 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(30000),
           });
           if (!retry.ok) { failed++; continue; }
           const data = await retry.json();
@@ -349,6 +353,7 @@ export async function deleteSyncedEvents(accessToken, events) {
       const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(30000),
       });
       if (response.ok || response.status === 410) {
         // 410 = already deleted (gone), treat as success

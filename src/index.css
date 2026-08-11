@@ -10,17 +10,13 @@
   --color-mindflow-text: #3c4043;
   --color-mindflow-heading: #202124;
   --color-mindflow-muted: #5f6368;
-  --color-mindflow-accent: #1a73e8;
-  --color-mindflow-accent-hover: #1765cc;
+  --color-mindflow-accent: #1669d4;
+  --color-mindflow-accent-hover: #1557b0;
   --color-mindflow-accent-soft: #e8f0fe;
   --color-mindflow-onaccent: #ffffff;
   --color-mindflow-success: #188038;
-  --color-mindflow-warning: #e37400;
+  --color-mindflow-warning: #c26400;
   --color-mindflow-danger: #d93025;
-  --color-mindflow-flow: #188038;
-  --color-mindflow-distracted: #e37400;
-  --color-mindflow-fatigue: #d93025;
-  --color-mindflow-recovery: #1a73e8;
 }
 
 html.dark {
@@ -38,12 +34,7 @@ html.dark {
   --color-mindflow-accent-soft: #004a77;
   --color-mindflow-onaccent: #062e6f;
   --color-mindflow-success: #81c995;
-  --color-mindflow-warning: #fdd663;
   --color-mindflow-danger: #f28b82;
-  --color-mindflow-flow: #81c995;
-  --color-mindflow-distracted: #fdd663;
-  --color-mindflow-fatigue: #f28b82;
-  --color-mindflow-recovery: #a8c7fa;
 }
 
 /* ── Theme-aware text colors for type/priority chips ───────────────── */
@@ -168,4 +159,33 @@ select {
 input::placeholder {
   color: var(--color-mindflow-muted);
   opacity: 0.7;
+}
+
+/* ── RTL (Arabic) ──────────────────────────────────────────────────── */
+[dir="rtl"] {
+  /* Flex direction for row layouts — reverse for logical reading order */
+  .flex-row { flex-direction: row-reverse; }
+
+  /* Margin/padding flips — ml→mr, pl→pr */
+  .ml-auto { margin-left: 0; margin-right: auto; }
+  .mr-auto { margin-right: 0; margin-left: auto; }
+
+  /* Absolute positioning flips */
+  .left-0 { left: auto; right: 0; }
+  .right-0 { right: auto; left: 0; }
+  .right-2 { right: auto; left: 0.5rem; }
+
+  /* Text alignment */
+  .text-left { text-align: right; }
+  .text-right { text-align: left; }
+
+  /* Animation directions — slide from left instead of right */
+  @keyframes stage-in-right {
+    from { opacity: 0; transform: translateX(-36px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes stage-in-left {
+    from { opacity: 0; transform: translateX(36px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
 }

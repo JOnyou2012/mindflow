@@ -134,7 +134,7 @@ export default function GoogleCalendarExport({ weekResults, T }) {
       <div className="flex items-center gap-2">
         <span className="text-xs text-mindflow-success">
           {T.gcalExportSuccess.replace('{n}', created)}
-          {skipped > 0 && ` (${skipped} ${T.gcalExportDuplicate ? 'skipped' : 'skipped'})`}
+          {skipped > 0 && ` (${skipped} skipped)`}
         </span>
         <button type="button" onClick={handleExport} className="text-xs text-mindflow-accent hover:underline">{T.gcalRefresh}</button>
         <button type="button" onClick={handleUnsync} className="text-xs text-mindflow-muted hover:text-mindflow-danger">{T.gcalUnsync}</button>
