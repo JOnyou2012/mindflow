@@ -10,7 +10,7 @@ import {
   saveCalendar, loadCalendar,
   saveTasks, loadTasks,
   saveSettings, loadSettings,
-  clearAll,
+  clearAll, loadGoogleCache, clearGoogleCache,
 } from './utils/storage.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
@@ -38,6 +38,11 @@ export default function App() {
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
   const [settings, setSettingsState] = useState(() => loadSettings());
+  const [googleBlocks, setGoogleBlocks] = useState(() => loadGoogleCache()?.data || []);
+  const [googleSyncInfo, setGoogleSyncInfo] = useState(() => {
+    const cache = loadGoogleCache();
+    return cache ? { syncedAt: cache.syncedAt, calendarName: cache.calendarName, eventCount: cache.eventCount } : null;
+  });
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result
@@ -68,15 +73,21 @@ export default function App() {
   const generateTimerRef = useRef(null);
   const isStale = Object.keys(weekResults).length > 0 && dataVersionRef.current > 0;
 
-  const setCalibration = (cal) => { setCalibrationState(cal); saveCalibration(cal); };
-  const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); saveCalendar(blocks); dataVersionRef.current++; };
-  const setTasks = (t) => { setTasksState(t); saveTasks(t); dataVersionRef.current++; };
-  const setSettings = (s) => { setSettingsState(s); saveSettings(s); };
+  const setCalibration = (cal) => { setCalibrationState(cal); const ok = saveCalibration(cal); if (!ok && cal) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } };
+  const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); const ok = saveCalendar(blocks); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
+  const setTasks = (t) => { setTasksState(t); const ok = saveTasks(t); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
+  const setSettings = (s) => { setSettingsState(s); saveSettings(s); dataVersionRef.current++; };
+
+  // Google Calendar import handler
+  const handleGoogleImport = (importedBlocks) => {
+    setGoogleBlocks(importedBlocks);
+    dataVersionRef.current++;
+  };
 
   const handleGenerate = useCallback((onDone) => {
     if (isCalculating) return;
     setError(null);
-    if (!calibration || typeof calibration.alphaScore !== 'number') {
+    if (!calibration || typeof calibration.alphaScore !== 'number' || !Number.isFinite(calibration.alphaScore)) {
       setError(T.noCalibration);
       return;
     }
@@ -116,7 +127,8 @@ export default function App() {
           const deferred = remaining.filter(t => !eligible.includes(t));
           const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
           const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
-          const result = generateWeeklySchedule(calendarBlocks, eligible, calibration.alphaScore, cappedSettings, ws);
+          const allBlocks = [...calendarBlocks, ...googleBlocks];
+          const result = generateWeeklySchedule(allBlocks, eligible, calibration.alphaScore, cappedSettings, ws);
           remaining = [...(result.unscheduled || []), ...deferred];
           results[ws] = result;
           w++;
@@ -135,7 +147,7 @@ export default function App() {
         setIsCalculating(false);
         if (onDone) onDone();
       } catch (err) {
-        if (import.meta.env.DEV) console.error('Schedule generation failed:', err);
+        console.error('Schedule generation failed:', err);
         setError(T.scheduleGenFailed || 'Failed to generate schedule.');
         setIsCalculating(false);
       }
@@ -247,7 +259,7 @@ export default function App() {
             <div className="max-w-md rounded-xl border border-mindflow-border bg-mindflow-surface p-5 flex items-center justify-between">
               <div>
                 <p className="text-xs text-mindflow-muted">{T.secCalibrationDone}</p>
-                <p className="text-3xl font-medium text-mindflow-heading tabular-nums mt-1">{calibration.alphaScore.toFixed(2)}</p>
+                <p className="text-3xl font-medium text-mindflow-heading tabular-nums mt-1">{calibration?.alphaScore != null ? calibration.alphaScore.toFixed(2) : '—'}</p>
               </div>
               <button
                 onClick={() => { setCalibrationState(null); try { localStorage.removeItem('mindflow_calibration'); } catch {} }}
@@ -259,7 +271,7 @@ export default function App() {
           )
         )}
 
-        {step === 2 && <WeeklyCalendar blocks={calendarBlocks} onChange={setCalendarBlocks} weekStart={getWeekStart(0)} onViewChange={setSubView} T={T} />}
+        {step === 2 && <WeeklyCalendar blocks={calendarBlocks} googleBlocks={googleBlocks} onChange={setCalendarBlocks} onGoogleImport={handleGoogleImport} weekStart={getWeekStart(0)} onViewChange={setSubView} T={T} />}
 
         {step === 3 && <TaskInputForm tasks={tasks} onChange={setTasks} onViewChange={setSubView} T={T} />}
 

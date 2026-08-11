@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, Star, Clock, Calendar, Edit3, CheckCircle2, ListChecks } from 'lucide-react';
 import { TYPE_COLORS, TYPE_TEXT_COLORS, PRIORITY_COLORS, PRIORITY_TEXT_COLORS } from '../utils/theme.js';
+import { uuid } from '../utils/uuid.js';
 import QuestionFlow from './QuestionFlow.jsx';
 
 const QUICK_DURATIONS = [15, 30, 60, 90, 120];
@@ -8,6 +9,7 @@ const QUICK_DURATIONS = [15, 30, 60, 90, 120];
 // -- Helpers ------------------------------------------------------------------
 
 function formatMinutes(mins) {
+  if (mins == null || !Number.isFinite(mins)) return '—';
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -266,7 +268,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
       setEditingId(null);
       setView('list');
     } else {
-      onChange([...tasks, { id: crypto.randomUUID(), ...task }]);
+      onChange([...tasks, { id: uuid(), ...task }]);
       setView('added');
     }
   };
@@ -284,7 +286,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
 
   const handleClearAll = () => {
     if (tasks.length === 0) return;
-    if (window.confirm(T.taskConfirmDeleteAll || `Delete all ${tasks.length} task${tasks.length !== 1 ? 's' : ''}? This cannot be undone.`)) {
+    if (window.confirm(T.confirmDeleteAll || `Delete all ${tasks.length} task${tasks.length !== 1 ? 's' : ''}? This cannot be undone.`)) {
       onChange([]);
     }
   };

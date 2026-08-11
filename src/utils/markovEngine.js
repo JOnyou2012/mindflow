@@ -99,6 +99,11 @@ const RECOVERY_TAU_MINUTES = RECOVERY_TAU_SLOW;
 export function calculateMarkovTimeline(
   alpha = 1.0, beta = 3, gamma = 1.0, steps = 18, initialState = null, options = null
 ) {
+  // Guard against invalid steps (negative, NaN, zero) — downstream code
+  // accessing timeline[0] or timeline.length - 1 would crash on an empty array
+  if (!Number.isFinite(steps) || steps < 1) {
+    return [{ tick: 0, timeLabel: '0h00', flow: 1, distracted: 0, fatigue: 0, recovery: 0 }];
+  }
   const opts = options || {};
   let v0 = validateInitialState(initialState);
 
@@ -171,9 +176,9 @@ function biexponentialDecay(t) {
  * approximation, especially for short breaks where fast component matters.
  */
 function invertBiexponentialDecay(ratio) {
-  // lo=1: meaningful minimum break. At t=0, decay=1.0 which would
-  // prevent the binary search from converging for ratio close to 1.
-  let lo = 1, hi = 120;
+  // lo=0: allow convergence for ratio > 0.84 (sub-1-minute breaks).
+  // At t=0, decay=1.0 which would prevent convergence with lo=1.
+  let lo = 0, hi = 120;
   for (let i = 0; i < 20; i++) {
     const mid = (lo + hi) / 2;
     if (biexponentialDecay(mid) > ratio) lo = mid;
@@ -205,6 +210,8 @@ export function computeOptimalBreakDuration(timeline, burnoutTick, targetFatigue
 
   const state = timeline[burnoutTick];
   const currentFatigue = state.fatigue;
+  // Guard against corrupted timeline entries (undefined/missing fatigue)
+  if (typeof currentFatigue !== 'number' || !Number.isFinite(currentFatigue)) return 5;
   const currentFlow = state.flow;
 
   if (currentFatigue <= targetFatigue) return 5;
@@ -244,6 +251,8 @@ export function computeOptimalBreakDuration(timeline, burnoutTick, targetFatigue
  * @returns {number[]} Post-break state vector
  */
 export function computeRecoveryState(currentState, breakMinutes = 15) {
+  // Guard against negative breakMinutes — would invert recovery (fatigue increases)
+  if (breakMinutes < 0) breakMinutes = 5;
   const [flow, distracted, fatigue, recovery] = currentState;
 
   // Biexponential decay of fatigue
@@ -321,12 +330,12 @@ export function computeAttentionResidue(prevType, newType) {
  * @param {string} prevType   Previous task type
  * @returns {number[]} Modified state
  */
-function applyAttentionResidue(state, prevType) {
+function applyAttentionResidue(state, prevType, newType = null) {
   // Shifts flow → distracted based on task type switching cost.
-  // Uses the type-pair-specific residue values from computeAttentionResidue,
-  // falling back to 'other' when the new task type is unknown.
-  // When no prevType specified, uses generic 12% residue.
-  const residue = prevType ? computeAttentionResidue(prevType, 'other') : 0.12;
+  // Uses the type-pair-specific residue values from computeAttentionResidue.
+  // Accepts newType to compute the correct residue for same-/cross-domain transitions.
+  // When no newType specified, falls back to 'other' to maintain backward compat.
+  const residue = prevType ? computeAttentionResidue(prevType, newType || 'other') : 0.12;
   const flowLoss = state[0] * residue;
   return [
     clamp(state[0] - flowLoss),
@@ -508,6 +517,10 @@ function simulateTrajectory(alpha, beta, gamma, steps, v0, opts = {}) {
   for (let t = 0; t <= steps; t++) {
     timeline.push(makeTick(t, v));
 
+    // Don't compute the final transition — it would produce a state for
+    // step+1 that is never recorded in the timeline (wasted computation)
+    if (t >= steps) break;
+
     const currentFatigue = v[2];
 
     // Track flow streak (for flow inertia)
@@ -564,6 +577,10 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
   for (let t = 0; t <= steps; t++) {
     timeline.push(makeTick(startTick + t, v));
 
+    // Don't compute the final transition — it would produce a state for
+    // step+1 that is never recorded in the timeline (wasted computation)
+    if (t >= steps) break;
+
     const currentFatigue = v[2];
     if (v[0] > 0.3) { flowStreak++; }
     else { flowStreak = Math.max(0, flowStreak - 2); }
@@ -596,6 +613,9 @@ function simulateTrajectoryFrom(alpha, beta, gamma, v0, steps, startTick, opts =
 // -- Helpers -----------------------------------------------------------------
 
 function sigmoid(x, center, steepness) {
+  // Guard against NaN input — NaN comparisons always return false,
+  // bypassing overflow guards and producing NaN through the sigmoid
+  if (Number.isNaN(x) || Number.isNaN(center) || Number.isNaN(steepness)) return 0.5;
   // Guard against overflow: exp(>709) = Infinity in IEEE 754
   const z = -steepness * (x - center);
   if (z > 700) return 1.0;  // effectively 1/(1+0) = 1
@@ -634,6 +654,20 @@ function clamp(x) {
   if (x > 1) return 1;
   if (x < 1e-10) return 0;
   return x;
+}
+
+/**
+ * Clamp and re-normalize a state vector to sum-to-1.0.
+ * Unlike clamp() which can break sum-to-1 when values are clamped to 0,
+ * this redistributes probability mass to maintain the invariant.
+ */
+export function clampAndNormalize(vec) {
+  const clamped = vec.map(v => clamp(v));
+  const sum = clamped.reduce((a, b) => a + b, 0);
+  if (sum > 0 && Number.isFinite(sum)) {
+    return clamped.map(v => v / sum);
+  }
+  return [0.25, 0.25, 0.25, 0.25];
 }
 
 // -- Exports -----------------------------------------------------------------

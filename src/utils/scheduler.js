@@ -342,7 +342,9 @@ function formatTickLabel(tick) {
 function deadlineToDay(isoDate) {
   if (!isoDate) return null;
   try {
-    const d = new Date(isoDate + 'T00:00:00');
+    // Use normalizeDeadline to handle time-including deadlines and trailing-T
+    const dlStr = normalizeDeadline(isoDate);
+    const d = new Date(dlStr);
     if (isNaN(d.getTime())) return null;
     const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return map[d.getDay()];
@@ -392,7 +394,7 @@ function slotBeforeDeadline(slotEndTick, task, day, weekStartDate) {
   if (!task.deadline) return true;
   if (!task.deadline.includes('T')) return true; // date-only deadline, time doesn't matter
 
-  const dlStr = task.deadline;
+  const dlStr = normalizeDeadline(task.deadline);
   const deadlineDt = new Date(dlStr);
   if (isNaN(deadlineDt.getTime())) return true;
 
@@ -484,7 +486,7 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     if (!isNaN(dl.getTime())) {
       const slotDate = new Date(weekStartDate + 'T00:00:00');
       slotDate.setDate(slotDate.getDate() + DAY_INDEX[slot.day]);
-      const daysUntilDeadline = (dl - slotDate) / 86400000;
+      const daysUntilDeadline = Math.round((dl - slotDate) / 86400000);
       if (daysUntilDeadline > 7) {
         // Task is scheduled too early — penalize proportionally
         deadlineWeekScore = (daysUntilDeadline / 7) * 0.3;
@@ -687,7 +689,7 @@ function analyzePreflight(tasks, settings) {
   const now = Date.now();
   for (const t of tasks) {
     if (t.deadline) {
-      const dl = new Date(t.deadline);
+      const dl = new Date(normalizeDeadline(t.deadline));
       if (!isNaN(dl.getTime())) {
         const daysUntil = (dl.getTime() - now) / (86400000);
         if (daysUntil <= 2) urgentCount++;
@@ -1125,6 +1127,7 @@ export default function generateWeeklySchedule(
   const dayNextInitialState = {};     // carryover cognitive state for next task on this day
   const dayHadBurnout = {};           // whether the last task on this day had burnout
   const dayDifficultyLoad = {};       // v5: cumulative difficulty sum (for spread penalty)
+  const dayOccupiedIntervals = {};    // v8: occupied [startTick, endTick) intervals per day (prevents double-booking)
 
   ALL_DAYS.forEach(d => {
     dayAccumulatedStrain[d] = 0;
@@ -1135,6 +1138,7 @@ export default function generateWeeklySchedule(
     dayNextInitialState[d] = null;   // null = fresh start [1,0,0,0]
     dayHadBurnout[d] = false;
     dayDifficultyLoad[d] = 0;
+    dayOccupiedIntervals[d] = [];     // v8: track placed sessions to prevent double-booking
   });
 
   // -- Phase 2: Primary placement -------------------------------------------
@@ -1176,6 +1180,22 @@ export default function generateWeeklySchedule(
         ? (s.maxHoursWeekend ?? 4) * 6
         : (s.maxHoursPerDay ?? 8) * 6;
       if (dayUsedTicks[slot.day] + taskTicks > dayMaxTicks) continue;
+
+      // v8: Double-booking check — ensure this candidate placement doesn't
+      // overlap with sessions already placed on this day.  Multiple candidate
+      // start times from the same free window have independent `usedTicks`,
+      // so without this check Task B could be placed at 9am even though
+      // Task A already occupies 8:00–9:30.
+      const candAbsStart = slot.startTick + slot.usedTicks;
+      const candAbsEnd = candAbsStart + taskTicks;
+      let hasOverlap = false;
+      for (const iv of dayOccupiedIntervals[slot.day]) {
+        if (candAbsStart < iv.end && candAbsEnd > iv.start) {
+          hasOverlap = true;
+          break;
+        }
+      }
+      if (hasOverlap) continue;
 
       const ticksSinceLastTask = Math.max(0,
         (slot.startTick + slot.usedTicks) - dayLastTaskEndTick[slot.day]);
@@ -1318,6 +1338,11 @@ export default function generateWeeklySchedule(
       week.days[bestSlot.day].totalFlowMins += Math.round(fm);
       if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
 
+      // v8: Record occupied interval to prevent double-booking
+      dayOccupiedIntervals[bestSlot.day].push({
+        start: absStart, end: absStart + fittedTicks,
+      });
+
       // Update per-day state
       const totalConsumed = fittedTicks + GAP_TICKS;
       bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + totalConsumed);
@@ -1358,7 +1383,7 @@ export default function generateWeeklySchedule(
         }
       }
     } catch (err) {
-      if (import.meta.env.DEV) console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
+      console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
       unscheduled.push(task);
     }
   }
@@ -1385,6 +1410,18 @@ export default function generateWeeklySchedule(
           ? (s.maxHoursWeekend ?? 4) * 6
           : (s.maxHoursPerDay ?? 8) * 6;
         if (dayUsedTicks[slot.day] + taskTicks > refDayMaxTicks) continue;
+
+        // v8: Double-booking check for refinement pass
+        const refCandStart = slot.startTick + slot.usedTicks;
+        const refCandEnd = refCandStart + taskTicks;
+        let refOverlap = false;
+        for (const iv of dayOccupiedIntervals[slot.day]) {
+          if (refCandStart < iv.end && refCandEnd > iv.start) {
+            refOverlap = true;
+            break;
+          }
+        }
+        if (refOverlap) continue;
 
         // Relaxed scoring: gamma only, no congestion, no Process S penalty
         // v5: difficulty still matters even in refinement — hard tasks get
@@ -1473,6 +1510,11 @@ export default function generateWeeklySchedule(
         });
         week.days[bestSlot.day].totalFlowMins += Math.round(fm);
         if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
+
+        // v8: Record occupied interval to prevent double-booking (refinement pass)
+        dayOccupiedIntervals[bestSlot.day].push({
+          start: absStart, end: absStart + fittedTicks,
+        });
 
         const totalConsumed = fittedTicks + GAP_TICKS;
         bestSlot.usedTicks = Math.min(bestSlot.maxTicks, bestSlot.usedTicks + totalConsumed);

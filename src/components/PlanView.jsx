@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2 } from 'lucide-react';
 import { typeColor, typeTextColor } from '../utils/theme.js';
+import GoogleCalendarExport from './GoogleCalendarExport.jsx';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const START_H = 6, END_H = 22, TOTAL_H = END_H - START_H, ROW_H = 48;
@@ -85,6 +86,9 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
   }, [allWeeks, weekResults, todayIdx]);
 
   const [selIdx, setSelIdx] = useState(defaultIdx);
+  // Re-sync when results change (e.g. async regeneration) — the default week
+  // may shift to the first week with scheduled sessions
+  useEffect(() => { setSelIdx(defaultIdx); }, [defaultIdx]);
   const idx = Math.max(0, Math.min(selIdx, allWeeks.length - 1));
   const ws = allWeeks[idx];
   const result = weekResults[ws] || null;
@@ -92,10 +96,10 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
 
   const stats = result?.stats;
   const statCells = stats ? [
-    [stats.totalScheduledHours + 'h', T.scheduled],
-    [stats.utilizationPct + '%', T.capacity],
-    [stats.workloadBalance + '%', T.balance],
-    [(stats.avgFatigue || 0) + '%', T.avgFatigue],
+    [(stats.totalScheduledHours != null ? stats.totalScheduledHours + 'h' : '—'), T.scheduled],
+    [(stats.utilizationPct != null ? stats.utilizationPct + '%' : '—'), T.capacity],
+    [(stats.workloadBalance != null ? stats.workloadBalance + '%' : '—'), T.balance],
+    [((stats.avgFatigue != null ? stats.avgFatigue : 0) + '%'), T.avgFatigue],
   ] : [];
 
   return (
@@ -106,6 +110,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
           <AlertTriangle className="w-4 h-4 text-mindflow-warning shrink-0" />
           <p className="text-sm text-mindflow-text flex-1">{T.scheduleChanged}</p>
           <button
+            type="button"
             onClick={onRegenerate}
             disabled={isCalculating}
             className="flex items-center gap-1.5 rounded-full bg-mindflow-accent px-4 py-1.5 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover disabled:opacity-50"
@@ -118,6 +123,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
       {/* Toolbar — Today / prev / next / range + legend */}
       <div className="flex flex-wrap items-center gap-3">
         <button
+          type="button"
           onClick={() => setSelIdx(todayIdx)}
           className="rounded-full border border-mindflow-border px-4 py-1.5 text-sm font-medium text-mindflow-text hover:bg-mindflow-surface-alt"
         >
@@ -125,6 +131,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         </button>
         <div className="flex items-center">
           <button
+            type="button"
             onClick={() => setSelIdx(i => Math.max(0, i - 1))}
             disabled={idx === 0}
             aria-label="Previous week"
@@ -133,6 +140,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
+            type="button"
             onClick={() => setSelIdx(i => Math.min(allWeeks.length - 1, i + 1))}
             disabled={idx >= allWeeks.length - 1}
             aria-label="Next week"
@@ -143,7 +151,13 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         </div>
         <h2 className="text-lg text-mindflow-heading font-normal">{weekLabel(ws)}</h2>
 
-        <div className="ml-auto flex items-center gap-4 text-xs text-mindflow-muted">
+        <div className="ml-auto flex items-center gap-3">
+          {Object.keys(weekResults).length > 0 && (
+            <GoogleCalendarExport weekResults={weekResults} T={T} />
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 text-xs text-mindflow-muted">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded-[3px]" style={{ backgroundColor: typeColor('academic') }} />
             {T.planLegendFixed}

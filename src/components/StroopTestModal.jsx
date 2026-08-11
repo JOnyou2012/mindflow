@@ -279,7 +279,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
           <Target className="w-5 h-5 text-mindflow-muted" />
           <span className="text-sm text-mindflow-text">{T.calibPreviousScore}</span>
           <span className={`text-sm font-medium tabular-nums ${alphaColor(existingCalibration.alphaScore)}`}>
-            {existingCalibration.alphaScore.toFixed(2)}
+            {existingCalibration?.alphaScore != null ? existingCalibration.alphaScore.toFixed(2) : '—'}
           </span>
         </div>
       )}

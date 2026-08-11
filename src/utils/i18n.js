@@ -115,6 +115,11 @@ const t = {
     settingsReset: 'Reset All Data',
     settingsResetConfirm: 'Delete all your data? This cannot be undone.',
 
+    // Error / status messages (shared across all languages)
+    scheduleGenFailed: 'Failed to generate schedule.',
+    saveFailed: 'Failed to save data. Storage may be full.',
+    calEventPlaceholder: 'e.g. Physics 101, Work shift, Dinner',
+
     // Schedule section headers
     secCalibration: 'Calibration',
     secCalibrationDone: 'Focus Score',
@@ -269,6 +274,35 @@ const t = {
     flowReviewTasks: 'Review my tasks',
     flowEmptyCalendar: 'Your week is wide open.',
     flowEmptyCalendarHint: 'Add your fixed commitments — classes, work, meals — and the scheduler will work around them.',
+
+    // Google Calendar — general
+    gcalConnect: 'Connect Google Calendar',
+    gcalConnecting: 'Connecting...',
+    gcalConnected: 'Connected',
+    gcalSignOut: 'Sign out',
+    gcalRefresh: 'Refresh',
+    gcalLastSync: 'Last synced',
+    gcalGoogleBlockTooltip: 'synced from Google Calendar',
+
+    // Google Calendar — import
+    gcalImportSuccess: '{n} events imported from {calendar}.',
+    gcalImportError: 'Failed to import events. Check your connection.',
+
+    // Google Calendar — export
+    gcalExport: 'Sync to Google Calendar',
+    gcalExportSync: 'Syncing...',
+    gcalExportProgress: 'Syncing {current} of {total} sessions...',
+    gcalExportSuccess: 'Synced {n} sessions to Google Calendar.',
+    gcalExportError: 'Failed to sync. {detail}',
+    gcalUnsync: 'Remove',
+    gcalUnsyncConfirm: 'Remove all synced MindFlow sessions from Google Calendar?',
+
+    // Google Calendar — errors
+    gcalTokenExpired: 'Google Calendar connection expired. Please sign in again.',
+    gcalPermissionDenied: 'Calendar access was denied. Please grant permission.',
+    gcalRateLimited: 'Too many requests. Please wait a moment.',
+    gcalNetworkError: 'Network error. Check your connection.',
+    gcalUnknownError: 'An unexpected error occurred. Please try again.',
   },
 
   'zh-CN': {
@@ -974,6 +1008,50 @@ const t = {
     flowReviewTasks: 'مراجعة مهامي',
     flowEmptyCalendar: 'أسبوعك فارغ تمامًا.',
     flowEmptyCalendarHint: 'أضف التزاماتك الثابتة — الحصص، العمل، الوجبات — وسيتجنبها المجدول.',
+    gcalConnect: "連接 Google 日曆",
+    gcalConnecting: "連接中...",
+    gcalConnected: "已連接",
+    gcalSignOut: "登出",
+    gcalRefresh: "重新整理",
+    gcalLastSync: "上次同步",
+    gcalGoogleBlockTooltip: "從 Google 日曆同步",
+    gcalImportSuccess: "已從 {calendar} 匯入 {n} 個事件。",
+    gcalImportError: "匯入事件失敗。請檢查網路連線。",
+    gcalExport: "同步到 Google 日曆",
+    gcalExportSync: "同步中...",
+    gcalExportProgress: "正在同步 {current}/{total} 個學習時段...",
+    gcalExportSuccess: "已將 {n} 個學習時段同步到 Google 日曆。",
+    gcalExportError: "同步失敗。{detail}",
+    gcalUnsync: "移除",
+    gcalUnsyncConfirm: "從 Google 日曆中移除所有已同步的學習時段？",
+    gcalTokenExpired: "Google 日曆連線已過期。請重新登入。",
+    gcalPermissionDenied: "日曆存取被拒絕。請授予權限。",
+    gcalRateLimited: "請求過多。請稍候。",
+    gcalNetworkError: "網路錯誤。請檢查連線。",
+    gcalUnknownError: "發生未預期錯誤。請重試。",
+
+    gcalConnect: "连接 Google 日历",
+    gcalConnecting: "连接中...",
+    gcalConnected: "已连接",
+    gcalSignOut: "退出",
+    gcalRefresh: "刷新",
+    gcalLastSync: "上次同步",
+    gcalGoogleBlockTooltip: "从 Google 日历同步",
+    gcalImportSuccess: "已从 {calendar} 导入 {n} 个事件。",
+    gcalImportError: "导入事件失败。请检查网络连接。",
+    gcalExport: "同步到 Google 日历",
+    gcalExportSync: "同步中...",
+    gcalExportProgress: "正在同步 {current}/{total} 个学习时段...",
+    gcalExportSuccess: "已将 {n} 个学习时段同步到 Google 日历。",
+    gcalExportError: "同步失败。{detail}",
+    gcalUnsync: "移除",
+    gcalUnsyncConfirm: "从 Google 日历中移除所有已同步的学习时段？",
+    gcalTokenExpired: "Google 日历连接已过期。请重新登录。",
+    gcalPermissionDenied: "日历访问被拒绝。请授予权限。",
+    gcalRateLimited: "请求过多。请稍候。",
+    gcalNetworkError: "网络错误。请检查连接。",
+    gcalUnknownError: "发生意外错误。请重试。",
+
   },
 };
 

@@ -370,12 +370,23 @@ assert(endBlockSlots.length === 1, 'F3.14: Block ending at 10pm → 1 leading sl
 
 console.log('\n📋 4. Deadline enforcement');
 
-// Task due Wednesday should NOT be scheduled Thursday+
+// Task due Wednesday of this week should NOT be scheduled Thursday+
+// Compute this Wednesday so deadline constrains to Mon-Wed of the
+// scheduler current default week.
+const thisWednesday = (() => {
+  const now = new Date();
+  const dow = now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+  const wed = new Date(mon);
+  wed.setDate(mon.getDate() + 2);
+  return wed.getFullYear() + "-" + String(wed.getMonth() + 1).padStart(2, "0") + "-" + String(wed.getDate()).padStart(2, "0");
+})();
 const deadlineTask = makeTask({
-  title: 'Due Wednesday',
-  deadline: '2026-08-05', // This is a Wednesday in 2026
+  title: "Due Wednesday",
+  deadline: thisWednesday,
   durationMins: 60,
-  priority: 'high',
+  priority: "high",
 });
 
 // Fill Mon-Wed with blocks, leave Thu-Sun free
@@ -584,20 +595,21 @@ if (recoverySession && recoverySession.burnoutTick > 0) {
 
 console.log('\n📋 10. Advanced edge cases');
 
-// All tasks have deadlines in the past → all unscheduled
-const pastTask = makeTask({
-  title: 'Past Due',
-  deadline: '2020-01-01', // years ago
-  durationMins: 60,
-});
-const pastResult = generateWeeklySchedule([], [pastTask], 1.0, {});
-// 2020-01-01 was a Wednesday, still a valid date — just in the past
-// The scheduler doesn't check "is this date in the past", only "which day of week"
-// So this task should still be schedulable (it's just a day-of-week constraint)
-const pastScheduled = ALL_DAYS.reduce(
-  (sum, d) => sum + pastResult.days[d].sessions.length, 0
-);
-assert(pastScheduled === 0, 'E10.1: Past-date deadline still schedulable (date-aware check)');
+  // All tasks have deadlines in the past → are overdue, so scheduled on
+  // any remaining day (defensive-hardening fix: overdue → urgent, not dropped).
+  // This test verifies the task IS scheduled, not dropped.
+  const pastTask = makeTask({
+    title: "Past Due",
+    deadline: "2020-01-01", // years ago
+    durationMins: 60,
+  });
+  const pastResult = generateWeeklySchedule([], [pastTask], 1.0, {});
+  // 2020-01-01 was a Wednesday — still a valid date, just far in the past.
+  // With the overdue→urgent fix, this task is now scheduleable on any day.
+  const pastScheduled = ALL_DAYS.reduce(
+    (sum, d) => sum + pastResult.days[d].sessions.length, 0
+  );
+  assert(pastScheduled > 0, "E10.1: Past-date deadline task IS scheduled (overdue→urgent)");
 
 // Tasks with extreme durations
 const extremeTasks = [

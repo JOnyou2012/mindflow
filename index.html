@@ -15,7 +15,17 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MindFlow — Smart Study Scheduler" />
     <meta name="twitter:description" content="Predict burnout before it happens. A personalized weekly study plan powered by a Markov-chain cognitive model." />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <title>MindFlow — Smart Study Scheduler</title>
+    <!-- Blocking script: apply dark theme before first paint to prevent FOWT -->
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('mindflow_theme');
+          if (t === 'dark') document.documentElement.classList.add('dark');
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body>
     <!--
