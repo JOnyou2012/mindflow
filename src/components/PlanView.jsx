@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2 } from 'lucide-react';
 import { typeColor, typeTextColor } from '../utils/theme.js';
 import { getStoredLang, langToLocale } from '../utils/i18n.js';
@@ -44,51 +44,44 @@ function dayInfo(ws, dayName) {
  * bordered chips. Weeks without generated results still show the calendar grid.
  */
 export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, onRegenerate, T }) {
-  // Build all navigable weeks: 2 weeks before today through 8 weeks after
-  const allWeeks = useMemo(() => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-    const weeks = [];
-    for (let i = -2; i <= 8; i++) {
-      const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i * 7);
-      weeks.push(
-        d.getFullYear() + '-' +
-        String(d.getMonth() + 1).padStart(2, '0') + '-' +
-        String(d.getDate()).padStart(2, '0')
-      );
-    }
-    return weeks;
-  }, [weekResults]);
+  // Build all navigable weeks: 2 weeks before today through 8 weeks after.
+  // Computed per render (no memo) — it's cheap O(11) date math, and
+  // recomputing keeps "today" correct across midnight while the app is open,
+  // without relying on memo dependencies to refresh stale values.
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  const allWeeks = [];
+  for (let i = -2; i <= 8; i++) {
+    const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i * 7);
+    allWeeks.push(
+      d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0')
+    );
+  }
 
   // Today's week index (for the Today button)
-  const todayIdx = useMemo(() => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-    const todayWs =
-      mon.getFullYear() + '-' +
-      String(mon.getMonth() + 1).padStart(2, '0') + '-' +
-      String(mon.getDate()).padStart(2, '0');
-    const idx = allWeeks.indexOf(todayWs);
-    return idx >= 0 ? idx : 2; // fallback to "today" position
-  }, [allWeeks, weekResults]);
+  const todayWs =
+    mon.getFullYear() + '-' +
+    String(mon.getMonth() + 1).padStart(2, '0') + '-' +
+    String(mon.getDate()).padStart(2, '0');
+  const todayIdx = allWeeks.indexOf(todayWs) >= 0 ? allWeeks.indexOf(todayWs) : 2;
 
   // Default to the first week that actually has scheduled sessions.
   // If every week is empty (all tasks unscheduled), fall back to the
   // first week with any result, then to today's week.
-  const defaultIdx = useMemo(() => {
-    const firstWithSessions = allWeeks.findIndex(ws => {
-      const r = weekResults[ws];
-      if (!r?.days) return false;
-      return Object.values(r.days).some(d => d.sessions?.length > 0);
-    });
-    if (firstWithSessions >= 0) return firstWithSessions;
-    const firstWithResults = allWeeks.findIndex(ws => weekResults[ws]);
-    return firstWithResults >= 0 ? firstWithResults : todayIdx;
-  }, [allWeeks, weekResults, todayIdx]);
+  const firstWithSessions = allWeeks.findIndex(ws => {
+    const r = weekResults[ws];
+    if (!r?.days) return false;
+    return Object.values(r.days).some(d => d.sessions?.length > 0);
+  });
+  const defaultIdx = firstWithSessions >= 0
+    ? firstWithSessions
+    : (allWeeks.findIndex(ws => weekResults[ws]) >= 0
+      ? allWeeks.findIndex(ws => weekResults[ws])
+      : todayIdx);
 
   const [selIdx, setSelIdx] = useState(defaultIdx);
   // Re-sync when results change (e.g. async regeneration) — the default week

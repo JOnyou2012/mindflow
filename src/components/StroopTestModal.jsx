@@ -105,7 +105,7 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     feedbackTimerRef.current = setTimeout(() => setLastFeedback(null), 250);
 
     setTrialId(id => id + 1);
-  }, [phase, currentWord]);
+  }, [phase, currentWord, T]);
 
   // Listen for keyboard
   useEffect(() => {

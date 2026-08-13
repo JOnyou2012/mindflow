@@ -173,8 +173,10 @@ const TYPE_TO_GCAL_COLOR = {
 
 /**
  * Build a Google Calendar event payload for a scheduled session.
+ * `sessionKey` is a stable per-session identifier used for duplicate
+ * detection on re-export.
  */
-function buildEventPayload(session, task, startISO, endISO) {
+function buildEventPayload(session, task, startISO, endISO, sessionKey) {
   return {
     summary: task.title,
     start: { dateTime: startISO, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
@@ -191,6 +193,7 @@ function buildEventPayload(session, task, startISO, endISO) {
     extendedProperties: {
       private: {
         mindflow_session: 'true',
+        mindflow_session_key: sessionKey,
         mindflow_task_type: task.type || 'other',
         mindflow_task_difficulty: String(task.difficulty || 3),
         mindflow_session_quality: session.sessionQuality
@@ -202,7 +205,9 @@ function buildEventPayload(session, task, startISO, endISO) {
 }
 
 /**
- * Check if a session already exists in Google Calendar for a given time slot.
+ * Find events previously created by MindFlow in the given time range.
+ * Returns [{ id, key }] — the Google event id and its mindflow_session_key
+ * extended property, used to skip duplicates on re-export.
  */
 async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
   const url = new URL(CALENDAR_API + '/calendars/primary/events');
@@ -218,7 +223,9 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
 
   if (!response.ok) return [];
   const data = await response.json();
-  return (data.items || []).map(e => e.id);
+  return (data.items || [])
+    .map(e => ({ id: e.id, key: e.extendedProperties?.private?.mindflow_session_key }))
+    .filter(x => x.key);
 }
 
 /**
@@ -254,8 +261,8 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
     d.setDate(d.getDate() + 7);
     return d.toISOString().slice(0, 10);
   })();
-  const existingIds = await findExistingEvents(accessToken, earliest, latest);
-  const existingSet = new Set(existingIds);
+  const existingEvents = await findExistingEvents(accessToken, earliest, latest);
+  const existingKeys = new Set(existingEvents.map(e => e.key));
 
   const created = [];
   let skipped = 0;
@@ -282,11 +289,19 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
         continue;
       }
 
+      // Skip if this exact session was already synced (duplicate detection)
+      const sessionKey = `${session.task.id}::${weekStart}::${dayName}::${session.startTick}`;
+      if (existingKeys.has(sessionKey)) {
+        skipped++;
+        continue;
+      }
+
       const payload = buildEventPayload(
         session,
         session.task,
         startDate.toISOString(),
         endDate.toISOString(),
+        sessionKey,
       );
 
       try {

@@ -356,7 +356,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
         <GoogleCalendarImport
           weekStart={weekStart}
           onImport={onGoogleImport}
-          onError={(msg) => {}} // App handles errors via setError
+          onError={() => {}} // App handles errors via setError
           T={T}
         />
       </div>

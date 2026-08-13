@@ -5,11 +5,10 @@
  */
 
 import generateWeeklySchedule, {
-  gammaForHour, circadianGamma, processC, processS, alertness,
-  sortTasks, findFreeSlots, ALL_DAYS,
+  findFreeSlots, ALL_DAYS,
 } from '../src/utils/scheduler.js';
 import {
-  calculateMarkovTimeline, findBurnoutTick, optimizeWithBreak,
+  calculateMarkovTimeline, findBurnoutTick,
   computeOptimalBreakDuration, computeRecoveryState,
   sigmoid,
 } from '../src/utils/markovEngine.js';

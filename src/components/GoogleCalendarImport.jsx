@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useGoogleAuth } from '../utils/googleAuth.jsx';
+import { useGoogleAuth } from '../utils/googleAuthContext.js';
 import { fetchWeekEvents } from '../utils/googleCalendar.js';
 import { saveGoogleCache } from '../utils/storage.js';
 import GoogleSyncButton from './GoogleSyncButton.jsx';

@@ -10,7 +10,7 @@ import {
   saveCalendar, loadCalendar,
   saveTasks, loadTasks,
   saveSettings, loadSettings,
-  clearAll, loadGoogleCache, clearGoogleCache,
+  clearAll, loadGoogleCache,
 } from './utils/storage.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
@@ -39,10 +39,6 @@ export default function App() {
   const [tasks, setTasksState] = useState(() => loadTasks());
   const [settings, setSettingsState] = useState(() => loadSettings());
   const [googleBlocks, setGoogleBlocks] = useState(() => loadGoogleCache()?.data || []);
-  const [googleSyncInfo, setGoogleSyncInfo] = useState(() => {
-    const cache = loadGoogleCache();
-    return cache ? { syncedAt: cache.syncedAt, calendarName: cache.calendarName, eventCount: cache.eventCount } : null;
-  });
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result

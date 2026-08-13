@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useGoogleAuth } from '../utils/googleAuth.jsx';
+import { useGoogleAuth } from '../utils/googleAuthContext.js';
 import { exportSessions, deleteSyncedEvents } from '../utils/googleCalendar.js';
 import { saveGoogleExport, loadGoogleExport } from '../utils/storage.js';
 
@@ -134,8 +134,13 @@ export default function GoogleCalendarExport({ weekResults, T }) {
       <div className="flex items-center gap-2">
         <span className="text-xs text-mindflow-success">
           {T.gcalExportSuccess.replace('{n}', created)}
-          {skipped > 0 && ` (${skipped} skipped)`}
+          {skipped > 0 && ' ' + T.gcalExportSkipped.replace('{n}', skipped)}
         </span>
+        {failed > 0 && (
+          <span className="text-xs text-mindflow-warning">
+            {T.gcalExportFailed.replace('{n}', failed)}
+          </span>
+        )}
         <button type="button" onClick={handleExport} className="text-xs text-mindflow-accent hover:underline">{T.gcalRefresh}</button>
         <button type="button" onClick={handleUnsync} className="text-xs text-mindflow-muted hover:text-mindflow-danger">{T.gcalUnsync}</button>
       </div>

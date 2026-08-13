@@ -929,7 +929,6 @@ function applyAttentionResidueToState(state, prevType, nextType) {
   if (residue <= 0) return state;
 
   const flowLoss = state[0] * residue;
-  const sum0 = state[0] + state[1] + state[2] + state[3];
   const result = [
     state[0] - flowLoss,
     state[1] + flowLoss * 0.7,

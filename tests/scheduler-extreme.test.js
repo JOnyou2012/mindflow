@@ -11,9 +11,7 @@
 
 import generateWeeklySchedule, {
   circadianGamma, processC, processS, alertness, requiredBreakMinutes,
-  sortTasks, findFreeSlots, ALL_DAYS, DAY_START_TICK, DAY_END_TICK,
-  GAP_TICKS, RECOVERY_TICKS, WEEKEND_DAYS,
-  TAU_BUILD, TAU_DECAY, CIRCADIAN_AMPLITUDE, PROCESS_S_WEIGHT,
+  sortTasks, findFreeSlots, ALL_DAYS, GAP_TICKS,
 } from '../src/utils/scheduler.js';
 
 // Future-proof Monday — always 4 weeks ahead so no days are past.
@@ -1255,10 +1253,6 @@ summary('Task type sequencing');
 // ===========================================================================
 // Done
 // ===========================================================================
-
-// Collect final totals across all sections
-const allPassed = parseInt(passed) + 0; // will be 0 after last summary
-const allFailed = parseInt(failed) + 0;
 
 console.log(`\n${'═'.repeat(60)}`);
 if (failed > 0) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useGoogleAuth } from '../utils/googleAuth.jsx';
+import { useGoogleAuth } from '../utils/googleAuthContext.js';
 
 /**
  * Reusable Google sign-in / sync button with four states:

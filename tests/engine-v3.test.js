@@ -21,11 +21,6 @@ function assert(condition, label) {
   else { failed++; failures.push(label); console.error(`  ❌ ${label}`); }
 }
 
-function assertClose(actual, expected, tol, label) {
-  if (Math.abs(actual - expected) <= tol) { passed++; }
-  else { failed++; failures.push(`${label} (got ${actual}, expected ~${expected})`); console.error(`  ❌ ${label}`); }
-}
-
 // ===========================================================================
 // 1. Biexponential Recovery
 // ===========================================================================
@@ -53,8 +48,6 @@ assert(rs120[2] < 0.15, 'B1.6: 120-min break nearly fully recovers');
 
 // Diminishing returns: first 15 min recovers more than second 15 min
 const recovery0to15 = rs1[2] - rs15[2];
-const recovery15to30 = computeRecoveryState([0.3, 0.2, 0.4, 0.1], 15)[2]
-                      - computeRecoveryState([0.3, 0.2, 0.4, 0.1], 30)[2];
 assert(recovery0to15 > 0, 'B1.7: First 15 min provides meaningful recovery');
 
 // ===========================================================================
@@ -69,9 +62,6 @@ const highFatigueState = [0.1, 0.15, 0.65, 0.1];   // 65% fatigue
 
 const recoveryLow = computeRecoveryState(lowFatigueState, 15);
 const recoveryHigh = computeRecoveryState(highFatigueState, 15);
-
-const flowGainLow = recoveryLow[0] - lowFatigueState[0];
-const flowGainHigh = recoveryHigh[0] - highFatigueState[0];
 
 // Break at low fatigue should recover more flow proportionally
 const fatigueReductionLow = lowFatigueState[2] - recoveryLow[2];

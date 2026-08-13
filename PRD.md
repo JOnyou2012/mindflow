@@ -54,8 +54,9 @@
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): PAUSED** — code complete, not deployed
 >
-> **🎯 Deploy-ready (2026-08-12).** All tiers resolved. Production-hardened.
-> `npm test` runs 5 suites, 0 failures. `npm run build` 0 errors.
+> **🎯 Deploy-ready (2026-08-13, re-verified).** All tiers resolved. Production-hardened.
+> `npm test` runs 5 suites (3,379 tests), 0 failures. `npm run build` 0 errors.
+> Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -102,9 +103,10 @@
 > extreme test suite made future-proof with dynamic Monday computation.
 >
 > **Final state:** Build: 374KB JS + 56KB CSS (gzipped ~122KB). All 5 test
-> suites pass (~1,950 tests, 0 failures). 240 i18n keys × 6 languages, 0
+> suites pass (3,379 tests, 0 failures). 242 i18n keys × 6 languages, 0
 > mismatches, every T.* reference resolves. 0 console.log, 0 debugger,
-> 0 eval(), 0 innerHTML, 0 DEV-gated errors. Vercel + Netlify config in
+> 0 eval(), 0 innerHTML, 0 DEV-gated errors. 0 lint warnings in project
+> code. `npm audit`: 0 vulnerabilities. Vercel + Netlify config in
 > place with security headers + SPA rewrites + asset caching.
 >
 > **Known limitations (non-blocking):** Day abbreviations (Mon/Tue/...) are
@@ -124,6 +126,27 @@
 > week, and replacing the hardcoded `2026-08-07` Friday deadline with a
 > computed target-week Friday. All 5 suites green (119 + 754 + extreme +
 > 672 + 270, 0 failures), build 0 errors.
+>
+> **2026-08-13 (Jeremy — pre-deploy polish pass):** Full re-verification +
+> cleanup. **1) GCal export duplicate detection wired** — `existingSet` was
+> built but never consulted, so re-export duplicated every event; now
+> `mindflow_session_key` (`taskId::weekStart::day::startTick`) is stored in
+> extended properties and checked before each create. **2) googleAuth split**
+> into `googleAuthCore.js` (OAuth state/functions) + `googleAuthContext.js`
+> (context/hook) + `googleAuth.jsx` (provider component only) — removes 7
+> fast-refresh lint warnings. **3) Zero lint warnings** across src/ and
+> tests/ — removed dead imports/vars in App.jsx, scheduler.js, extreme/stress/
+> engine-v3 suites, and PlanView's two useMemos with the unused `weekResults`
+> dep (now plain per-render computations — fresher "today" handling, same
+> behavior). **4) i18n** — added `gcalExportSkipped`/`gcalExportFailed` keys in
+> all 6 languages (242 keys total); export summary now surfaces skipped and
+> failed counts instead of hardcoded English. **5) `npm audit fix`** — nanoid
+> (vite→postcss transitive, build-time only) 3.3.16→3.3.18; audit now 0
+> vulnerabilities. **6) Bundle claims re-verified** against `dist/`: 0
+> console.log/debugger/DEV-guards; the 5 console.error sites are the intended
+> unconditional production diagnostics; innerHTML/dangerouslySetInnerHTML
+> matches are React DOM internals, none in our source. Final state: 5 suites,
+> 3,379 tests, 0 failures; build 374 KB JS + 56 KB CSS (~112 + 10 KB gzipped).
 
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
@@ -461,9 +484,10 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 > - Most deadline parsing already uses `normalizeDeadline()` — only 3 sites
 >   missed (C1, H6)
 >
-> > **Next (2026-08-12):** Deploy to Vercel or Netlify. `npm test` & `npm run build`
-> > pass clean. All audits resolved, full i18n, security headers, SPA routing,
-> > ErrorBoundary. Google Calendar paused indefinitely.
+> > **Next (2026-08-13):** Deploy to Vercel or Netlify. `npm test` & `npm run build`
+> > pass clean (3,379 tests, 0 failures; 0 lint warnings; 0 audit vulns). All
+> > audits resolved, full i18n, security headers, SPA routing, ErrorBoundary.
+> > Google Calendar paused (code complete; OAuth client ID setup deferred).
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
@@ -2913,7 +2937,9 @@ session quality) in extended properties. All generated weeks are synced at once.
 - Google-synced blocks shown with "G" badge, locked from editing (z-index 5 vs manual at 10)
 - Export button in PlanView toolbar syncs ALL generated weeks at once
 - Batch export: 10 events per batch with 2s pause (rate limit safety)
-- Duplicate detection via extendedProperties.mindflow_session
+- Duplicate detection via extendedProperties.mindflow_session_key
+  (`taskId::weekStart::day::startTick`) — checked against existing events
+  before each create (wired 2026-08-13)
 - GIS script loaded from CDN; token stored in memory (never localStorage)
 - Auto-refresh on app load, cache with 30-min TTL
 - Unsync: delete previously synced events from Google Calendar
@@ -3003,7 +3029,7 @@ session quality) in extended properties. All generated weeks are synced at once.
 - [x] 95. `deleteSyncedEvents()` — remove previously synced events
 - [x] 95. Build event payload: summary, start/end ISO, description, colorId, extendedProperties
 - [x] 95. Batch processing: 10 events per batch, 2s pause (rate limit safety)
-- [x] 95. Duplicate detection via `mindflow_session=true` extended properties
+- [x] 95. Duplicate detection via `mindflow_session_key` extended property
 
 **Step 96** — Export UI component (`src/components/GoogleCalendarExport.jsx`)
 - [x] 96. Five states: signed-out, syncing (with progress), synced, error, idle+signed-in
