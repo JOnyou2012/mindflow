@@ -113,6 +113,19 @@
 > Two unused exports (`clampAndNormalize` in markovEngine.js, `clearGoogleExport`
 > in storage.js). No `og:image` for social previews.
 >
+> **2026-08-13 (Jeremy — test suite date-proofing):** `npm test` was failing in
+> `tests/scheduler-advanced.test.js` D4.1 — the deadline tests computed "this
+> Wednesday", which is in the past Thu–Sun. Since the 2026-08-09 hardening
+> intentionally treats past-deadline tasks as urgent (schedulable on any
+> remaining day), the task got scheduled and the assertion crashed on
+> `unscheduled[0]`. Fixed by pinning an explicit future `weekStartDate`
+> (`futureMonday()` + `addDays()` helpers, same pattern as
+> scheduler-extreme.test.js) so the scenario is identical every day of the
+> week, and replacing the hardcoded `2026-08-07` Friday deadline with a
+> computed target-week Friday. All 5 suites green (119 + 754 + extreme +
+> 672 + 270, 0 failures), build 0 errors.
+
+>
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
 > slide transitions (0.22s), auto-advance on single-choice answers, Enter to

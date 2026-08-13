@@ -84,6 +84,23 @@ function makeCalendarBlock(overrides = {}) {
   };
 }
 
+// Future-proof Monday — always 4 weeks ahead so no target-week day is past
+// (matches the pattern in scheduler-extreme.test.js). Deadline tests in
+// section 4 must pin an explicit weekStartDate; otherwise "this Wednesday"
+// is in the past Thu–Sun and overdue tasks are intentionally treated as
+// urgent (schedulable on any day), which breaks the deadline assertions.
+function futureMonday() {
+  const d = new Date();
+  d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7) + 21);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // ===========================================================================
 // 1. Circadian Gamma — continuous cosine model
 // ===========================================================================
@@ -370,21 +387,14 @@ assert(endBlockSlots.length === 1, 'F3.14: Block ending at 10pm → 1 leading sl
 
 console.log('\n📋 4. Deadline enforcement');
 
-// Task due Wednesday of this week should NOT be scheduled Thursday+
-// Compute this Wednesday so deadline constrains to Mon-Wed of the
-// scheduler current default week.
-const thisWednesday = (() => {
-  const now = new Date();
-  const dow = now.getDay();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-  const wed = new Date(mon);
-  wed.setDate(mon.getDate() + 2);
-  return wed.getFullYear() + "-" + String(wed.getMonth() + 1).padStart(2, "0") + "-" + String(wed.getDate()).padStart(2, "0");
-})();
+// Task due Wednesday of the target week should NOT be scheduled Thursday+
+// Pin an explicit future week start so the scenario is identical regardless
+// of which day of the week the suite runs on (see futureMonday above).
+const d4Mon = futureMonday();
+const d4Wed = addDays(d4Mon, 2); // Wednesday of the target week
 const deadlineTask = makeTask({
   title: "Due Wednesday",
-  deadline: thisWednesday,
+  deadline: d4Wed,
   durationMins: 60,
   priority: "high",
 });
@@ -395,7 +405,7 @@ for (const day of ['Mon', 'Tue', 'Wed']) {
   earlyWeekBlocks.push(makeCalendarBlock({ day, startHour: 6, durationHours: 16 }));
 }
 
-const deadlineResult = generateWeeklySchedule(earlyWeekBlocks, [deadlineTask], 1.0, {});
+const deadlineResult = generateWeeklySchedule(earlyWeekBlocks, [deadlineTask], 1.0, {}, d4Mon);
 // Task is due Wednesday but Mon-Wed are full → should be unscheduled
 // (not placed on Thu/Fri despite them being free)
 assert(deadlineResult.unscheduled.length === 1, 'D4.1: Task due Wednesday with Mon-Wed full → unscheduled');
@@ -407,26 +417,29 @@ for (const day of ['Thu', 'Fri', 'Sat', 'Sun']) {
     `D4.3: No session on ${day} for Wednesday-deadline task`);
 }
 
-// Task due Friday CAN be scheduled on Wednesday
+// Task due Friday CAN be scheduled on a weekday
 const friTask = makeTask({
   title: 'Due Friday',
-  deadline: '2026-08-07', // Friday
+  deadline: addDays(d4Mon, 4), // Friday of the target week
   durationMins: 60,
 });
 
-const friResult = generateWeeklySchedule([], [friTask], 1.0, {});
+const friResult = generateWeeklySchedule([], [friTask], 1.0, {}, d4Mon);
 // Should be scheduled on some day Mon-Fri, not Sat-Sun
+const weekdaySessions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  .reduce((sum, d) => sum + friResult.days[d].sessions.length, 0);
+assert(weekdaySessions >= 1, 'D4.4: Friday-deadline task scheduled on a weekday');
 let scheduledOnWeekend = false;
 for (const day of ['Sat', 'Sun']) {
   if (friResult.days[day].sessions.length > 0) scheduledOnWeekend = true;
 }
-assert(!scheduledOnWeekend, 'D4.4: Friday-deadline task not scheduled on weekend');
+assert(!scheduledOnWeekend, 'D4.5: Friday-deadline task not scheduled on weekend');
 
 // Task with no deadline can go any day (including weekend if necessary)
 const noDLTask = makeTask({ title: 'No Deadline', durationMins: 60 });
 const noDLResult = generateWeeklySchedule([], [noDLTask], 1.0, {});
 const totalSessions = ALL_DAYS.reduce((sum, d) => sum + noDLResult.days[d].sessions.length, 0);
-assert(totalSessions === 1, 'D4.5: No-deadline task scheduled somewhere');
+assert(totalSessions === 1, 'D4.6: No-deadline task scheduled somewhere');
 
 // ===========================================================================
 // 5. Inter-session gaps
