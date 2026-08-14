@@ -1,152 +1,108 @@
-# 🧠 MindFlow — Dynamic Markov Chain Study Optimizer
+# 🧠 MindFlow — Smart Study Scheduler
 
-Adaptive study-session optimizer using **Markov Chain stochastic models** to predict cognitive fatigue and recommend optimal break windows.
+MindFlow predicts mental burnout and builds an optimized weekly study schedule. Everything runs in the browser — no backend, no accounts, no database. Your data stays in localStorage.
 
-> Built for STEM fairs, hackathons, or anyone who wants to study smarter.
+Hard tasks land when you're freshest, breaks appear right before you'd burn out, and the result is a Google-Calendar-style week plan you can iterate on.
 
----
+## ✨ How It Works
+
+1. **Calibrate** — a 60-second Stroop color game measures your focus score (α), or skip it (α = 1.0)
+2. **Schedule** — add your fixed weekly commitments (classes, work, meals)
+3. **Tasks** — add homework with type, difficulty, duration, deadline, priority
+4. **Generate** — a 4-state Markov chain simulates your brain state every 10 minutes; the scheduler fits tasks into calendar gaps across the week, inserts recovery breaks at burnout thresholds, and respects your chronotype via a two-process circadian model
+5. **Plan** — GCal-style week view with navigation, stats, warnings, and unscheduled-task callouts
 
 ## 🚀 Quick Start
 
-### 1. Frontend (React)
-
 ```bash
-cd mindflow
-npm install        # one-time
-npm run dev        # starts at http://localhost:5173
+npm install     # one-time
+npm run dev     # starts at http://localhost:5173
 ```
 
-### 2. Backend (Python API)
+That's it. There is no required backend — the Markov engine and scheduler run entirely in the browser.
+
+### Optional Python API
+
+`backend/main.py` (FastAPI) is an optional mirror of the engine for offloading simulation server-side. The client-side app doesn't call it by default; `src/utils/api.js` is ready-to-use infrastructure if you ever want to (`VITE_API_ORIGIN` selects the origin).
 
 ```bash
-cd mindflow/backend
-source venv/bin/activate   # macOS / Linux
-pip install -r requirements.txt   # one-time
-python main.py             # starts at http://127.0.0.1:8000
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload   # http://127.0.0.1:8000
 ```
 
-The Vite dev server automatically proxies `/api` requests to the Python backend.
+## 🧪 Testing & Verification
 
-### 3. Open the app
-
-Visit **http://localhost:5173** — move the sliders and click "Run Simulation" to see the Markov chain in action.
-
----
-
-## 📐 How It Works
-
-MindFlow models a student's cognitive state as a **4-state Discrete-Time Markov Chain**:
-
-| State | Meaning |
-|-------|---------|
-| **S₁ Flow** | High focus, high retention |
-| **S₂ Distracted** | Low efficiency, mind-wandering |
-| **S₃ Fatigue** | Burnout — high error rate |
-| **S₄ Recovery** | Rest & cognitive reset |
-
-The transition matrix is dynamically scaled by three parameters:
-
-| Parameter | Symbol | Range | Meaning |
-|-----------|--------|-------|---------|
-| Personal calibration | α | 0.5 – 2.0 | Stroop-test score (higher = more stamina) |
-| Task difficulty | β | 1 – 5 | 1 = light reading, 5 = hard math |
-| Circadian coefficient | γ | 0.8 – 1.3 | Time-of-day alertness |
-
-The app simulates 18 ten-minute ticks (3 hours) and flags the first tick where **P(Fatigue) > 50%** — your optimal break window.
-
----
+```bash
+npm test          # 5 suites, 3,379 tests (engine, scheduler ×3, stress)
+npm run build     # production build → dist/ (0 errors expected)
+npm run lint      # oxlint over src/ and tests/ (0 warnings expected)
+npm audit         # 0 vulnerabilities expected
+```
 
 ## 🛠️ Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| **Frontend** | React, Vite, Tailwind CSS v4, Recharts, Lucide Icons |
-| **Backend** | Python, FastAPI, NumPy |
-| **Math** | Discrete-Time Markov Chains, Probability Vector Evolution |
-
----
+| Frontend | React 19, Vite 8, Tailwind CSS v4, Lucide Icons |
+| Engine | 4-state non-homogeneous Markov chain (JS, `src/utils/markovEngine.js`) |
+| Scheduler | Deadline-aware multi-week cascade + two-process model (`src/utils/scheduler.js`) |
+| i18n | 6 languages (EN / ZH-CN / ZH-TW / ES / HI / AR), RTL support |
+| Optional API | Python, FastAPI, NumPy (`backend/`) |
 
 ## 📁 Project Structure
 
 ```
 mindflow/
-├── index.html
-├── vite.config.js
+├── index.html               # entry + pre-paint theme/language script
 ├── src/
-│   ├── main.jsx              # React entry
-│   ├── App.jsx               # Main dashboard + chart
-│   ├── index.css             # Tailwind + MindFlow theme
+│   ├── main.jsx             # React entry (ErrorBoundary + GoogleAuthProvider)
+│   ├── App.jsx              # wizard state machine (Calibrate → Schedule → Tasks → Plan)
+│   ├── index.css            # Tailwind + MindFlow theme tokens + animations
+│   ├── components/
+│   │   ├── QuestionFlow.jsx          # one-question-per-screen flows
+│   │   ├── WeeklyCalendar.jsx        # 7-column calendar grid + presets
+│   │   ├── TaskInputForm.jsx         # task list + form + edit popover
+│   │   ├── PlanView.jsx              # GCal-style results week view
+│   │   ├── StroopTestModal.jsx       # focus calibration
+│   │   ├── GoogleSyncButton.jsx      # GCal connect (gated, see below)
+│   │   ├── GoogleCalendarImport.jsx  # GCal → MindFlow blocks (gated)
+│   │   ├── GoogleCalendarExport.jsx  # MindFlow plan → GCal (gated)
+│   │   └── ErrorBoundary.jsx
 │   └── utils/
-│       ├── markovEngine.js   # Client-side Markov chain engine
-│       └── storage.js        # localStorage persistence helpers
-├── backend/
-│   ├── main.py               # FastAPI server + Markov model
-│   ├── requirements.txt      # Python dependencies
-│   └── venv/                 # Virtual environment (not in git)
-└── README.md
+│       ├── markovEngine.js  # Markov chain math (v5)
+│       ├── scheduler.js     # weekly schedule generation (v6)
+│       ├── storage.js       # localStorage persistence
+│       ├── i18n.js          # 6-language translation system
+│       ├── theme.js         # event/priority colors
+│       ├── uuid.js          # UUID with legacy fallback
+│       ├── api.js           # optional Python-backend bridge
+│       ├── googleAuthCore.js / googleAuthContext.js / googleAuth.jsx
+│       └── googleCalendar.js # GCal OAuth + import/export (paused)
+├── backend/                 # optional FastAPI mirror (main.py)
+├── tests/                   # 5 Node test suites
+├── netlify.toml             # Netlify deploy config
+├── vercel.json              # Vercel deploy config
+├── render.yaml              # Render blueprint (backend only)
+└── PRD.md                   # master PRD — read before contributing
 ```
 
----
+## 🚢 Deployment
 
-## 🤝 Sharing on GitHub
+**Frontend (recommended: Netlify)** — repo is fully configured:
 
-### One-time: create a GitHub repo
+1. Push to GitHub
+2. Netlify: **Add new site → Import from Git** — build command `npm run build`, publish dir `dist` (already in `netlify.toml`; SPA rewrites via `public/_redirects`)
+3. Vercel: **New Project → Import** — `vercel.json` provides SPA rewrites, immutable asset caching, and security headers
+4. No environment variables required — the app is fully client-side
 
-1. Go to [github.com/new](https://github.com/new)
-2. Name it `mindflow` (or whatever you like)
-3. **Don't** check "Add a README" or "Add .gitignore" (we already have those)
-4. Click **Create repository**
+**Optional backend (Render):** `render.yaml` deploys `mindflow-api` in one click. After the frontend is live, set `MDFLOW_FRONTEND_ORIGIN` in the Render dashboard to your deployed URL (CORS).
 
-### Push your existing code
+**Google Calendar (paused):** code is complete but gated behind `VITE_GOOGLE_CLIENT_ID`. Set that env var at build time (and re-add the GSI script line documented in `index.html`) to light up connect/import/export.
 
-```bash
-cd /Users/Jeremy/anaconda_projects/mindflow
-git remote add origin https://github.com/YOUR_USERNAME/mindflow.git
-git branch -M main
-git commit -m "Initial MindFlow setup — React + FastAPI + Markov chain engine"
-git push -u origin main
-```
+## 🤝 Contributing
 
-### Invite your partner
-
-1. On your GitHub repo page → **Settings** → **Collaborators**
-2. Click **Add people** → enter their GitHub username
-3. They'll get an email invite. Once they accept, they can clone:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/mindflow.git
-cd mindflow
-npm install
-cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
-```
-
-### Daily workflow (after initial setup)
-
-```bash
-# Pull your partner's latest work
-git pull
-
-# ... make changes ...
-git add -A
-git commit -m "What you changed"
-git push
-```
-
-> 💡 **Tip:** Work on separate branches for big features to avoid merge conflicts:
-> ```bash
-> git checkout -b feature/my-cool-thing
-> # ... code ...
-> git push -u origin feature/my-cool-thing
-> ```
-> Then open a Pull Request on GitHub to merge it together.
-
----
-
-## 🎯 What's Next
-
-- [x] Client-side Markov chain engine (`src/utils/markovEngine.js`)
-- [x] localStorage persistence layer (`src/utils/storage.js`)
-- [ ] Stroop Color-Word micro-test for personal α calibration
-- [ ] Weekly schedule / task manager UI
-- [ ] User accounts & session history
-- [ ] PWA offline support
+- Read **PRD.md** first — it's the source of truth and progress tracker
+- `git pull` before starting; commit and push after each step
+- Run `npm test` and `npm run build` before pushing — never push a broken build
+- New components → `src/components/`, utilities → `src/utils/`, tests → `tests/`

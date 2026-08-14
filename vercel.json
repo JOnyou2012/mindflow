@@ -1,19 +1,6 @@
 {
-  "services": {
-    "mindflow-frontend": {
-      "root": ".",
-      "installCommand": "npm install",
-      "buildCommand": "npm run build",
-      "outputDirectory": "dist"
-    },
-    "mindflow-api": {
-      "root": "backend/",
-      "entrypoint": "main:app"
-    }
-  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "mindflow-api" } },
-    { "source": "/(.*)", "destination": { "service": "mindflow-frontend" } }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {

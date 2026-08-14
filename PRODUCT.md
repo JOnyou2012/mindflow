@@ -36,7 +36,7 @@ calendar → tweak and regenerate. Used repeatedly as the week evolves.
 
 ## Capabilities and Constraints
 
-- React 19 + Vite 8 + Tailwind CSS v4 + Recharts + Lucide. Pure JS frontend,
+- React 19 + Vite 8 + Tailwind CSS v4 + Lucide. Pure JS frontend,
   no backend on the primary path (`backend/` FastAPI exists but is stale/secondary).
 - Scheduler: multi-week cascade (up to 8 weeks), deadline-aware week targeting,
   daily hour caps (weekday/weekend), 30-min gaps, auto-split of large tasks,

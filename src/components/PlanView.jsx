@@ -150,7 +150,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         <h2 className="text-lg text-mindflow-heading font-normal">{weekLabel(ws)}</h2>
 
         <div className="ml-auto flex items-center gap-3">
-          {Object.keys(weekResults).length > 0 && (
+          {import.meta.env.VITE_GOOGLE_CLIENT_ID && Object.keys(weekResults).length > 0 && (
             <GoogleCalendarExport weekResults={weekResults} T={T} />
           )}
         </div>

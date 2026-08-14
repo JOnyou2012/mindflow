@@ -351,15 +351,18 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
         </button>
       </div>
 
-      {/* Google Calendar import */}
-      <div className="mb-3">
-        <GoogleCalendarImport
-          weekStart={weekStart}
-          onImport={onGoogleImport}
-          onError={() => {}} // App handles errors via setError
-          T={T}
-        />
-      </div>
+      {/* Google Calendar import — hidden until VITE_GOOGLE_CLIENT_ID is
+          configured at build time (Stage 5 is paused pre-launch). */}
+      {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+        <div className="mb-3">
+          <GoogleCalendarImport
+            weekStart={weekStart}
+            onImport={onGoogleImport}
+            onError={() => {}} // App handles errors via setError
+            T={T}
+          />
+        </div>
+      )}
 
       {/* Empty state */}
       {blocks.length === 0 && googleBlocks.length === 0 && (

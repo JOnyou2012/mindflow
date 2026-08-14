@@ -52,11 +52,13 @@
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
-> **Stage 5 (Google Calendar): PAUSED** — code complete, not deployed
+> **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
+> `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
-> **🎯 Deploy-ready (2026-08-13, re-verified).** All tiers resolved. Production-hardened.
-> `npm test` runs 5 suites (3,379 tests), 0 failures. `npm run build` 0 errors.
-> Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
+> **🎯 Deploy-ready (2026-08-14, final deployment audit).** All tiers resolved.
+> Production-hardened. `npm test` runs 5 suites (3,379 tests), 0 failures.
+> `npm run build` 0 errors, 0 warnings. Project lint: 0 warnings.
+> `npm audit`: 0 vulnerabilities.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -147,7 +149,41 @@
 > unconditional production diagnostics; innerHTML/dangerouslySetInnerHTML
 > matches are React DOM internals, none in our source. Final state: 5 suites,
 > 3,379 tests, 0 failures; build 374 KB JS + 56 KB CSS (~112 + 10 KB gzipped).
-
+>
+> **2026-08-14 (Jeremy + Claude — final deployment audit):** Read-through of
+> PRD + deploy configs + production bundle. **6 fixes:**
+> **1) vercel.json was invalid Vercel schema** — top-level `services` key and
+> object `destination: { service: ... }` are Render-blueprint syntax, not
+> Vercel's; `vercel deploy` would have failed validation. Rewrote as standard
+> SPA config (rewrite `/(.*)` → `/index.html`, immutable asset cache, security
+> headers). The `/api` proxy rewrite was dropped — `api.js` calls the backend
+> via absolute `VITE_API_ORIGIN` (falls back to `mindflow-api.onrender.com`),
+> so no proxy is needed; Netlify config was already correct.
+> **2) GCal UI was live without a client ID** — the "Connect Google Calendar"
+> button (Step 2) and plan-export button (Step 4) rendered in production and
+> clicking them surfaced raw `Not initialized` errors, plus the GSI script
+> loaded ~50KB of third-party JS on every page visit for a paused feature.
+> Now gated on `import.meta.env.VITE_GOOGLE_CLIENT_ID` in WeeklyCalendar +
+> PlanView; esbuild folds the unset-var branch so the GCal components are
+> tree-shaken from the bundle. GSI script removed from index.html (comment
+> documents the 2-step re-enable). Bundle: 374 KB → 356 KB JS.
+> **3) Invalid nested `@keyframes`** inside `[dir="rtl"]` (index.css) —
+> at-rules can't nest in selector rules; Lightning CSS warned 2× and the RTL
+> slide-direction flip silently never shipped. Hoisted as top-level
+> `stage-in-*-rtl` keyframes + `animation-name` overrides under `[dir="rtl"]`.
+> Build now 0 CSS warnings; Arabic question-flow slides actually mirror.
+> **4) `npm run lint` linted vendored files** — bare `oxlint` picked up
+> `.agents/skills/` third-party bundles (10 warnings). Scoped to
+> `oxlint src/ tests/`. 0 warnings.
+> **5) README rewritten** — was pre-revamp (claimed Stroop + task manager
+> weren't built; listed removed files). Now has current structure, test
+> commands, and deploy steps for Netlify/Vercel/Render + GCal gating notes.
+> **6) recharts removed** — dead dependency since the 2026-08-07 revamp
+> removed SessionChart/Dashboard (0 imports). Not in the bundle, but it
+> bloated installs + audit surface.
+> Final state: 5 suites, 3,379 tests, 0 failures; build 356 KB JS + 56 KB CSS
+> (~108 + 10 KB gzipped), 0 errors, 0 warnings; lint 0; audit 0. Verified in
+> `dist/`: no GSI script tag, no GCal UI strings, RTL keyframes present.
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
@@ -484,10 +520,14 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 > - Most deadline parsing already uses `normalizeDeadline()` — only 3 sites
 >   missed (C1, H6)
 >
-> > **Next (2026-08-13):** Deploy to Vercel or Netlify. `npm test` & `npm run build`
-> > pass clean (3,379 tests, 0 failures; 0 lint warnings; 0 audit vulns). All
-> > audits resolved, full i18n, security headers, SPA routing, ErrorBoundary.
-> > Google Calendar paused (code complete; OAuth client ID setup deferred).
+> > **Next (2026-08-14):** Deploy the frontend — Netlify (recommended, fully
+> > configured via netlify.toml + `_redirects`) or Vercel (`vercel.json` now
+> > schema-valid). No env vars required; the app is fully client-side. Optional
+> > backend via Render blueprint (`render.yaml`) + set `MDFLOW_FRONTEND_ORIGIN`.
+> > Google Calendar stays paused — UI is gated behind `VITE_GOOGLE_CLIENT_ID`;
+> > set it + re-add the GSI script (steps in index.html comment) to go live.
+> > `npm test` & `npm run build` pass clean (3,379 tests, 0 failures; 0 lint
+> > warnings; 0 audit vulns; 0 build warnings).
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
@@ -671,7 +711,7 @@ freshest and breaks appear right before you'd burn out.
 
 ## Tech Stack
 
-React 19 · Vite 8 · Tailwind CSS v4 · Recharts · Lucide Icons
+React 19 · Vite 8 · Tailwind CSS v4 · Lucide Icons
 Pure JavaScript. localStorage for persistence. No backend.
 
 ## User Journey

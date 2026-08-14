@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "oxlint",
+    "lint": "oxlint src/ tests/",
     "test": "node tests/scheduler.test.js && node tests/scheduler-advanced.test.js && node tests/scheduler-extreme.test.js && node tests/engine-v3.test.js && node tests/stress.test.js",
     "preview": "vite preview"
   },
@@ -15,7 +15,6 @@
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "recharts": "^3.10.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

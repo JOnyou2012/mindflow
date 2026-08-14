@@ -115,6 +115,18 @@ body {
   .animate-stage-in-left { animation: none; }
 }
 
+/* RTL stage keyframes — must live at top level because @keyframes cannot
+   nest inside a selector rule. Mirrored slide directions for Arabic;
+   wired up via animation-name overrides in the [dir="rtl"] block below. */
+@keyframes stage-in-right-rtl {
+  from { opacity: 0; transform: translateX(-36px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes stage-in-left-rtl {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* ── Transitions ───────────────────────────────────────────────────── */
 
 a, button, input, select, textarea, .interactive {
@@ -180,12 +192,6 @@ input::placeholder {
   .text-right { text-align: left; }
 
   /* Animation directions — slide from left instead of right */
-  @keyframes stage-in-right {
-    from { opacity: 0; transform: translateX(-36px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes stage-in-left {
-    from { opacity: 0; transform: translateX(36px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
+  .animate-stage-in-right { animation-name: stage-in-right-rtl; }
+  .animate-stage-in-left { animation-name: stage-in-left-rtl; }
 }
