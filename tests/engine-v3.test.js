@@ -250,12 +250,23 @@ for (const params of [
   }
 }
 
-// No NaN or Infinity in any output
+// No NaN or Infinity in any output.
+// Seeded PRNG (mulberry32) — the suite's total is assertion-based and this
+// loop asserts per timeline point, whose length depends on the random step
+// count. A fixed seed keeps the run-to-run total deterministic (CI-friendly)
+// while still exercising 20 varied random parameter sets.
+let _randSeed = 0x2f6e2b1;
+function rand() {
+  _randSeed = (_randSeed + 0x6D2B79F5) | 0;
+  let t = Math.imul(_randSeed ^ (_randSeed >>> 15), 1 | _randSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
 for (let i = 0; i < 20; i++) {
-  const a = 0.3 + Math.random() * 2.7;
-  const b = 1 + Math.random() * 4;
-  const g = 0.5 + Math.random() * 1.5;
-  const s = Math.floor(Math.random() * 20) + 1;
+  const a = 0.3 + rand() * 2.7;
+  const b = 1 + rand() * 4;
+  const g = 0.5 + rand() * 1.5;
+  const s = Math.floor(rand() * 20) + 1;
   const tl = calculateMarkovTimeline(a, b, g, s);
   for (const p of tl) {
     assert(Number.isFinite(p.flow), `N10b: No NaN in flow (a=${a.toFixed(2)}, b=${b.toFixed(2)})`);

@@ -34,7 +34,7 @@ uvicorn main:app --reload   # http://127.0.0.1:8000
 ## 🧪 Testing & Verification
 
 ```bash
-npm test          # 5 suites, 3,379 tests (engine, scheduler ×3, stress)
+npm test          # 5 suites, 3,481 assertion checks (deterministic), 0 failures
 npm run build     # production build → dist/ (0 errors expected)
 npm run lint      # oxlint over src/ and tests/ (0 warnings expected)
 npm audit         # 0 vulnerabilities expected

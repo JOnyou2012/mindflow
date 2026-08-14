@@ -56,9 +56,9 @@
 > `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
 > **🎯 Deploy-ready (2026-08-14, final deployment audit).** All tiers resolved.
-> Production-hardened. `npm test` runs 5 suites (3,379 tests), 0 failures.
-> `npm run build` 0 errors, 0 warnings. Project lint: 0 warnings.
-> `npm audit`: 0 vulnerabilities.
+> Production-hardened. `npm test` runs 5 suites (3,481 assertion checks),
+> 0 failures, byte-deterministic output. `npm run build` 0 errors, 0 warnings.
+> Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -151,14 +151,17 @@
 > 3,379 tests, 0 failures; build 374 KB JS + 56 KB CSS (~112 + 10 KB gzipped).
 >
 > **2026-08-14 (Jeremy + Claude — final deployment audit):** Read-through of
-> PRD + deploy configs + production bundle. **6 fixes:**
-> **1) vercel.json was invalid Vercel schema** — top-level `services` key and
-> object `destination: { service: ... }` are Render-blueprint syntax, not
-> Vercel's; `vercel deploy` would have failed validation. Rewrote as standard
-> SPA config (rewrite `/(.*)` → `/index.html`, immutable asset cache, security
-> headers). The `/api` proxy rewrite was dropped — `api.js` calls the backend
-> via absolute `VITE_API_ORIGIN` (falls back to `mindflow-api.onrender.com`),
-> so no proxy is needed; Netlify config was already correct.
+> PRD + deploy configs + production bundle. **7 fixes:**
+> **1) vercel.json simplified to standard single-service SPA config** — the
+> previous file used Vercel's `services` monorepo form (service objects +
+> `{ service: ... }` rewrite destinations). NOTE: that form IS schema-valid
+> in current Vercel CLI (verified against the real v59 validator — both old
+> and new files pass), but it deploys two services for an app whose backend
+> is optional and uncalled in production. New file: single-service rewrite
+> `/(.*)` → `/index.html`, immutable asset cache, security headers, validated
+> against the same CLI validator. The `/api` proxy was dropped — `api.js`
+> calls the backend via absolute `VITE_API_ORIGIN` (falls back to
+> `mindflow-api.onrender.com`); Netlify config was already correct.
 > **2) GCal UI was live without a client ID** — the "Connect Google Calendar"
 > button (Step 2) and plan-export button (Step 4) rendered in production and
 > clicking them surfaced raw `Not initialized` errors, plus the GSI script
@@ -181,9 +184,22 @@
 > **6) recharts removed** — dead dependency since the 2026-08-07 revamp
 > removed SessionChart/Dashboard (0 imports). Not in the bundle, but it
 > bloated installs + audit surface.
-> Final state: 5 suites, 3,379 tests, 0 failures; build 356 KB JS + 56 KB CSS
-> (~108 + 10 KB gzipped), 0 errors, 0 warnings; lint 0; audit 0. Verified in
-> `dist/`: no GSI script tag, no GCal UI strings, RTL keyframes present.
+> **7) Test counts were non-deterministic** — the suites count assertions,
+> not test cases, and engine-v3's N10b-d loop asserted per timeline point
+> with `Math.random()` step counts, so run-to-run totals wobbled (observed
+> 807–912). Replaced with a seeded mulberry32 PRNG; added a FINAL total to
+> the extreme suite (it printed none). Two full-suite runs now produce
+> byte-identical output. True per-suite totals (deterministic): scheduler
+> 119, advanced 754, extreme 1,414, engine-v3 924, stress 270 = **3,481
+> assertion checks**. (The historical "3,379" figure mixed stale counts.)
+> **8) Dead public/icons.svg removed** (unreferenced since the initial
+> commit; was shipping in every deploy) and **engines.node** added to
+> package.json (Vite 8 requires ^20.19 || >=22.12 — lets Netlify/Vercel
+> pick a compatible runtime).
+> Final state: 5 suites, 3,481 checks, 0 failures, deterministic; build
+> 356 KB JS + 56 KB CSS (~108 + 10 KB gzipped), 0 errors, 0 warnings;
+> lint 0; audit 0. Verified in `dist/`: no GSI script tag, no GCal UI
+> strings, RTL keyframes present. `npm ci` from lockfile passes clean.
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
@@ -526,8 +542,8 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 > > backend via Render blueprint (`render.yaml`) + set `MDFLOW_FRONTEND_ORIGIN`.
 > > Google Calendar stays paused — UI is gated behind `VITE_GOOGLE_CLIENT_ID`;
 > > set it + re-add the GSI script (steps in index.html comment) to go live.
-> > `npm test` & `npm run build` pass clean (3,379 tests, 0 failures; 0 lint
-> > warnings; 0 audit vulns; 0 build warnings).
+> > `npm test` & `npm run build` pass clean (3,481 checks, 0 failures,
+> > deterministic; 0 lint warnings; 0 audit vulns; 0 build warnings).
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias

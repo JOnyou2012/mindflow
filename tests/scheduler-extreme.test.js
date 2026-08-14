@@ -32,6 +32,8 @@ function addDays(iso, n) {
 
 let passed = 0;
 let failed = 0;
+let totalPassed = 0;   // accumulates across sections — never reset
+let totalFailed = 0;
 const failures = [];
 
 function assert(condition, label) {
@@ -50,6 +52,7 @@ function summary(name) {
     console.log('  ✅ All passed!');
   }
   const result = [passed, failed];
+  totalPassed += passed; totalFailed += failed;
   passed = 0; failed = 0;
   return result;
 }
@@ -1255,11 +1258,12 @@ summary('Task type sequencing');
 // ===========================================================================
 
 console.log(`\n${'═'.repeat(60)}`);
-if (failed > 0) {
-  console.log(`  FINAL: ${passed} passed, ${failed} failed in last section`);
+if (failed > 0 || totalFailed > 0) {
+  console.log(`  FINAL: ${totalPassed} passed, ${totalFailed} failed (${totalPassed + totalFailed} total)`);
   console.log(`\n  Failures:`);
   failures.forEach((f, i) => console.log(`  ${i + 1}. ${f}`));
   process.exit(1);
 } else {
+  console.log(`  FINAL: ${totalPassed} passed, 0 failed  (${totalPassed} total)`);
   console.log('  ✅ All extreme edge-case test sections passed!\n');
 }
