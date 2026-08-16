@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2 } from 'lucide-react';
 import { typeColor, typeTextColor } from '../utils/theme.js';
-import { getStoredLang, langToLocale } from '../utils/i18n.js';
+import { getStoredLang, langToLocale, getDayShortNames } from '../utils/i18n.js';
+import { isGoogleConfigured } from '../utils/googleAuthCore.js';
 import GoogleCalendarExport from './GoogleCalendarExport.jsx';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -94,11 +95,16 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
 
   const stats = result?.stats;
   const statCells = stats ? [
-    [(stats.totalScheduledHours != null ? stats.totalScheduledHours + 'h' : '—'), T.scheduled],
+    [(stats.totalScheduledHours != null ? stats.totalScheduledHours + T.unitHoursShort : '—'), T.scheduled],
     [(stats.utilizationPct != null ? stats.utilizationPct + '%' : '—'), T.capacity],
     [(stats.workloadBalance != null ? stats.workloadBalance + '%' : '—'), T.balance],
     [((stats.avgFatigue != null ? stats.avgFatigue : 0) + '%'), T.avgFatigue],
   ] : [];
+
+  // Locale-correct weekday labels; internal day keys stay English ('Mon'…'Sun').
+  // Recomputes on every render (cheap 7-item Intl map) so a language switch
+  // via Settings is reflected immediately.
+  const dayNames = getDayShortNames(getStoredLang());
 
   return (
     <div className="space-y-4">
@@ -150,7 +156,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         <h2 className="text-lg text-mindflow-heading font-normal">{weekLabel(ws)}</h2>
 
         <div className="ml-auto flex items-center gap-3">
-          {import.meta.env.VITE_GOOGLE_CLIENT_ID && Object.keys(weekResults).length > 0 && (
+          {isGoogleConfigured && Object.keys(weekResults).length > 0 && (
             <GoogleCalendarExport weekResults={weekResults} T={T} />
           )}
         </div>
@@ -213,8 +219,8 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
               {DAYS.map(d => {
                 const { dateNum, isToday, isPast } = dayInfo(ws, d);
                 return (
-                  <div key={d} className={`flex-1 min-w-[110px] border-l border-mindflow-border-light py-2 text-center ${isPast ? 'opacity-45' : ''}`}>
-                    <p className={`text-[11px] font-medium uppercase tracking-wide ${isToday ? 'text-mindflow-accent' : 'text-mindflow-muted'}`}>{d}</p>
+                  <div key={d} className={`flex-1 min-w-[110px] border-s border-mindflow-border-light py-2 text-center ${isPast ? 'opacity-45' : ''}`}>
+                    <p className={`text-[11px] font-medium uppercase tracking-wide ${isToday ? 'text-mindflow-accent' : 'text-mindflow-muted'}`}>{dayNames[d] || d}</p>
                     <p className="mt-0.5">
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${
                         isToday ? 'bg-mindflow-accent font-medium text-mindflow-onaccent' : 'text-mindflow-heading'
@@ -240,7 +246,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
             return (
               <div
                 key={day}
-                className={`relative min-w-[110px] flex-1 border-l border-mindflow-border-light ${isToday ? 'bg-mindflow-accent-soft/30' : ''} ${isPast ? 'opacity-45' : ''}`}
+                className={`relative min-w-[110px] flex-1 border-s border-mindflow-border-light ${isToday ? 'bg-mindflow-accent-soft/30' : ''} ${isPast ? 'opacity-45' : ''}`}
                 style={{ height: TOTAL_H * ROW_H + 'px' }}
               >
                 {HOUR_LINES.map(i => (
@@ -296,7 +302,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
           <CalendarX2 className="w-4 h-4 mt-0.5 shrink-0 text-mindflow-warning" />
           <div>
             <p className="text-sm font-medium text-mindflow-heading">
-              {result.unscheduled.length} {result.unscheduled.length === 1 ? 'task' : 'tasks'} {T.couldNotFit}
+              {result.unscheduled.length} {result.unscheduled.length === 1 ? T.taskSingular : T.taskPlural} {T.couldNotFit}
             </p>
             <p className="mt-0.5 text-xs text-mindflow-muted">
               {result.unscheduled.map(t => t.title).join(', ')} — {T.tryReducing}

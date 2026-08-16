@@ -13,6 +13,7 @@
 
 // Module-scoped state — survives re-renders, lost on page refresh
 let accessToken = null;
+let tokenExpiresAt = 0; // epoch ms — implicit-flow tokens live ~1h
 let tokenClient = null;
 let expiryCallbacks = [];
 let gisLoadPromise = null;
@@ -37,7 +38,9 @@ function waitForGis() {
     };
     check();
   });
-  return gisLoadPromise;
+  // Don't cache a rejection — a transient failure (slow network, ad-blocker
+  // timing) would otherwise brick sign-in for the whole session.
+  return gisLoadPromise.catch((err) => { gisLoadPromise = null; throw err; });
 }
 
 // -- Core Auth Functions -------------------------------------------------------
@@ -56,9 +59,13 @@ export function initGoogleAuth(clientId) {
         if (response.error) {
           console.warn('Google OAuth error:', response.error);
           accessToken = null;
+          tokenExpiresAt = 0;
           expiryCallbacks.forEach(cb => cb(response.error));
         } else {
           accessToken = response.access_token;
+          // Track expiry so a stale token is never handed out (implicit-flow
+          // tokens last ~1h; expires_in is in seconds). 30s safety margin.
+          tokenExpiresAt = Date.now() + (response.expires_in || 3599) * 1000 - 30000;
         }
       },
     });
@@ -77,21 +84,34 @@ export function isSignedIn() {
 
 /**
  * Trigger the OAuth popup. Returns a Promise that resolves with the token.
- * If already signed in, returns the existing token immediately.
+ * If already signed in (and the token hasn't expired), returns the existing
+ * token immediately. Expired tokens are discarded and re-prompted.
  */
-export function requestAccessToken() {
-  if (accessToken) return Promise.resolve(accessToken);
-  if (!tokenClient) return Promise.reject(new Error('Google Auth not initialized. Set VITE_GOOGLE_CLIENT_ID.'));
+export async function requestAccessToken() {
+  if (accessToken) {
+    if (Date.now() < tokenExpiresAt) return accessToken;
+    // Token expired — clear it and notify so the UI flips to signed-out
+    // before we open a fresh consent popup.
+    accessToken = null;
+    expiryCallbacks.forEach(cb => cb('token_expired'));
+  }
+  // Wait for the GIS script if it hasn't loaded yet (it may still be
+  // in-flight when the user clicks right after mount).
+  if (!tokenClient) {
+    try { await waitForGis(); } catch { /* tokenClient stays null → error below */ }
+  }
+  if (!tokenClient) return Promise.reject(new Error('Google sign-in could not be loaded. Check your network connection or ad-blocker.'));
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error('Sign-in timed out. Check your pop-up blocker.'));
+      reject(new Error('Sign-in was cancelled or timed out.'));
     }, 60000);
 
     // Override the callback temporarily to resolve/reject the Promise
     const origCallback = tokenClient.callback;
     tokenClient.callback = (response) => {
       clearTimeout(timeout);
+      tokenClient.callback = origCallback; // restore — don't chain closures
       if (origCallback) origCallback(response);
       if (response.error) {
         reject(new Error(response.error === 'access_denied' ? 'Calendar access was denied. Please grant permission.' : response.error));
@@ -104,6 +124,7 @@ export function requestAccessToken() {
       tokenClient.requestAccessToken();
     } catch (err) {
       clearTimeout(timeout);
+      tokenClient.callback = origCallback;
       reject(err);
     }
   });
@@ -117,8 +138,18 @@ export function clearToken() {
     } catch { /* best effort */ }
   }
   accessToken = null;
+  tokenExpiresAt = 0;
   expiryCallbacks.forEach(cb => cb('user_signed_out'));
 }
+
+/**
+ * Single source of truth for whether the Google integration can work.
+ * False when the build-time client ID is missing or still the .env.example
+ * placeholder — in that case every Google UI element must stay hidden.
+ */
+export const isGoogleConfigured =
+  !!import.meta.env.VITE_GOOGLE_CLIENT_ID &&
+  !String(import.meta.env.VITE_GOOGLE_CLIENT_ID).startsWith('your-');
 
 /** Register a callback for when the token expires or is revoked. */
 export function onTokenExpired(cb) {

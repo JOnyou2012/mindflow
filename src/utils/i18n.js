@@ -87,6 +87,7 @@ const t = {
     taskSave: 'Save Changes',
     taskCancel: 'Cancel',
     taskClearAll: 'Clear all',
+    taskDelete: 'Delete task',
 
     // Generate
     generate: 'Generate Schedule',
@@ -157,6 +158,8 @@ const t = {
     scheduleChanged: 'Schedule Changed — Regenerate',
     dismiss: 'Dismiss',
     couldNotFit: 'couldn\'t fit',
+    taskSingular: 'task',
+    taskPlural: 'tasks',
     tryReducing: 'try reducing duration or freeing up calendar space.',
     yourTasks: 'Your Tasks',
     noEvents: 'No events',
@@ -224,6 +227,8 @@ const t = {
     calBlocks: 'blocks',
     calDay: 'day',
     calDaysUnit: 'days',
+    unitHoursShort: 'h',
+    unitMinutesShort: 'm',
     calHScheduled: 'h scheduled',
 
     // Stroop score breakdown
@@ -233,6 +238,7 @@ const t = {
     calibLapsesLabel: 'Lapses',
     calibInterferenceLabel: 'Stroop Interference',
     calibLapsesDetail: 'attention lapses',
+    calibLapsesPrefix: '{n} lapses — ',
 
     // More calendar
     calConflictsWith: 'Conflicts with',
@@ -304,6 +310,7 @@ const t = {
     gcalExportFailed: '{n} failed',
     gcalUnsync: 'Remove',
     gcalUnsyncConfirm: 'Remove all synced MindFlow sessions from Google Calendar?',
+    gcalUnsyncRetry: 'Some events could not be removed. Try again.',
 
     // Google Calendar — errors
     gcalTokenExpired: 'Google Calendar connection expired. Please sign in again.',
@@ -390,6 +397,7 @@ const t = {
     taskSave: '保存修改',
     taskCancel: '取消',
     taskClearAll: '清空全部',
+    taskDelete: '删除任务',
     generate: '生成计划',
     generating: '生成中...',
     noCalibration: '请先完成校准测试。',
@@ -491,6 +499,8 @@ const t = {
     scheduleChanged: '计划已过期。重新生成？',
     dismiss: '忽略',
     couldNotFit: '无法安排',
+    taskSingular: '项任务',
+    taskPlural: '项任务',
     tryReducing: '尝试减少任务或增加可用时间。',
     yourTasks: '你的任务',
     noEvents: '本周无事件',
@@ -559,6 +569,8 @@ const t = {
     calDay: '天',
     calDaysUnit: '天',
     calHScheduled: '小时已安排',
+    unitHoursShort: '小时',
+    unitMinutesShort: '分钟',
 
     // Stroop score breakdown
     calibAccuracyLabel: '准确度',
@@ -567,6 +579,7 @@ const t = {
     calibLapsesLabel: '注意力流失',
     calibInterferenceLabel: '干扰',
     calibLapsesDetail: '次注意力流失',
+    calibLapsesPrefix: '{n} 次流失 — ',
 
     // More calendar
     calConflictsWith: '与以下冲突',
@@ -591,6 +604,7 @@ const t = {
     gcalExportFailed: '{n} 个失败',
     gcalUnsync: '移除',
     gcalUnsyncConfirm: '从 Google 日历移除所有已同步的学习时段？',
+    gcalUnsyncRetry: '部分事件未能删除。请重试。',
     gcalTokenExpired: 'Google 日历连接已过期。请重新登录。',
     gcalPermissionDenied: '日历访问被拒绝。请授予权限。',
     gcalRateLimited: '请求过多。请稍候。',
@@ -669,6 +683,7 @@ const t = {
     taskSave: '儲存修改',
     taskCancel: '取消',
     taskClearAll: '清空全部',
+    taskDelete: '刪除任務',
     generate: '生成計劃',
     generating: '生成中...',
     noCalibration: '請先完成校準測試。',
@@ -770,6 +785,8 @@ const t = {
     scheduleChanged: '計劃已過期。重新生成？',
     dismiss: '忽略',
     couldNotFit: '無法安排',
+    taskSingular: '項任務',
+    taskPlural: '項任務',
     tryReducing: '嘗試減少任務或增加可用時間。',
     yourTasks: '你的任務',
     noEvents: '本週無事件',
@@ -838,6 +855,8 @@ const t = {
     calDay: '天',
     calDaysUnit: '天',
     calHScheduled: '小時已安排',
+    unitHoursShort: '小時',
+    unitMinutesShort: '分鐘',
 
     // Stroop score breakdown
     calibAccuracyLabel: '準確度',
@@ -846,6 +865,7 @@ const t = {
     calibLapsesLabel: '注意力流失',
     calibInterferenceLabel: '干擾',
     calibLapsesDetail: '次注意力流失',
+    calibLapsesPrefix: '{n} 次流失 — ',
 
     // More calendar
     calConflictsWith: '與以下衝突',
@@ -870,6 +890,7 @@ const t = {
     gcalExportFailed: '{n} 個失敗',
     gcalUnsync: '移除',
     gcalUnsyncConfirm: '從 Google 日曆移除所有已同步的學習時段？',
+    gcalUnsyncRetry: '部分事件未能刪除。請重試。',
     gcalTokenExpired: 'Google 日曆連線已過期。請重新登入。',
     gcalPermissionDenied: '日曆存取被拒絕。請授予權限。',
     gcalRateLimited: '請求過多。請稍候。',
@@ -948,6 +969,7 @@ const t = {
     taskSave: 'Guardar cambios',
     taskCancel: 'Cancelar',
     taskClearAll: 'Limpiar todo',
+    taskDelete: 'Eliminar tarea',
     generate: 'Generar horario',
     generating: 'Generando...',
     noCalibration: 'Haz la prueba de calibración primero.',
@@ -1049,6 +1071,8 @@ const t = {
     scheduleChanged: 'El horario está desactualizado. ¿Regenerar?',
     dismiss: 'Descartar',
     couldNotFit: 'No se pudo programar',
+    taskSingular: 'tarea',
+    taskPlural: 'tareas',
     tryReducing: 'Intenta reducir la carga de tareas o aumentar las horas disponibles.',
     yourTasks: 'Tus tareas',
     noEvents: 'Sin eventos esta semana',
@@ -1116,6 +1140,8 @@ const t = {
     calBlocks: 'bloques',
     calDay: 'día',
     calDaysUnit: 'días',
+    unitHoursShort: 'h',
+    unitMinutesShort: 'min',
     calHScheduled: 'h programadas',
 
     // Stroop score breakdown
@@ -1125,6 +1151,7 @@ const t = {
     calibLapsesLabel: 'Lapsos de atención',
     calibInterferenceLabel: 'Interferencia',
     calibLapsesDetail: 'lapsos de atención',
+    calibLapsesPrefix: '{n} lapsos — ',
 
     // More calendar
     calConflictsWith: 'Conflicto con',
@@ -1149,6 +1176,7 @@ const t = {
     gcalExportFailed: '{n} fallidos',
     gcalUnsync: 'Eliminar',
     gcalUnsyncConfirm: '¿Eliminar todas las sesiones sincronizadas de Google Calendar?',
+    gcalUnsyncRetry: 'Algunos eventos no se pudieron eliminar. Inténtalo de nuevo.',
     gcalTokenExpired: 'La conexión expiró. Inicia sesión de nuevo.',
     gcalPermissionDenied: 'Acceso al calendario denegado. Concede el permiso.',
     gcalRateLimited: 'Demasiadas solicitudes. Espera un momento.',
@@ -1227,6 +1255,7 @@ const t = {
     taskSave: 'परिवर्तन सहेजें',
     taskCancel: 'रद्द करें',
     taskClearAll: 'सभी हटाएं',
+    taskDelete: 'कार्य हटाएं',
     generate: 'शेड्यूल बनाएं',
     generating: 'बन रहा है...',
     noCalibration: 'पहले कैलिब्रेशन टेस्ट लें।',
@@ -1328,6 +1357,8 @@ const t = {
     scheduleChanged: 'शेड्यूल पुराना हो चुका है। पुनर्जनित करें?',
     dismiss: 'खारिज करें',
     couldNotFit: 'शेड्यूल नहीं कर सका',
+    taskSingular: 'कार्य',
+    taskPlural: 'कार्य',
     tryReducing: 'कार्यभार कम करें या उपलब्ध घंटे बढ़ाएं।',
     yourTasks: 'आपके कार्य',
     noEvents: 'इस सप्ताह कोई कार्यक्रम नहीं',
@@ -1395,6 +1426,8 @@ const t = {
     calBlocks: 'ब्लॉक',
     calDay: 'दिन',
     calDaysUnit: 'दिन',
+    unitHoursShort: 'घंटे',
+    unitMinutesShort: 'मिनट',
     calHScheduled: 'घंटे शेड्यूल',
 
     // Stroop score breakdown
@@ -1404,6 +1437,7 @@ const t = {
     calibLapsesLabel: 'ध्यान चूक',
     calibInterferenceLabel: 'हस्तक्षेप',
     calibLapsesDetail: 'ध्यान चूक',
+    calibLapsesPrefix: '{n} चूक — ',
 
     // More calendar
     calConflictsWith: 'विरोध',
@@ -1428,6 +1462,7 @@ const t = {
     gcalExportFailed: '{n} विफल',
     gcalUnsync: 'हटाएं',
     gcalUnsyncConfirm: 'सभी सिंक किए गए सत्र Google Calendar से हटाएं?',
+    gcalUnsyncRetry: 'कुछ इवेंट हटाए नहीं जा सके। पुनः प्रयास करें।',
     gcalTokenExpired: 'Google Calendar कनेक्शन समाप्त हो गया। कृपया फिर से साइन इन करें।',
     gcalPermissionDenied: 'कैलेंडर एक्सेस अस्वीकृत। कृपया अनुमति दें।',
     gcalRateLimited: 'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
@@ -1506,6 +1541,7 @@ const t = {
     taskSave: 'حفظ التغييرات',
     taskCancel: 'إلغاء',
     taskClearAll: 'مسح الكل',
+    taskDelete: 'حذف المهمة',
     generate: 'إنشاء الجدول',
     generating: 'جارٍ الإنشاء...',
     noCalibration: 'أجرِ اختبار المعايرة أولاً.',
@@ -1607,6 +1643,8 @@ const t = {
     scheduleChanged: 'الجدول قديم. إعادة الإنشاء؟',
     dismiss: 'تجاهل',
     couldNotFit: 'لم يتمكن من الجدولة',
+    taskSingular: 'مهمة',
+    taskPlural: 'مهام',
     tryReducing: 'حاول تقليل المهام أو زيادة الساعات المتاحة.',
     yourTasks: 'مهامك',
     noEvents: 'لا توجد أحداث هذا الأسبوع',
@@ -1674,6 +1712,8 @@ const t = {
     calBlocks: 'كتل',
     calDay: 'يوم',
     calDaysUnit: 'أيام',
+    unitHoursShort: 'س',
+    unitMinutesShort: 'د',
     calHScheduled: 'ساعة مجدولة',
 
     // Stroop score breakdown
@@ -1683,6 +1723,7 @@ const t = {
     calibLapsesLabel: 'فقدان الانتباه',
     calibInterferenceLabel: 'التداخل',
     calibLapsesDetail: 'فقدان انتباه',
+    calibLapsesPrefix: '{n} فقدان — ',
 
     // More calendar
     calConflictsWith: 'يتعارض مع',
@@ -1707,6 +1748,7 @@ const t = {
     gcalExportFailed: 'فشل {n}',
     gcalUnsync: 'إزالة',
     gcalUnsyncConfirm: 'إزالة جميع الجلسات المتزامنة من تقويم Google؟',
+    gcalUnsyncRetry: 'تعذرت إزالة بعض الأحداث. حاول مرة أخرى.',
     gcalTokenExpired: 'انتهت صلاحية اتصال تقويم Google. يرجى تسجيل الدخول مرة أخرى.',
     gcalPermissionDenied: 'تم رفض الوصول إلى التقويم. يرجى منح الإذن.',
     gcalRateLimited: 'طلبات كثيرة جدًا. يرجى الانتظار.',
@@ -1727,7 +1769,20 @@ export function getTranslations(lang) {
 }
 
 export function getStoredLang() {
-  try { return localStorage.getItem('mindflow_lang') || 'en'; } catch { return 'en'; }
+  try {
+    const stored = localStorage.getItem('mindflow_lang');
+    // Validate against supported codes — corrupted/foreign values (e.g.
+    // 'fr') would render an empty Settings <select>.
+    if (stored && LANGUAGES.some(l => l.code === stored)) return stored;
+    // First visit: match the browser locale so non-English users don't
+    // silently land in English.
+    const nav = (navigator.language || '').toLowerCase();
+    if (nav.startsWith('zh-tw') || nav.startsWith('zh-hk') || nav.startsWith('zh-mo')) return 'zh-TW';
+    if (nav.startsWith('zh')) return 'zh-CN';
+    const base = nav.split('-')[0];
+    if (LANGUAGES.some(l => l.code === base)) return base;
+    return 'en';
+  } catch { return 'en'; }
 }
 
 export function setStoredLang(code) {
@@ -1741,4 +1796,20 @@ const LANG_TO_LOCALE = {
 };
 export function langToLocale(lang) {
   return LANG_TO_LOCALE[lang] || 'en-US';
+}
+
+/**
+ * Locale-correct short weekday names keyed by internal day code
+ * ('Mon'…'Sun'). Internal keys stay English (blocks store day as 'Mon');
+ * only display labels are localized. 2026-01-05 is a Monday — the anchor
+ * date makes the mapping locale-independent.
+ */
+export function getDayShortNames(lang) {
+  const loc = langToLocale(lang);
+  const names = {};
+  const DAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (let i = 0; i < 7; i++) {
+    names[DAY_KEYS[i]] = new Date(2026, 0, 5 + i).toLocaleDateString(loc, { weekday: 'short' });
+  }
+  return names;
 }

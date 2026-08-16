@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { clearAll } from '../utils/storage.js';
 
 /**
  * ErrorBoundary — catches unhandled render exceptions to prevent
@@ -43,13 +44,26 @@ export default class ErrorBoundary extends Component {
                 </pre>
               </details>
             )}
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-full bg-mindflow-accent px-6 py-2 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover shadow-sm"
-            >
-              Reload page
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-full bg-mindflow-accent px-6 py-2 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover shadow-sm"
+              >
+                Reload page
+              </button>
+              <button
+                type="button"
+                onClick={() => { clearAll(); window.location.reload(); }}
+                className="rounded-full border border-mindflow-border px-6 py-2 text-sm font-medium text-mindflow-muted hover:bg-mindflow-surface-alt"
+              >
+                Reset all data
+              </button>
+            </div>
+            <p className="text-xs text-mindflow-muted mt-3">
+              Reloading restores this screen only if the crash comes from saved data — use
+              Reset all data to wipe the local data and start fresh.
+            </p>
           </div>
         </div>
       );

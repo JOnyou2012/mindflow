@@ -883,6 +883,88 @@ assert(session.placementReason !== undefined, 'BC15.12: session.placementReason 
 assert(session.sessionQuality !== undefined, 'BC15.13: session.sessionQuality exists (new)');
 
 // ===========================================================================
+// 16. Production hardening regressions (deploy-prep audit 2026-08)
+// ===========================================================================
+
+console.log('\n📋 16. Production hardening regressions');
+
+// Date-proof helpers: anchor on the upcoming Monday, never on today's weekday.
+const nextMondayISO = (() => {
+  const now = new Date();
+  const diff = now.getDay() === 0 ? 1 : 8 - now.getDay();
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  return mon.getFullYear() + '-' + String(mon.getMonth() + 1).padStart(2, '0') + '-' + String(mon.getDate()).padStart(2, '0');
+})();
+const isoDaysAgo = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
+const isoDaysAfterMonday = (n) => {
+  const [y, m, d] = nextMondayISO.split('-').map(Number);
+  const date = new Date(y, m - 1, d + n);
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+};
+const countSessions = (result) =>
+  Object.values(result.days).reduce((s, d) => s + (d.sessions?.length || 0), 0);
+
+// PH1: Overdue DATETIME deadline must still schedule (was permanently
+// unschedulable — slotBeforeDeadline rejected every slot after expiry).
+{
+  const task = { id: 'ph1', title: 'Overdue timed task', type: 'academic', difficulty: 3, durationMins: 60, priority: 'high', deadline: isoDaysAgo(3) + 'T15:00' };
+  const r = generateWeeklySchedule([], [task], 1.0, {}, nextMondayISO);
+  assert(countSessions(r) > 0, 'PH1: overdue datetime-deadline task is schedulable');
+}
+
+// PH2: Non-string deadline (corrupted localStorage) must not throw and the
+// task must still schedule.
+{
+  const task = { id: 'ph2', title: 'Corrupt deadline', type: 'academic', difficulty: 3, durationMins: 60, priority: 'medium', deadline: 1755555555555 };
+  let r = null;
+  try {
+    r = generateWeeklySchedule([], [task], 1.0, {}, nextMondayISO);
+  } catch {
+    r = null;
+  }
+  assert(r !== null, 'PH2.1: non-string deadline does not throw');
+  assert(r && countSessions(r) > 0, 'PH2.2: non-string deadline task is schedulable');
+}
+
+// PH3: Huge durationMins must terminate (was unbounded chunking → OOM /
+// infinite loop). The assertion is simply reaching this line.
+{
+  const task = { id: 'ph3', title: 'Huge duration', type: 'academic', difficulty: 3, durationMins: 1e9, priority: 'low' };
+  const r = generateWeeklySchedule([], [task], 1.0, {}, nextMondayISO);
+  assert(r !== null && typeof r.days === 'object', 'PH3: huge durationMins terminates');
+}
+
+// PH4: Malformed weekStartDate must fall back to the current week instead of
+// silently unscheduling every task.
+{
+  const task = { id: 'ph4', title: 'No deadline', type: 'academic', difficulty: 3, durationMins: 60, priority: 'medium' };
+  const r = generateWeeklySchedule([], [task], 1.0, {}, 'garbage');
+  assert(countSessions(r) > 0, 'PH4: malformed weekStartDate falls back and schedules');
+}
+
+// PH5: no_deadline_buffer warning must compare actual dates, not weekdays.
+// Force placement on this week's Wednesday by blocking every other day;
+// the deadline is NEXT week's Wednesday → no warning may fire.
+{
+  const wedIdx = 2; // Wednesday index in ALL_DAYS
+  const blocks = [];
+  ALL_DAYS.forEach((day, i) => {
+    if (i === wedIdx) return; // leave this week's Wednesday free
+    blocks.push({ id: 'blk' + i, day, startHour: 8, durationHours: 14, label: 'busy', type: 'other', isFixed: true });
+  });
+  const task = { id: 'ph5', title: 'Due next Wednesday', type: 'academic', difficulty: 3, durationMins: 60, priority: 'medium', deadline: isoDaysAfterMonday(9) + 'T23:59' };
+  const r = generateWeeklySchedule(blocks, [task], 1.0, {}, nextMondayISO);
+  const placedWed = (r.days.Wed?.sessions || []).some(s => s.task.id === 'ph5');
+  const bufferWarnings = (r.warnings || []).filter(w => w.type === 'no_deadline_buffer');
+  assert(placedWed, 'PH5.1: task forced onto this week Wednesday');
+  assert(bufferWarnings.length === 0, 'PH5.2: next-week deadline triggers no false weekday warning');
+}
+
+// ===========================================================================
 // Done
 // ===========================================================================
 

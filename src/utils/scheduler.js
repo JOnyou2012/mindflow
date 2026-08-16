@@ -37,7 +37,11 @@ const DAY_START_TICK = 36;       // 6:00 AM
 const DAY_END_TICK = 132;        // 10:00 PM
 const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKEND_DAYS = new Set(['Sat', 'Sun']);
-const DAY_INDEX = Object.fromEntries(ALL_DAYS.map((d, i) => [d, i]));
+// Not Object.fromEntries — it's a runtime API missing on Safari ≤12.0 and
+// this runs at module scope (a crash here is a white screen before React
+// mounts, bypassing the ErrorBoundary).
+const DAY_INDEX = {};
+ALL_DAYS.forEach((d, i) => { DAY_INDEX[d] = i; });
 
 const GAP_TICKS = 3;             // 30-minute gap between consecutive sessions
 const RECOVERY_TICKS = 2;        // 20-minute forced rest after burnout
@@ -242,8 +246,9 @@ function effectiveAlpha(alpha, strain) {
  *          null/undefined → null
  */
 function normalizeDeadline(deadline) {
-  if (!deadline) return null;
-  let s = deadline;
+  if (deadline == null || typeof deadline !== 'string') return null;
+  let s = deadline.trim();
+  if (!s) return null;
   if (s.endsWith('T')) s = s.slice(0, -1);
   if (!s.includes('T')) s += 'T23:59';
   return s;
@@ -259,9 +264,10 @@ export function sortTasks(tasks) {
     if (!a.deadline && b.deadline) return 1;
 
     if (a.deadline && b.deadline) {
-      const da = new Date(normalizeDeadline(a.deadline)), db = new Date(normalizeDeadline(b.deadline));
-      if (isNaN(da.getTime())) return 1;
-      if (isNaN(db.getTime())) return -1;
+      const na = normalizeDeadline(a.deadline), nb = normalizeDeadline(b.deadline);
+      const da = na ? new Date(na) : null, db = nb ? new Date(nb) : null;
+      if (!da) return 1;
+      if (!db) return -1;
       if (da < db) return -1;
       if (da > db) return 1;
     }
@@ -339,20 +345,6 @@ function formatTickLabel(tick) {
   return `${Math.floor(m / 60)}h${(m % 60).toString().padStart(2, '0')}`;
 }
 
-function deadlineToDay(isoDate) {
-  if (!isoDate) return null;
-  try {
-    // Use normalizeDeadline to handle time-including deadlines and trailing-T
-    const dlStr = normalizeDeadline(isoDate);
-    const d = new Date(dlStr);
-    if (isNaN(d.getTime())) return null;
-    const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return map[d.getDay()];
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Check if a task's deadline allows it to be scheduled on a given day.
  * Uses actual calendar dates so deadlines work across week boundaries.
@@ -364,29 +356,27 @@ function deadlineToDay(isoDate) {
  */
 function deadlineAllowsDay(task, day, weekStartDate) {
   if (!task.deadline) return true;
+  if (typeof task.deadline !== 'string') return true;
 
   // Parse deadline — may include time (e.g. '2026-08-15T15:00')
   const dlStr = normalizeDeadline(task.deadline);
+  if (!dlStr) return true;
   const deadlineDt = new Date(dlStr);
   if (isNaN(deadlineDt.getTime())) return true;
 
-  // Compute this day's date and normalize both dates to midnight for a
-  // pure date comparison (ignore time-of-day). The slot-level time check
-  // in slotBeforeDeadline() handles the specific hour constraint separately.
+  // Truly overdue (past the deadline's wall-clock time) → urgent: allow on
+  // any remaining day instead of dropping the task forever. Use the full
+  // datetime so a task due tonight stays gated to its deadline day until
+  // the moment actually passes.
+  if (deadlineDt.getTime() < Date.now()) return true;
+
+  // Compute this day's date for a pure date comparison. The slot-level
+  // time check in slotBeforeDeadline() handles the specific hour constraint.
   const [y, m, d] = weekStartDate.split('-').map(Number);
   const dayIdx = DAY_INDEX[day];
   const dayDate = new Date(y, m - 1, d + dayIdx);
   dayDate.setHours(0, 0, 0, 0);
-  deadlineDt.setHours(0, 0, 0, 0);
 
-  // Task can be on this day if the day is before or on the deadline date.
-  // Overdue tasks (deadline already past) are treated as urgent —
-  // allow them on any remaining day rather than dropping them.
-  // Compare against today's midnight explicitly (not wall-clock `new Date()`)
-  // so the intent is clear for future readers.
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  if (deadlineDt < dayDate && deadlineDt < todayMidnight) return true;
   return dayDate <= deadlineDt;
 }
 
@@ -396,11 +386,17 @@ function deadlineAllowsDay(task, day, weekStartDate) {
  */
 function slotBeforeDeadline(slotEndTick, task, day, weekStartDate) {
   if (!task.deadline) return true;
+  if (typeof task.deadline !== 'string') return true;
   if (!task.deadline.includes('T')) return true; // date-only deadline, time doesn't matter
 
   const dlStr = normalizeDeadline(task.deadline);
+  if (!dlStr) return true;
   const deadlineDt = new Date(dlStr);
   if (isNaN(deadlineDt.getTime())) return true;
+
+  // Overdue → schedule ASAP: rejecting every slot after the deadline has
+  // passed would make the task permanently unschedulable.
+  if (deadlineDt.getTime() < Date.now()) return true;
 
   const [y, m, d] = weekStartDate.split('-').map(Number);
   const dayIdx = DAY_INDEX[day];
@@ -486,8 +482,8 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   if (task.deadline && weekStartDate) {
     // Deadline may already include time (e.g. '2026-08-15T23:59')
     const dlStr = normalizeDeadline(task.deadline);
-    const dl = new Date(dlStr);
-    if (!isNaN(dl.getTime())) {
+    const dl = dlStr ? new Date(dlStr) : null;
+    if (dl && !isNaN(dl.getTime())) {
       const slotDate = new Date(weekStartDate + 'T00:00:00');
       slotDate.setDate(slotDate.getDate() + DAY_INDEX[slot.day]);
       const daysUntilDeadline = Math.round((dl - slotDate) / 86400000);
@@ -695,8 +691,9 @@ function analyzePreflight(tasks, settings) {
   const now = Date.now();
   for (const t of tasks) {
     if (t.deadline) {
-      const dl = new Date(normalizeDeadline(t.deadline));
-      if (!isNaN(dl.getTime())) {
+      const dlStr = normalizeDeadline(t.deadline);
+      const dl = dlStr ? new Date(dlStr) : null;
+      if (dl && !isNaN(dl.getTime())) {
         const daysUntil = (dl.getTime() - now) / (86400000);
         if (daysUntil <= 2) urgentCount++;
       }
@@ -737,7 +734,7 @@ function analyzePreflight(tasks, settings) {
  * @param {UserSettings} settings
  * @returns {object[]} Array of warning objects { severity, message, day, detail }
  */
-function generateWarnings(week, tasks, settings) {
+function generateWarnings(week, tasks, settings, wsDate) {
   const warnings = [];
   const s = settings || {};
   const maxWeekday = s.maxHoursPerDay ?? 8;
@@ -845,19 +842,34 @@ function generateWarnings(week, tasks, settings) {
     });
   }
 
-  // Deadline buffer check
+  // Deadline buffer check — compare actual calendar dates, not weekdays:
+  // a task due next Wednesday must not warn when scheduled this Wednesday.
+  const dateForDay = (dayName) => {
+    const [y, m, d] = wsDate.split('-').map(Number);
+    const idx = DAY_INDEX[dayName];
+    const date = new Date(y, m - 1, d + idx);
+    return date.getFullYear() + '-' +
+      String(date.getMonth() + 1).padStart(2, '0') + '-' +
+      String(date.getDate()).padStart(2, '0');
+  };
   for (const day of ALL_DAYS) {
     for (const sess of week.days[day].sessions) {
       if (sess.task.deadline) {
-        const dlDay = deadlineToDay(sess.task.deadline);
-        if (dlDay && DAY_INDEX[day] === DAY_INDEX[dlDay]) {
-          warnings.push({
-            severity: 'medium',
-            type: 'no_deadline_buffer',
-            message: `"${sess.task.title}" scheduled on its deadline day (${day})`,
-            day,
-            detail: 'No buffer day — any delay means missing the deadline',
-          });
+        const dlStr = normalizeDeadline(sess.task.deadline);
+        const dl = dlStr ? new Date(dlStr) : null;
+        if (dl && !isNaN(dl.getTime())) {
+          const dlDate = dl.getFullYear() + '-' +
+            String(dl.getMonth() + 1).padStart(2, '0') + '-' +
+            String(dl.getDate()).padStart(2, '0');
+          if (dateForDay(day) === dlDate) {
+            warnings.push({
+              severity: 'medium',
+              type: 'no_deadline_buffer',
+              message: `"${sess.task.title}" scheduled on its deadline day (${day})`,
+              day,
+              detail: 'No buffer day — any delay means missing the deadline',
+            });
+          }
         }
       }
     }
@@ -971,11 +983,16 @@ function applyAttentionResidueToState(state, prevType, nextType) {
 export default function generateWeeklySchedule(
   calendarBlocks = [], tasks = [], alpha = 1.0, settings = {}, weekStartDate = null
 ) {
-  // Default to this week's Monday if no date provided.
+  // Validate the caller-supplied week date. A malformed value ('garbage',
+  // wrong shape) would otherwise poison every date comparison and silently
+  // unschedule every task.
+  const isValidWeekDate =
+    typeof weekStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(weekStartDate);
+  // Default to this week's Monday if no (or malformed) date is provided.
   // Must use local date parts, NOT toISOString() which is UTC — in timezones
   // ahead of UTC (Asia, Australia, etc.), toISOString returns the previous day
   // and shifts the entire week by one day, breaking all deadline checks.
-  const wsDate = weekStartDate || (() => {
+  const wsDate = isValidWeekDate ? weekStartDate : (() => {
     const now = new Date();
     const day = now.getDay();
     const diff = day === 0 ? -6 : 1 - day;
@@ -997,7 +1014,7 @@ export default function generateWeeklySchedule(
   const nowHour = nowDate.getHours() + nowDate.getMinutes() / 60;
 
   // Only enforce past-day blocking when caller passes real week dates
-  const enforceRealDates = !!weekStartDate;
+  const enforceRealDates = isValidWeekDate;
 
   // Compute actual date for a day name (timezone-safe: use local date parts)
   const dateForDay = (dayName) => {
@@ -1024,10 +1041,12 @@ export default function generateWeeklySchedule(
   const MAX_CHUNK_MINS = 90;
   const taskList = [];
   for (const t of (tasks || [])) {
-    if (!t || t.durationMins <= 0) continue;
+    if (!t || !Number.isFinite(t.durationMins) || t.durationMins <= 0) continue;
     const needsSplit = t.durationMins > 180 || (t.durationMins > 120 && (t.difficulty || 3) >= 4);
     if (needsSplit) {
-      const numChunks = Math.ceil(t.durationMins / MAX_CHUNK_MINS);
+      // Hard cap: a corrupted/huge durationMins must never spawn an
+      // unbounded number of chunk clones (OOM / infinite loop).
+      const numChunks = Math.min(8, Math.ceil(t.durationMins / MAX_CHUNK_MINS));
       const chunkMins = Math.round(t.durationMins / numChunks);
       for (let c = 0; c < numChunks; c++) {
         taskList.push({
@@ -1119,7 +1138,7 @@ export default function generateWeeklySchedule(
   if (allSlots.length === 0) {
     week.unscheduled = [...sorted];
     week.stats = computeStats(week, sorted, s);
-    week.warnings = generateWarnings(week, sorted, s);
+    week.warnings = generateWarnings(week, sorted, s, wsDate);
     week.preflight = analyzePreflight(sorted, s);
     return week;
   }
@@ -1153,18 +1172,24 @@ export default function generateWeeklySchedule(
     const taskTicks = Math.ceil((task.durationMins || 30) / 10);
     const profile = TYPE_PROFILES[task.type] || TYPE_PROFILES.other;
 
-    // Deadline pressure: alpha boost for tasks due within 2 days.
-    // Computed once per task using a week-relative estimate for scoring;
-    // refined after slot selection with the actual scheduled day.
+    // Deadline pressure: alpha boost for tasks due within 2 days of THIS
+    // week. Uses real calendar dates — the old weekday-distance heuristic
+    // boosted tasks due Mon–Wed regardless of how far away the deadline
+    // actually was (e.g. next Tuesday), while genuinely urgent Thu–Sun
+    // deadlines got nothing.
     let deadlineAlphaBoost = 1.0;
     if (task.deadline) {
-      const deadlineDay = deadlineToDay(task.deadline);
-      if (deadlineDay) {
-        // Use worst-case (earliest possible scheduling day = Monday) for scoring
-        const worstCaseDaysUntil = DAY_INDEX[deadlineDay] - DAY_INDEX.Mon;
-        if (worstCaseDaysUntil >= 0 && worstCaseDaysUntil <= DEADLINE_PRESSURE_DAYS) {
+      const dlStr = normalizeDeadline(task.deadline);
+      const dl = dlStr ? new Date(dlStr) : null;
+      if (dl && !isNaN(dl.getTime())) {
+        const dlMid = new Date(dl);
+        dlMid.setHours(0, 0, 0, 0);
+        const [y, m, d] = wsDate.split('-').map(Number);
+        const monMid = new Date(y, m - 1, d);
+        const daysUntil = Math.round((dlMid - monMid) / 86400000);
+        if (daysUntil >= 0 && daysUntil <= DEADLINE_PRESSURE_DAYS) {
           deadlineAlphaBoost = 1.0 + DEADLINE_PRESSURE_BOOST
-            * (1 - worstCaseDaysUntil / DEADLINE_PRESSURE_DAYS);
+            * (1 - daysUntil / DEADLINE_PRESSURE_DAYS);
         }
       }
     }
@@ -1243,9 +1268,14 @@ export default function generateWeeklySchedule(
     // Refine deadline pressure relative to the actual scheduled day
     let dayRelativeBoost = deadlineAlphaBoost;
     if (task.deadline && deadlineAlphaBoost > 1.0) {
-      const deadlineDay = deadlineToDay(task.deadline);
-      if (deadlineDay) {
-        const daysUntil = DAY_INDEX[deadlineDay] - DAY_INDEX[bestSlot.day];
+      const dlStr = normalizeDeadline(task.deadline);
+      const dl = dlStr ? new Date(dlStr) : null;
+      if (dl && !isNaN(dl.getTime())) {
+        const dlMid = new Date(dl);
+        dlMid.setHours(0, 0, 0, 0);
+        const [y, m, d] = wsDate.split('-').map(Number);
+        const slotMid = new Date(y, m - 1, d + DAY_INDEX[bestSlot.day]);
+        const daysUntil = Math.round((dlMid - slotMid) / 86400000);
         if (daysUntil >= 0 && daysUntil <= DEADLINE_PRESSURE_DAYS) {
           dayRelativeBoost = 1.0 + DEADLINE_PRESSURE_BOOST
             * (1 - daysUntil / DEADLINE_PRESSURE_DAYS);
@@ -1587,7 +1617,7 @@ export default function generateWeeklySchedule(
   }
 
   week.stats = computeStats(week, sorted, s);
-  week.warnings = generateWarnings(week, sorted, s);
+  week.warnings = generateWarnings(week, sorted, s, wsDate);
   week.preflight = analyzePreflight(sorted, s);
 
   return week;

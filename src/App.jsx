@@ -38,7 +38,12 @@ export default function App() {
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
   const [settings, setSettingsState] = useState(() => loadSettings());
-  const [googleBlocks, setGoogleBlocks] = useState(() => loadGoogleCache()?.data || []);
+  // Google cache is week-scoped: a cache imported last week must not render
+  // as this week's blocks (the auth token is gone after reload anyway).
+  const [googleBlocks, setGoogleBlocks] = useState(() => {
+    const cache = loadGoogleCache();
+    return cache && cache.weekStart === getWeekMonday() ? cache.data : [];
+  });
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result
@@ -108,10 +113,10 @@ export default function App() {
         while (remaining.length > 0 && w < 8) {
           const ws = getWeekStart(w);
           // Only pass tasks whose deadline is within range of this week.
-          const weekEndDate = new Date(ws + 'T00:00:00');
-          weekEndDate.setDate(weekEndDate.getDate() + 6);
           const eligible = remaining.filter(t => {
             if (!t.deadline) return true;
+            // Non-string deadlines (corrupted localStorage) → treat as no deadline.
+            if (typeof t.deadline !== 'string') return true;
             // Normalize deadline (handles date-only, datetime, trailing-T).
             let dlStr = t.deadline;
             if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
@@ -126,24 +131,29 @@ export default function App() {
             const weekStartDate = new Date(ws + 'T00:00:00');
             return dl >= weekStartDate || dl < new Date();
           });
+          // Deferred tasks have deadlines that fall before this week starts
+          // but haven't passed yet. They were unscheduled in the previous
+          // week (they came from its result.unscheduled), so they are
+          // already recorded there — drop them from the pool instead of
+          // re-attaching (which would duplicate them in a far-away week's
+          // list, miles from where the user looks).
           const deferred = remaining.filter(t => !eligible.includes(t));
           const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
           const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
           const allBlocks = [...calendarBlocks, ...googleBlocks];
           const result = generateWeeklySchedule(allBlocks, eligible, calibration.alphaScore, cappedSettings, ws);
-          remaining = [...(result.unscheduled || []), ...deferred];
           results[ws] = result;
+          if (w === 0 && deferred.length > 0) {
+            // Mathematically unreachable (this week's Monday is never in the
+            // future), but never drop a task silently.
+            results[ws].unscheduled = [...(results[ws].unscheduled || []), ...deferred];
+          }
+          remaining = [...(result.unscheduled || [])];
           w++;
         }
-        // Attach any tasks still remaining (deferred beyond the last
-        // generated week) to the last week's unscheduled list so they
-        // don't silently disappear from the UI.
-        if (remaining.length > 0 && w > 0) {
-          const lastWs = getWeekStart(w - 1);
-          if (results[lastWs]) {
-            results[lastWs].unscheduled = [...(results[lastWs].unscheduled || []), ...remaining];
-          }
-        }
+        // No post-loop attach needed: on exit, `remaining` is either empty
+        // or exactly the last generated week's own unscheduled list, which
+        // is already recorded in results.
         setWeekResults(results);
         dataVersionRef.current = 0;
         setIsCalculating(false);
@@ -281,7 +291,7 @@ export default function App() {
           )
         )}
 
-        {step === 2 && <WeeklyCalendar blocks={calendarBlocks} googleBlocks={googleBlocks} onChange={setCalendarBlocks} onGoogleImport={handleGoogleImport} weekStart={getWeekStart(0)} onViewChange={setSubView} T={T} />}
+        {step === 2 && <WeeklyCalendar blocks={calendarBlocks} googleBlocks={googleBlocks} onChange={setCalendarBlocks} onGoogleImport={handleGoogleImport} weekStart={getWeekStart(0)} onViewChange={setSubView} onError={setError} T={T} />}
 
         {step === 3 && <TaskInputForm tasks={tasks} onChange={setTasks} onViewChange={setSubView} T={T} />}
 
@@ -366,7 +376,15 @@ export default function App() {
                   <span className="text-sm text-mindflow-text w-28 shrink-0">{T.settingsLanguage}</span>
                   <select
                     value={lang}
-                    onChange={e => { setLang(e.target.value); setStoredLang(e.target.value); }}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setLang(v);
+                      setStoredLang(v);
+                      // Apply dir/lang synchronously — the effect would run
+                      // after paint and flash one RTL-frame-in-LTR.
+                      document.documentElement.lang = v;
+                      document.documentElement.dir = v === 'ar' ? 'rtl' : 'ltr';
+                    }}
                     className="flex-1 bg-mindflow-bg border border-mindflow-border rounded-lg px-3 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none"
                   >
                     {LANGUAGES.map(l => (<option key={l.code} value={l.code}>{l.native}</option>))}
@@ -415,7 +433,13 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number" value={settings.maxHoursPerDay} min={1} max={16}
-                      onChange={e => setSettings(s => ({ ...s, maxHoursPerDay: Number(e.target.value) }))}
+                      onChange={e => {
+                        // Clamp: Number('') is 0 — persisting it would either
+                        // silently switch the app to the default cap or cap
+                        // the day at 0h (everything lands in "couldn't fit").
+                        const n = Number(e.target.value);
+                        setSettings(s => ({ ...s, maxHoursPerDay: Number.isFinite(n) ? Math.max(1, Math.min(16, n)) : 8 }));
+                      }}
                       className="w-16 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1.5 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none"
                     />
                     <span className="text-xs text-mindflow-muted">{T.hours}</span>
@@ -427,7 +451,10 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number" value={settings.maxHoursWeekend} min={0} max={12}
-                      onChange={e => setSettings(s => ({ ...s, maxHoursWeekend: Number(e.target.value) }))}
+                      onChange={e => {
+                        const n = Number(e.target.value);
+                        setSettings(s => ({ ...s, maxHoursWeekend: Number.isFinite(n) ? Math.max(0, Math.min(12, n)) : 4 }));
+                      }}
                       className="w-16 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1.5 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none"
                     />
                     <span className="text-xs text-mindflow-muted">{T.hours}</span>

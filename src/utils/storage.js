@@ -5,7 +5,46 @@ const KEYS = {
   SETTINGS: 'mindflow_settings',
   GOOGLE_CACHE: 'mindflow_google_cache',
   GOOGLE_EXPORT: 'mindflow_google_export',
+  SCHEMA_VERSION: 'mindflow_schema_version',
 };
+
+// Bump when persisted shapes change; loaders sanitize against old/foreign
+// data, and this key gives future migrations a signal to key off.
+export const SCHEMA_VERSION = 1;
+
+/** Write the schema version once at app start (best-effort). */
+export function stampSchemaVersion() {
+  try { localStorage.setItem(KEYS.SCHEMA_VERSION, String(SCHEMA_VERSION)); } catch {}
+}
+
+// -- Persisted element sanitization -------------------------------------------
+// Returning users carry localStorage written by older builds (or corrupted
+// writes). A single bad element — null, a string, an old-schema object —
+// crashes the first render that touches it, so loaders must drop or repair
+// invalid items rather than trust the array type alone.
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function sanitizeBlock(b) {
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return null;
+  if (typeof b.day !== 'string' || !DAY_NAMES.includes(b.day)) return null;
+  const startHour = Number(b.startHour);
+  const durationHours = Number(b.durationHours);
+  if (!Number.isFinite(startHour) || !Number.isFinite(durationHours)) return null;
+  return { ...b, startHour, durationHours };
+}
+
+function sanitizeTask(t) {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
+  if (typeof t.title !== 'string' || t.title.trim() === '') return null;
+  const out = { ...t };
+  for (const key of ['difficulty', 'durationMins', 'priority']) {
+    const n = Number(out[key]);
+    if (Number.isFinite(n)) out[key] = n; else delete out[key];
+  }
+  if (typeof out.deadline !== 'string' || out.deadline === '') delete out.deadline;
+  return out;
+}
 
 export function saveCalibration(cal) {
   try { if (cal) localStorage.setItem(KEYS.CALIBRATION, JSON.stringify(cal)); } catch (e) { console.warn('localStorage full, calibration not saved:', e); return false; } return true;
@@ -26,31 +65,56 @@ export function saveCalendar(blocks) {
   try { localStorage.setItem(KEYS.CALENDAR, JSON.stringify(blocks)); } catch (e) { console.warn('localStorage full, calendar not saved:', e); return false; } return true;
 }
 export function loadCalendar() {
-  try { const d = localStorage.getItem(KEYS.CALENDAR); if (!d) return []; const p = JSON.parse(d); return Array.isArray(p) ? p : []; } catch { return []; }
+  try {
+    const d = localStorage.getItem(KEYS.CALENDAR);
+    if (!d) return [];
+    const p = JSON.parse(d);
+    if (!Array.isArray(p)) return [];
+    return p.map(sanitizeBlock).filter(Boolean);
+  } catch { return []; }
 }
 
 export function saveTasks(tasks) {
   try { localStorage.setItem(KEYS.TASKS, JSON.stringify(tasks)); } catch (e) { console.warn('localStorage full, tasks not saved:', e); return false; } return true;
 }
 export function loadTasks() {
-  try { const d = localStorage.getItem(KEYS.TASKS); if (!d) return []; const p = JSON.parse(d); return Array.isArray(p) ? p : []; } catch { return []; }
+  try {
+    const d = localStorage.getItem(KEYS.TASKS);
+    if (!d) return [];
+    const p = JSON.parse(d);
+    if (!Array.isArray(p)) return [];
+    return p.map(sanitizeTask).filter(Boolean);
+  } catch { return []; }
 }
 
 export function saveSettings(settings) {
   try { localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings)); } catch (e) { console.warn('localStorage full, settings not saved:', e); return false; } return true;
 }
 export function loadSettings() {
+  const DEFAULTS = { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
   try {
     const d = localStorage.getItem(KEYS.SETTINGS);
     if (d) {
       const parsed = JSON.parse(d);
-      // Guard against corrupt / non-object stored values
+      // Guard against corrupt / non-object stored values, merge with
+      // defaults, and coerce numerics so NaN/strings never reach the
+      // scheduler or render blank inputs.
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed;
+        const clamp = (n, min, max, fallback) => {
+          const v = Number(n);
+          return Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+        };
+        return {
+          chronotype: ['morning', 'neutral', 'night'].includes(parsed.chronotype)
+            ? parsed.chronotype
+            : DEFAULTS.chronotype,
+          maxHoursPerDay: clamp(parsed.maxHoursPerDay, 1, 16, DEFAULTS.maxHoursPerDay),
+          maxHoursWeekend: clamp(parsed.maxHoursWeekend, 0, 12, DEFAULTS.maxHoursWeekend),
+        };
       }
     }
   } catch {}
-  return { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
+  return { ...DEFAULTS };
 }
 
 export function clearAll() {
@@ -74,7 +138,9 @@ export function loadGoogleCache() {
     const d = localStorage.getItem(KEYS.GOOGLE_CACHE);
     if (!d) return null;
     const p = JSON.parse(d);
-    return p && typeof p === 'object' && Array.isArray(p.data) ? p : null;
+    if (!p || typeof p !== 'object' || Array.isArray(p.data) === false) return null;
+    if (typeof p.weekStart !== 'string' || p.weekStart === '') return null;
+    return { ...p, data: p.data.map(sanitizeBlock).filter(Boolean) };
   } catch { return null; }
 }
 
@@ -94,7 +160,9 @@ export function saveGoogleExport(data) {
 export function loadGoogleExport() {
   try {
     const d = localStorage.getItem(KEYS.GOOGLE_EXPORT);
-    return d ? JSON.parse(d) : {};
+    if (!d) return {};
+    const p = JSON.parse(d);
+    return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
   } catch { return {}; }
 }
 

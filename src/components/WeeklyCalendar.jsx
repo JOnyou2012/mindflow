@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, School, Dumbbell, Palette, Ellipsis, Trash2, AlertCircle, Plus, CheckCircle2, CalendarDays } from 'lucide-react';
 import { TYPE_COLORS, typeColor } from '../utils/theme.js';
-import { getStoredLang, langToLocale } from '../utils/i18n.js';
+import { getStoredLang, langToLocale, getDayShortNames } from '../utils/i18n.js';
 import { uuid } from '../utils/uuid.js';
+import { isGoogleConfigured } from '../utils/googleAuthCore.js';
 import QuestionFlow from './QuestionFlow.jsx';
 import GoogleCalendarImport from './GoogleCalendarImport.jsx';
 
@@ -46,7 +47,7 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 
 const FRESH_ANSWERS = () => ({ label: '', type: 'academic', time: { start: 9, end: 10 }, days: [...WEEKDAYS] });
 
-export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChange, onGoogleImport, weekStart = null, onViewChange, T }) {
+export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChange, onGoogleImport, weekStart = null, onViewChange, onError, T }) {
   const TYPE_CFG = {
     academic: { ...TYPE_ICONS.academic, label: T.typeAcademic },
     sports:   { ...TYPE_ICONS.sports, label: T.typeSports },
@@ -54,11 +55,18 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
     other:    { ...TYPE_ICONS.other, label: T.typeOther },
   };
 
+  // Locale-correct weekday labels; internal day keys stay English ('Mon'…'Sun').
+  // Recomputes on every render (cheap 7-item Intl map) so a language switch
+  // via Settings is reflected immediately.
+  const dayNames = getDayShortNames(getStoredLang());
+
+  // No "Sleep" preset: the grid only spans 6:00–22:00, so a 22:00–6:00 block
+  // is invisible, never conflicts, and poisons the stats footer with
+  // negative duration. The scheduler already never schedules past 22:00.
   const QUICK_PRESETS = [
     { label: T.presetSchool, type: 'academic', start: 8, end: 15, days: WEEKDAYS },
     { label: T.presetHalf, type: 'academic', start: 8, end: 12, days: WEEKDAYS },
     { label: T.presetDinner, type: 'other', start: 18, end: 19, days: DAYS },
-    { label: T.presetSleep, type: 'other', start: 22, end: 6, days: DAYS },
     { label: T.presetSports, type: 'sports', start: 15, end: 17, days: ['Mon','Wed','Fri'] },
   ];
 
@@ -162,7 +170,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
               {TIME_OPTIONS.filter(t => t > v.start).map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
             </select>
             <span className="text-sm text-mindflow-muted tabular-nums">
-              ({((v.end - v.start) * 60).toFixed(0)}m)
+              ({((v.end - v.start) * 60).toFixed(0)}{T.unitMinutesShort})
             </span>
           </div>
         );
@@ -202,7 +210,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                 className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
                   ${sel.includes(d) ? 'bg-mindflow-accent text-mindflow-onaccent' : 'border border-mindflow-border text-mindflow-muted hover:text-mindflow-text'}`}
               >
-                {d}
+                {dayNames[d] || d}
               </button>
             ))}
           </div>
@@ -336,7 +344,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             type="button"
             onClick={() => applyPreset(p)}
             className="flex items-center gap-1.5 rounded-full border border-mindflow-border px-3 py-1.5 text-xs text-mindflow-text hover:bg-mindflow-surface-alt transition-colors"
-            title={`${p.label}: ${fmtHr(p.start)}–${fmtHr(p.end)} on ${p.days.length} days`}
+            title={`${p.label}: ${fmtHr(p.start)}–${fmtHr(p.end)} · ${p.days.length} ${T.calDaysUnit}`}
           >
             <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: typeColor(p.type) }} />
             {p.label} ({fmtHr(p.start)}–{fmtHr(p.end)})
@@ -351,14 +359,14 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
         </button>
       </div>
 
-      {/* Google Calendar import — hidden until VITE_GOOGLE_CLIENT_ID is
-          configured at build time (Stage 5 is paused pre-launch). */}
-      {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+      {/* Google Calendar import — hidden until a real VITE_GOOGLE_CLIENT_ID
+          is configured at build time (Stage 5 is paused pre-launch). */}
+      {isGoogleConfigured && (
         <div className="mb-3">
           <GoogleCalendarImport
             weekStart={weekStart}
             onImport={onGoogleImport}
-            onError={() => {}} // App handles errors via setError
+            onError={onError}
             T={T}
           />
         </div>
@@ -390,8 +398,8 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                 const isToday = DAYS.indexOf(d) === todayIdx;
                 const dayNum = getDayNum(d);
                 return (
-                  <div key={d} className="flex-1 min-w-[110px] px-2 py-2 text-center border-l border-mindflow-border-light">
-                    <span className={`block text-[11px] font-medium uppercase tracking-wide ${isToday ? 'text-mindflow-accent' : 'text-mindflow-muted'}`}>{d}</span>
+                  <div key={d} className="flex-1 min-w-[110px] px-2 py-2 text-center border-s border-mindflow-border-light">
+                    <span className={`block text-[11px] font-medium uppercase tracking-wide ${isToday ? 'text-mindflow-accent' : 'text-mindflow-muted'}`}>{dayNames[d] || d}</span>
                     <span className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${isToday ? 'bg-mindflow-accent text-mindflow-onaccent' : 'text-mindflow-heading'}`}>
                       {dayNum ?? ''}
                     </span>
@@ -419,7 +427,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
 
               {/* Day columns */}
               {DAYS.map(day => (
-                <div key={day} className="relative flex-1 min-w-[110px] border-l border-mindflow-border-light" style={{ height: TOTAL_H * ROW_H + 'px' }}>
+                <div key={day} className="relative flex-1 min-w-[110px] border-s border-mindflow-border-light" style={{ height: TOTAL_H * ROW_H + 'px' }}>
                   {Array.from({ length: TOTAL_H + 1 }, (_, i) => (
                     <div key={i} className="absolute left-0 right-0 border-t border-mindflow-border-light" style={{ top: i * ROW_H + 'px' }} />
                   ))}
@@ -434,7 +442,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                         key={b.id}
                         role="button"
                         tabIndex={0}
-                        aria-label={`${b.label}, ${fmtHr(b.startHour)} to ${fmtHr(b.startHour + b.durationHours)}`}
+                        aria-label={`${b.label}, ${fmtHr(b.startHour)} ${T.calTo} ${fmtHr(b.startHour + b.durationHours)}`}
                         onClick={() => openEdit(b)}
                         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(b); } }}
                         className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-white/60"
@@ -502,7 +510,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
           <span className="flex items-center gap-2">
             <span>{stats.totalBlocks} {stats.totalBlocks !== 1 ? T.calBlocks : T.calBlock}</span>
             <span className="text-mindflow-border">·</span>
-            <span>{stats.totalHours}h</span>
+            <span>{stats.totalHours}{T.unitHoursShort}</span>
             <span className="text-mindflow-border">·</span>
             <span>{stats.daysUsed} {stats.daysUsed !== 1 ? T.calDaysUnit : T.calDay}</span>
           </span>
@@ -535,7 +543,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             </div>
 
             <div className="bg-mindflow-surface-alt rounded-lg px-3 py-2 text-xs">
-              <span className="font-medium text-mindflow-heading">{pop.day}</span>
+              <span className="font-medium text-mindflow-heading">{dayNames[pop.day] || pop.day}</span>
               <span className="text-mindflow-muted"> · </span>
               <span className="font-medium text-mindflow-heading">{fmtHr(pop.startHour)} – {fmtHr(pop.startHour + pop.durationHours)}</span>
             </div>

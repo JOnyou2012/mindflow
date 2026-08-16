@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
 
 /**
@@ -9,6 +9,13 @@ export default function GoogleSyncButton({ onSync, onError, T }) {
   const { isSignedIn, signIn, signOut } = useGoogleAuth();
   const [status, setStatus] = useState(isSignedIn ? 'signed-in' : 'signed-out');
   const [errorMsg, setErrorMsg] = useState(null);
+
+  // Follow the context: when the token expires elsewhere (e.g. an import
+  // call signs out on 401), the button must flip back to signed-out so the
+  // user can re-connect instead of staring at a dead "Connected" state.
+  useEffect(() => {
+    setStatus(isSignedIn ? 'signed-in' : 'signed-out');
+  }, [isSignedIn]);
 
   const handleSignIn = async () => {
     setStatus('connecting');

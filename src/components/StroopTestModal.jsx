@@ -13,7 +13,10 @@ function getColors(T) {
   ];
 }
 function getColorByKey(T) {
-  return Object.fromEntries(getColors(T).map(c => [c.key, c]));
+  // Not Object.fromEntries — runtime API missing on Safari ≤12.0.
+  const map = {};
+  for (const c of getColors(T)) map[c.key] = c;
+  return map;
 }
 
 const GAME_SECS = 60;
@@ -466,10 +469,10 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
           <p>{T.calibInterpretGood}</p>
         )}
         {results.alphaScore >= 0.7 && results.alphaScore < 0.9 && (
-          <p>{results.lapses > 2 ? `${results.lapses} lapses — ` : ''}{T.calibInterpretModerate}</p>
+          <p>{results.lapses > 2 ? T.calibLapsesPrefix.replace('{n}', results.lapses) : ''}{T.calibInterpretModerate}</p>
         )}
         {results.alphaScore < 0.7 && (
-          <p>{results.lapses > 3 ? `${results.lapses} lapses — ` : ''}{T.calibInterpretLow}</p>
+          <p>{results.lapses > 3 ? T.calibLapsesPrefix.replace('{n}', results.lapses) : ''}{T.calibInterpretLow}</p>
         )}
       </div>
 

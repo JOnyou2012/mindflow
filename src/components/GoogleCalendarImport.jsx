@@ -15,7 +15,7 @@ import GoogleSyncButton from './GoogleSyncButton.jsx';
  *   T              translations
  */
 export default function GoogleCalendarImport({ weekStart, onImport, onError, T }) {
-  const { getToken } = useGoogleAuth();
+  const { getToken, signOut } = useGoogleAuth();
   const [syncInfo, setSyncInfo] = useState(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -30,16 +30,20 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
       if (onImport) onImport(blocks);
     } catch (err) {
       if (err.message === 'token_expired') {
+        // Clear the dead token so the next Connect opens a fresh popup.
+        signOut();
         onError?.(T.gcalTokenExpired);
       } else if (err.message === 'permission_denied') {
         onError?.(T.gcalPermissionDenied);
+      } else if (err.message === 'rate_limited') {
+        onError?.(T.gcalRateLimited);
       } else {
         onError?.(T.gcalImportError);
       }
     } finally {
       setSyncing(false);
     }
-  }, [getToken, weekStart, onImport, onError, T]);
+  }, [getToken, signOut, weekStart, onImport, onError, T]);
 
   if (syncing) {
     return (

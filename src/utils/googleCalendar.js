@@ -9,6 +9,17 @@ import { ALL_DAYS, DAY_START_TICK, DAY_END_TICK } from './scheduler.js';
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
+/**
+ * AbortSignal.timeout(ms) does not exist in Safari < 16.4 (and older
+ * Chromium). Students may have older devices — provide a fallback.
+ */
+function timeoutSignal(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 // -- Type inference (keyword-based) -------------------------------------------
 
 const TYPE_KEYWORDS = {
@@ -52,7 +63,7 @@ export async function fetchWeekEvents(accessToken, weekStartISO) {
 
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(30000),
+    signal: timeoutSignal(30000),
   });
 
   if (!response.ok) {
@@ -87,6 +98,10 @@ export async function fetchWeekEvents(accessToken, weekStartISO) {
 export function mapToCalendarBlocks(events, weekStartISO) {
   const blocks = [];
   const weekStart = new Date(weekStartISO + 'T00:00:00');
+  // DST-safe week end: adding 7 * 86400000 ms crosses DST shifts and can
+  // leak/drop the Monday hour around spring-forward / fall-back.
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
   const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   for (const event of events) {
@@ -105,7 +120,7 @@ export function mapToCalendarBlocks(events, weekStartISO) {
       const cursor = new Date(startDate);
       while (cursor < endDate) {
         // Only include if within the target week
-        if (cursor >= weekStart && cursor < new Date(weekStart.getTime() + 7 * 86400000)) {
+        if (cursor >= weekStart && cursor < weekEnd) {
           const day = dayMap[cursor.getDay()];
           blocks.push({
             id: `gcal-${event.id}-${cursor.toISOString().slice(0, 10)}`,
@@ -131,7 +146,7 @@ export function mapToCalendarBlocks(events, weekStartISO) {
       const day = dayMap[startDt.getDay()];
 
       // Only include if within the target week
-      if (startDt >= weekStart && startDt < new Date(weekStart.getTime() + 7 * 86400000)) {
+      if (startDt >= weekStart && startDt < weekEnd) {
         const startHour = startDt.getHours() + startDt.getMinutes() / 60;
         const durationHours = (endDt - startDt) / 3600000;
 
@@ -218,10 +233,17 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
 
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(30000),
+    signal: timeoutSignal(30000),
   });
 
-  if (!response.ok) return [];
+  // 401 means the token died — surface it so the UI can re-auth instead of
+  // proceeding to fail every POST. Other failures degrade to "no dedup
+  // info" (duplicates are recoverable via unsync).
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('token_expired');
+    console.warn('findExistingEvents failed, duplicate detection skipped:', response.status);
+    return [];
+  }
   const data = await response.json();
   return (data.items || [])
     .map(e => ({ id: e.id, key: e.extendedProperties?.private?.mindflow_session_key }))
@@ -235,9 +257,10 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
  * @param {string} accessToken       OAuth access token
  * @param {string[]} weekStartISOs   Array of week Monday ISO dates to sync
  * @param {object} weekResults       All week results keyed by weekStartISO
+ * @param {(current: number, total: number) => void} [onProgress]
  * @returns {Promise<{ created: number, skipped: number, failed: number, events: object[] }>}
  */
-export async function exportSessions(accessToken, weekStartISOs, weekResults) {
+export async function exportSessions(accessToken, weekStartISOs, weekResults, onProgress = null) {
   // Flatten all sessions from all weeks
   const flat = [];
   for (const ws of weekStartISOs) {
@@ -267,6 +290,7 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
   const created = [];
   let skipped = 0;
   let failed = 0;
+  let processed = 0;
 
   // Process in batches of 10 with 2s pause between batches (rate limit safety)
   const BATCH_SIZE = 10;
@@ -312,7 +336,7 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(30000),
+          signal: timeoutSignal(30000),
         });
 
         if (response.status === 401) throw new Error('token_expired');
@@ -327,7 +351,7 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(30000),
+            signal: timeoutSignal(30000),
           });
           if (!retry.ok) { failed++; continue; }
           const data = await retry.json();
@@ -341,6 +365,8 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults) {
       } catch {
         failed++;
       }
+      processed++;
+      if (onProgress) onProgress(processed, flat.length);
     }
 
     // 2-second pause between batches
@@ -368,7 +394,7 @@ export async function deleteSyncedEvents(accessToken, events) {
       const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(30000),
+        signal: timeoutSignal(30000),
       });
       if (response.ok || response.status === 410) {
         // 410 = already deleted (gone), treat as success

@@ -9,16 +9,16 @@ const QUICK_DURATIONS = [15, 30, 60, 90, 120];
 
 // -- Helpers ------------------------------------------------------------------
 
-function formatMinutes(mins) {
+function formatMinutes(mins, units = { h: 'h', m: 'm' }) {
   if (mins == null || !Number.isFinite(mins)) return '—';
-  if (mins < 60) return `${mins}m`;
+  if (mins < 60) return `${mins}${units.m}`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return m > 0 ? `${h}${units.h} ${m}${units.m}` : `${h}${units.h}`;
 }
 
 function formatDeadline(iso) {
-  if (!iso) return null;
+  if (!iso || typeof iso !== 'string') return null;
   try {
     // Deadline may already include time (e.g. '2026-08-15T23:59') —
     // don't blindly append T00:00:00 which produces an invalid date.
@@ -34,7 +34,7 @@ function formatDeadline(iso) {
 }
 
 function isPastDeadline(iso) {
-  if (!iso) return false;
+  if (!iso || typeof iso !== 'string') return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let dlStr = iso;
@@ -89,6 +89,9 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
 
   const typeMeta = (t) => TYPES.find(o => o.value === t) || TYPES[3];
   const priorityMeta = (p) => PRIORITIES.find(o => o.value === p) || PRIORITIES[1];
+
+  // Duration formatting with the active language's unit abbreviations
+  const fmtMin = (mins) => formatMinutes(mins, { h: T.unitHoursShort, m: T.unitMinutesShort });
 
   // -- Question flow stages ----------------------------------------------------
 
@@ -209,7 +212,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
                 className={`rounded-full border px-3 py-1.5 text-xs transition-colors
                   ${value === m ? 'bg-mindflow-accent-soft text-mindflow-accent border-transparent font-medium' : 'border-mindflow-border text-mindflow-muted hover:bg-mindflow-surface-alt'}`}
               >
-                {formatMinutes(m)}
+                {fmtMin(m)}
               </button>
             ))}
           </div>
@@ -380,7 +383,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden rounded-lg border border-mindflow-border bg-mindflow-border mb-4">
               {[
                 [stats.count, T.taskTotal],
-                [formatMinutes(stats.totalMins), T.taskTotalTime],
+                [fmtMin(stats.totalMins), T.taskTotalTime],
                 [stats.avgDifficulty.toFixed(1), T.taskAvgDiff],
                 [stats.withDeadlines + (stats.pastDeadline > 0 ? ` (${stats.pastDeadline} ${T.taskOverdue.toLowerCase()})` : ''), T.taskWithDeadlines],
               ].map(([val, label], i) => (
@@ -399,7 +402,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
                 key={task.id}
                 role="button"
                 tabIndex={0}
-                aria-label={`${task.title}, ${tm.label}, ${T.taskMinutes.replace('{n}', task.durationMins)}`}
+                aria-label={`${task.title}, ${tm.label}, ${task.durationMins} ${T.taskMinutes}`}
                 onClick={() => startEdit(task)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(task); } }}
                 className="flex items-start justify-between gap-3 rounded-lg border border-mindflow-border-light bg-mindflow-surface px-4 py-3 hover:bg-mindflow-surface-alt cursor-pointer group transition-colors"
@@ -427,7 +430,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
                       {pm.label}
                     </span>
                     <span className="rounded-full bg-mindflow-surface-alt px-2 py-0.5 text-[11px] text-mindflow-muted flex items-center gap-1">
-                      <Clock className="w-3 h-3" />{formatMinutes(task.durationMins)}
+                      <Clock className="w-3 h-3" />{fmtMin(task.durationMins)}
                     </span>
                     <span className="rounded-full bg-mindflow-surface-alt px-2 py-0.5 flex items-center gap-px" title={DIFFICULTY_LABELS[task.difficulty]}>
                       {[1, 2, 3, 4, 5].map(s => (
@@ -454,7 +457,7 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}
                     className="p-1.5 rounded-full text-mindflow-muted hover:text-mindflow-danger opacity-0 group-hover:opacity-100 transition-all"
-                    title={T.taskClearAll}
+                    title={T.taskDelete}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
