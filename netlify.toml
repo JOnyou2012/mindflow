@@ -4,9 +4,10 @@
   publish = "dist"
 
 # The _redirects file in public/ handles SPA routing.
-# VITE_API_ORIGIN tells api.js where the Render backend lives.
+# VITE_API_ORIGIN is intentionally NOT set here — api.js falls back to
+# https://mindflow-api.onrender.com in production builds, which keeps the
+# backend URL in exactly one place (src/utils/api.js).  Set VITE_API_ORIGIN
+# only if the Render service moves.
 # api.js is optional infrastructure — the app runs fully client-side
 # by default.  Import api.js in a component to enable server-side
 # simulation via the Python backend.
-[build.environment]
-  VITE_API_ORIGIN = "https://mindflow-api.onrender.com"

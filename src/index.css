@@ -127,6 +127,15 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
+/* RTL animation direction overrides.  [dir="rtl"] .animate-* beats the
+   .animate-* class in specificity, so these must live inside a
+   no-preference media query — otherwise they re-enable the animation for
+   prefers-reduced-motion: reduce users (which the block above disables). */
+@media (prefers-reduced-motion: no-preference) {
+  [dir="rtl"] .animate-stage-in-right { animation-name: stage-in-right-rtl; }
+  [dir="rtl"] .animate-stage-in-left { animation-name: stage-in-left-rtl; }
+}
+
 /* ── Transitions ───────────────────────────────────────────────────── */
 
 a, button, input, select, textarea, .interactive {
@@ -190,8 +199,4 @@ input::placeholder {
   /* Text alignment */
   .text-left { text-align: right; }
   .text-right { text-align: left; }
-
-  /* Animation directions — slide from left instead of right */
-  .animate-stage-in-right { animation-name: stage-in-right-rtl; }
-  .animate-stage-in-left { animation-name: stage-in-left-rtl; }
 }

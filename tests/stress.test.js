@@ -5,7 +5,7 @@
  */
 
 import generateWeeklySchedule, {
-  findFreeSlots, ALL_DAYS,
+  findFreeSlots, sortTasks, ALL_DAYS, DAY_START_TICK, DAY_END_TICK,
 } from '../src/utils/scheduler.js';
 import {
   calculateMarkovTimeline, findBurnoutTick,
@@ -220,6 +220,24 @@ assert(lateSlots.length >= 1, 'C3: Late block → free slots before it');
 const earlyBlock = [{ id: 'eb', day: 'Mon', startHour: 4, durationHours: 4, label: 'Early', type: 'academic', isFixed: true }];
 const earlySlots = findFreeSlots(earlyBlock);
 assert(earlySlots.length >= 1, 'C4: Early block → free slots after it');
+
+// Block entirely outside the study window (23:00–01:00) — regression: an
+// inverted merged interval used to fabricate a slot ending past DAY_END.
+const outsideBlock = [{ id: 'ob', day: 'Mon', startHour: 23, durationHours: 2, label: 'LateNight', type: 'academic', isFixed: true }];
+const outsideSlots = findFreeSlots(outsideBlock);
+assert(outsideSlots.length >= 1, 'C5: Out-of-window block → day still has free slots');
+assert(outsideSlots.every(s => s.startTick >= DAY_START_TICK && s.endTick <= DAY_END_TICK), 'C5b: no slot extends beyond the study window');
+
+// Unknown priority strings (corrupted data) used to yield NaN from the sort
+// comparator → unstable order. They must rank as 'medium'.
+const weirdPrioTasks = [
+  { id: 'w1', title: 'W1', type: 'academic', difficulty: 3, priority: 'urgent' },
+  { id: 'w2', title: 'W2', type: 'academic', difficulty: 1, priority: 'medium' },
+  { id: 'w3', title: 'W3', type: 'academic', difficulty: 3, priority: 'low' },
+];
+const weirdPrio = sortTasks(weirdPrioTasks);
+assert(weirdPrio.length === 3, 'C6: unknown priority does not drop tasks');
+assert(weirdPrio[0].id === 'w1' && weirdPrio[1].id === 'w2' && weirdPrio[2].id === 'w3', 'C6b: unknown priority ranks as medium (stable, deterministic order)');
 
 // ===========================================================================
 // 8. Settings edge cases

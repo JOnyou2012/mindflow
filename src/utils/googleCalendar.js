@@ -353,6 +353,8 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
             body: JSON.stringify(payload),
             signal: timeoutSignal(30000),
           });
+          if (retry.status === 401) throw new Error('token_expired');
+          if (retry.status === 403) throw new Error('permission_denied');
           if (!retry.ok) { failed++; continue; }
           const data = await retry.json();
           created.push({ googleEventId: data.id, dayName, startTick: session.startTick, weekStart });
@@ -362,7 +364,11 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
 
         const data = await response.json();
         created.push({ googleEventId: data.id, dayName, startTick: session.startTick, weekStart });
-      } catch {
+      } catch (err) {
+        // A dead token (401) or revoked scope (403) must surface to the UI
+        // so it can sign out and re-auth — counting it as a generic
+        // failure left the user stuck on "{n} failed" forever.
+        if (err?.message === 'token_expired' || err?.message === 'permission_denied') throw err;
         failed++;
       }
       processed++;

@@ -35,13 +35,14 @@ function formatDeadline(iso) {
 
 function isPastDeadline(iso) {
   if (!iso || typeof iso !== 'string') return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
   let dlStr = iso;
   if (dlStr.endsWith('T')) dlStr = dlStr.slice(0, -1);
-  if (!dlStr.includes('T')) dlStr += 'T00:00:00';
+  // Date-only deadlines mean "due by end of day" — mirror the scheduler's
+  // normalizeDeadline (T23:59) instead of T00:00:00, which flagged a task
+  // due today as overdue the moment the day started.
+  if (!dlStr.includes('T')) dlStr += 'T23:59';
   const dl = new Date(dlStr);
-  return !isNaN(dl.getTime()) && dl < today;
+  return !isNaN(dl.getTime()) && dl < new Date();
 }
 
 const FRESH_ANSWERS = () => ({

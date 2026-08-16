@@ -8,5 +8,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      # Pin the runtime: requirements.txt pins the exact dependency set,
+      # and numpy==2.0.2 ships no wheels for the current Render default
+      # (3.14.x) — building from source would fail the deploy.
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      # The deployed frontend's origin(s). Accepts a comma-separated list.
+      # Must be set manually in the Render dashboard after the frontend is
+      # deployed — the backend logs a startup warning while it is unset.
       - key: MDFLOW_FRONTEND_ORIGIN
-        sync: false # set manually in Render dashboard after frontend is deployed
+        sync: false

@@ -256,8 +256,8 @@ function normalizeDeadline(deadline) {
 
 export function sortTasks(tasks) {
   return [...tasks].sort((a, b) => {
-    const pa = PRIORITY_ORDER[a.priority || 'medium'];
-    const pb = PRIORITY_ORDER[b.priority || 'medium'];
+    const pa = PRIORITY_ORDER[a.priority || 'medium'] ?? PRIORITY_ORDER.medium;
+    const pb = PRIORITY_ORDER[b.priority || 'medium'] ?? PRIORITY_ORDER.medium;
     if (pa !== pb) return pa - pb;
 
     if (a.deadline && !b.deadline) return -1;
@@ -298,6 +298,10 @@ export function findFreeSlots(blocksForDay) {
   for (const b of sorted) {
     const bs = Math.max(DAY_START_TICK, Math.round((b.startHour || 0) * 6));
     const be = Math.min(DAY_END_TICK, Math.round(((b.startHour || 0) + (b.durationHours || 0)) * 6));
+    // Blocks entirely outside the study window (e.g. 23:00–01:00) or
+    // zero-length produce bs >= be — an inverted interval that used to
+    // fabricate phantom slots past DAY_END_TICK. They occupy no time here.
+    if (bs >= be) continue;
     if (merged.length > 0 && bs <= merged[merged.length - 1].end) {
       merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, be);
     } else {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
 import { exportSessions, deleteSyncedEvents } from '../utils/googleCalendar.js';
 import { saveGoogleExport, loadGoogleExport } from '../utils/storage.js';
@@ -11,12 +11,21 @@ import { saveGoogleExport, loadGoogleExport } from '../utils/storage.js';
  *   weekResults   { [weekStartISO]: OptimizedWeek }
  *   T             translations
  */
-export default function GoogleCalendarExport({ weekResults, T }) {
+export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
   const { isSignedIn, signIn, signOut, getToken } = useGoogleAuth();
   const [status, setStatus] = useState('idle'); // idle | syncing | synced | error
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [syncResult, setSyncResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+
+  // A regenerated plan means the previously synced sessions no longer exist —
+  // "Synced N sessions" would otherwise keep claiming the new plan is in
+  // Google Calendar when it was never exported.
+  useEffect(() => {
+    setStatus('idle');
+    setSyncResult(null);
+    setErrorMsg(null);
+  }, [planVersion]);
 
   const weekStarts = Object.keys(weekResults).sort();
   const totalSessions = Object.values(weekResults).reduce((sum, r) => {
@@ -66,6 +75,10 @@ export default function GoogleCalendarExport({ weekResults, T }) {
         signOut();
         setErrorMsg(T.gcalTokenExpired);
       } else if (err.message === 'permission_denied') {
+        // The scope was revoked in Google settings — the token is useless
+        // for export. Sign out so the next Connect re-requests consent
+        // instead of failing forever with the same dead token.
+        signOut();
         setErrorMsg(T.gcalPermissionDenied);
       } else {
         setErrorMsg(T.gcalExportError.replace('{detail}', err.message || ''));
@@ -112,8 +125,9 @@ export default function GoogleCalendarExport({ weekResults, T }) {
     }
   }, [getToken, signOut, weekStarts, T]);
 
-  // Signed-out state
-  if (!isSignedIn && status !== 'syncing') {
+  // Signed-out state (errors take precedence — a failed sign-in leaves
+  // isSignedIn false, and swallowing the error here made it invisible)
+  if (!isSignedIn && status !== 'syncing' && status !== 'error') {
     return (
       <button
         type="button"

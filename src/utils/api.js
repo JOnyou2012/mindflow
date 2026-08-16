@@ -34,6 +34,18 @@
  * @module api
  */
 
+/**
+ * AbortSignal.timeout(ms) does not exist in Safari < 16.4 — provide a
+ * fallback so a cold Render backend (free tier ~30s spin-up) can never
+ * hang a request forever.
+ */
+function timeoutSignal(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 const API_ORIGIN =
   import.meta.env.VITE_API_ORIGIN ||
   (import.meta.env.DEV ? '' : 'https://mindflow-api.onrender.com');
@@ -52,6 +64,7 @@ export async function api(path, body = undefined) {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
+    signal: timeoutSignal(30000),
   };
   if (body !== undefined) {
     init.method = 'POST';

@@ -55,10 +55,10 @@
 > **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
 > `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
-> **🎯 Deploy-ready (2026-08-14, final deployment audit).** All tiers resolved.
-> Production-hardened. `npm test` runs 5 suites (3,481 assertion checks),
-> 0 failures, byte-deterministic output. `npm run build` 0 errors, 0 warnings.
-> Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
+> **🎯 Deploy-ready (2026-08-16, pre-deployment mega-audit).** All tiers
+> resolved. `npm test` runs 5 suites (3,497 assertion checks), 0 failures,
+> byte-deterministic output. `npm run build` 0 errors, 0 warnings. Project
+> lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -200,6 +200,74 @@
 > 356 KB JS + 56 KB CSS (~108 + 10 KB gzipped), 0 errors, 0 warnings;
 > lint 0; audit 0. Verified in `dist/`: no GSI script tag, no GCal UI
 > strings, RTL keyframes present. `npm ci` from lockfile passes clean.
+>
+> **2026-08-16 (Jeremy + Claude — pre-deployment mega-audit):** Six parallel
+> audit tracks (tests ×2 for flakes, lint+build+preview smoke, Python backend,
+> frontend critical paths, deploy configs, security review of the
+> `0ea6f07..HEAD` window), then fix + re-verify. **19 files changed, 204
+> insertions, 50 deletions.**
+> **1) Backend JSON contract (H1)** — `/api/simulate` + `/api/recovery`
+> read only query params; `api.js` POSTs a JSON body, so every parameter was
+> silently ignored (responses computed from defaults with no error). Both
+> endpoints now accept a Pydantic body model OR query params (body wins).
+> Verified live against uvicorn.
+> **2) `/api/recovery` validation (M1)** — `flow=nan` / negative
+> `break_minutes` crashed the JSON serializer (HTTP 500) or *increased*
+> fatigue. Non-finite / negative inputs now return 422.
+> **3) CORS parsing (L1)** — `MDFLOW_FRONTEND_ORIGIN` was appended raw:
+> comma-separated lists never matched any Origin and `"*"` silently opened
+> allow-all. Now split per-origin, plus a startup warning while the allowlist
+> is dev-only (the Render blueprint previously deployed CORS-blocked with no
+> loud failure).
+> **4) Engine honesty (H2)** — removed the false "Matches markovEngine.js v2
+> exactly" header (frontend runs v5). API documented as the v2 reference
+> implementation; v5 port is post-deploy backlog. Docstring "matrix: final
+> transition matrix" → "matrix built at tick 0".
+> **5) Reproducible backend deploys (M2)** — requirements.txt pinned
+> (`numpy==2.0.2`, `fastapi==0.128.8`, `uvicorn==0.39.0`) +
+> `PYTHON_VERSION: 3.12.11` in render.yaml (Render's new 3.14 default ships
+> no numpy 2.0.2 wheels → the build would fail from source).
+> **6) GCal export error surfacing** — sign-in failures (popup blocked,
+> `access_denied`) were invisible: the signed-out branch rendered before the
+> error branch. Mid-export 401/403 were swallowed into "{n} failed" with no
+> re-auth path. Errors now render; revoked scope signs out so re-consent is
+> possible; the export widget resets its "Synced N sessions" claim when the
+> plan regenerates (new `planVersion` prop through PlanView).
+> **7) Google import week-scoping** — imported events were applied to ALL 7
+> cascade weeks, so a one-off "Dentist Tue 15:00" blocked that slot in every
+> generated future week. Now applied to week 0 (the imported week) only.
+> **8) Storage sanitization** — `loadGoogleExport` now deep-validates
+> (non-array `events` used to throw AFTER the events were already created in
+> Google → "Failed to sync" + orphaned events). `sanitizeTask` repairs
+> missing `id` (uuid) and normalizes unknown `type`/`priority`.
+> **9) Scheduler robustness** — out-of-window blocks (e.g. 23:00–01:00)
+> produced inverted merged intervals → phantom free slots past 10pm; unknown
+> priority strings made the sort comparator NaN. Both fixed + 4 regression
+> asserts added (stress suite 270 → 274).
+> **10) Config hardening** — vercel.json: removed obsolete
+> `X-XSS-Protection` and the svg rule that 1-year-cached root
+> `/favicon.svg`; `.env.example` documents `VITE_API_ORIGIN` + "add every
+> deployed domain to OAuth origins"; netlify.toml no longer duplicates the
+> backend URL (single-sourced in `api.js`); `api.js` gained a 30s request
+> timeout (Safari <16.4 fallback) so a cold Render backend can't hang calls.
+> **11) Small fixes** — OVERDUE now uses end-of-day deadline semantics
+> (matches the scheduler; a task due today is not overdue at 9am); the OAuth
+> 60s timeout restores the GIS callback (no ghost token while UI shows
+> signed-out); import Refresh falls back to the Connect button when the token
+> was cleared elsewhere; calendar conflict checks now include
+> Google-imported blocks; RTL slide animations respect
+> `prefers-reduced-motion` (moved into a no-preference media query).
+> **Security review:** 30 changed files (~1,073 insertions) — no HIGH or
+> MEDIUM confidence vulnerabilities. OAuth tokens never touch
+> localStorage/logs and only reach `www.googleapis.com`; 0 innerHTML /
+> dangerouslySetInnerHTML / eval in src/; no secrets in backend code.
+> **Final state:** 5 suites, 3,497 checks, 0 failures; build 0 errors 0
+> warnings; lint 0; backend smoke-tested live (health, JSON-body simulate,
+> query fallback, 422s, CORS header, startup warning).
+>
+> **Remaining manual deploy steps:** set `MDFLOW_FRONTEND_ORIGIN` in the
+> Render dashboard; add the final production domain to Google Cloud Console
+> OAuth "Authorized JavaScript origins".
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast

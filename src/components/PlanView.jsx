@@ -44,7 +44,7 @@ function dayInfo(ws, dayName) {
  * Fixed commitments render as solid chips, generated study sessions as tinted,
  * bordered chips. Weeks without generated results still show the calendar grid.
  */
-export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, onRegenerate, T }) {
+export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, onRegenerate, planVersion, T }) {
   // Build all navigable weeks: 2 weeks before today through 8 weeks after.
   // Computed per render (no memo) — it's cheap O(11) date math, and
   // recomputing keeps "today" correct across midnight while the app is open,
@@ -157,7 +157,7 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
 
         <div className="ml-auto flex items-center gap-3">
           {isGoogleConfigured && Object.keys(weekResults).length > 0 && (
-            <GoogleCalendarExport weekResults={weekResults} T={T} />
+            <GoogleCalendarExport weekResults={weekResults} planVersion={planVersion} T={T} />
           )}
         </div>
 

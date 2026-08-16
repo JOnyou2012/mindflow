@@ -186,7 +186,9 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
         const { start, end } = a.time;
         const conflicts = [];
         for (const d of a.days) {
-          for (const b of blocks.filter(x => x.day === d)) {
+          // Google-imported blocks also occupy time — a manual block drawn
+          // over an imported one silently merged in the scheduler.
+          for (const b of [...blocks, ...(googleBlocks || [])].filter(x => x.day === d)) {
             if (overlaps(start, end, b.startHour, b.startHour + b.durationHours)) {
               conflicts.push(`${b.label} (${d})`);
             }
@@ -239,7 +241,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
     const dur = preset.end - preset.start;
     const newBlocks = [];
     for (const d of preset.days) {
-      const conflict = blocks.filter(b => b.day === d).some(b =>
+      const conflict = [...blocks, ...(googleBlocks || [])].filter(b => b.day === d).some(b =>
         overlaps(preset.start, preset.end, b.startHour, b.startHour + b.durationHours)
       );
       if (!conflict) {
@@ -268,7 +270,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
     const dur = popEnd - popStart;
     if (dur <= 0) { setPopMsg(T.calErrEndAfterStart); return; }
 
-    const conflicts = blocks.filter(b =>
+    const conflicts = [...blocks, ...(googleBlocks || [])].filter(b =>
       b.day === pop.day && b.id !== pop.id &&
       overlaps(popStart, popEnd, b.startHour, b.startHour + b.durationHours)
     );

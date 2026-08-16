@@ -47,6 +47,7 @@ export default function App() {
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result
+  const [planVersion, setPlanVersion] = useState(0); // bumps on every generate
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -80,7 +81,7 @@ export default function App() {
   const generateTimerRef = useRef(null);
   const isStale = Object.keys(weekResults).length > 0 && dataVersionRef.current > 0;
 
-  const setCalibration = (cal) => { setCalibrationState(cal); const ok = saveCalibration(cal); if (!ok && cal) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } };
+  const setCalibration = (cal) => { setCalibrationState(cal); const ok = saveCalibration(cal); if (!ok && cal) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
   const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); const ok = saveCalendar(blocks); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
   const setTasks = (t) => { setTasksState(t); const ok = saveTasks(t); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
   const setSettings = (s) => { setSettingsState(s); saveSettings(s); dataVersionRef.current++; };
@@ -140,7 +141,10 @@ export default function App() {
           const deferred = remaining.filter(t => !eligible.includes(t));
           const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
           const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
-          const allBlocks = [...calendarBlocks, ...googleBlocks];
+          // Google-imported blocks are week-scoped (imported for the current
+          // week only). Applying them to every cascade week planted a
+          // one-off event (e.g. "Dentist Tue 15:00") in all 7 future weeks.
+          const allBlocks = w === 0 ? [...calendarBlocks, ...googleBlocks] : [...calendarBlocks];
           const result = generateWeeklySchedule(allBlocks, eligible, calibration.alphaScore, cappedSettings, ws);
           results[ws] = result;
           if (w === 0 && deferred.length > 0) {
@@ -155,6 +159,7 @@ export default function App() {
         // or exactly the last generated week's own unscheduled list, which
         // is already recorded in results.
         setWeekResults(results);
+        setPlanVersion(v => v + 1);
         dataVersionRef.current = 0;
         setIsCalculating(false);
         if (onDone) onDone();
@@ -179,6 +184,8 @@ export default function App() {
     setCalibration({ stroopAccuracy: 0.75, avgResponseTimeMs: 750, alphaScore: 1.0 });
     setStep(2);
   };
+  // (setCalibration bumps dataVersionRef, so a skipped re-calibration also
+  // marks an existing plan stale — alpha may have changed.)
   const handleReset = () => {
     if (confirm(T.settingsResetConfirm)) {
       clearAll();
@@ -302,6 +309,7 @@ export default function App() {
             isStale={isStale}
             isCalculating={isCalculating}
             onRegenerate={() => handleGenerate()}
+            planVersion={planVersion}
             T={T}
           />
         )}

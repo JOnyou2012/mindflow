@@ -104,6 +104,10 @@ export async function requestAccessToken() {
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
+      // Restore the callback before rejecting — otherwise the stale closure
+      // survives the timeout and fires on a late popup completion, storing
+      // a token while the UI still shows signed-out.
+      tokenClient.callback = origCallback;
       reject(new Error('Sign-in was cancelled or timed out.'));
     }, 60000);
 

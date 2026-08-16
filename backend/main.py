@@ -8,14 +8,19 @@ Mathematical features:
   - Optimal break duration computation
   - Recovery state computation
 
-Matches src/utils/markovEngine.js v2 exactly.
+⚠️  Reference implementation of the v2 engine.  The frontend
+(src/utils/markovEngine.js) runs v5 — trajectories and break
+durations differ between the two.  Do not treat this API as a
+mirror of the current engine until v5 is ported.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 import math
 import numpy as np
 from typing import Optional
+
+from pydantic import BaseModel
 
 app = FastAPI(title="MindFlow API", version="0.2.0")
 
@@ -41,7 +46,16 @@ _cors_origins = [
 ]
 _frontend_env = _os.environ.get("MDFLOW_FRONTEND_ORIGIN", "")
 if _frontend_env:
-    _cors_origins.append(_frontend_env)
+    # Accept a comma-separated list of origins.  A raw append would treat
+    # "https://a.com,https://b.com" as one literal origin, which never
+    # matches a real Origin header (Starlette does exact membership checks).
+    _cors_origins.extend(o.strip() for o in _frontend_env.split(",") if o.strip())
+if not _frontend_env:
+    print(
+        "[MindFlow] WARNING: MDFLOW_FRONTEND_ORIGIN is not set — "
+        "the deployed frontend will be CORS-blocked until it is configured.",
+        flush=True,
+    )
 _render_url = _os.environ.get("RENDER_EXTERNAL_URL", "")
 if _render_url:
     _cors_origins.append(_render_url)
@@ -261,6 +275,25 @@ def compute_recovery_state(
 
     return result
 
+# -- Request models -----------------------------------------------------------
+# Endpoints accept a JSON body (what src/utils/api.js sends) OR query params
+# (curl / older callers).  The body takes precedence when present.
+
+class SimulateRequest(BaseModel):
+    alpha: float = 1.0
+    beta: float = 3.0
+    gamma: float = 1.0
+    steps: int = 18
+
+
+class RecoveryRequest(BaseModel):
+    flow: float = 0.3
+    distracted: float = 0.2
+    fatigue: float = 0.4
+    recovery: float = 0.1
+    break_minutes: float = 15.0
+
+
 # -- API Routes --------------------------------------------------------------
 
 @app.get("/api/health")
@@ -270,11 +303,14 @@ def health():
 
 @app.post("/api/simulate")
 def simulate_endpoint(
+    body: Optional[SimulateRequest] = Body(default=None),
     alpha: float = 1.0,
     beta: float = 3.0,
     gamma: float = 1.0,
     steps: int = 18,
 ):
+    if body is not None:
+        alpha, beta, gamma, steps = body.alpha, body.beta, body.gamma, body.steps
     """
     Run a non-linear Markov-chain simulation.
 
@@ -282,7 +318,7 @@ def simulate_endpoint(
       - trajectory: probability vectors at each 10-min tick
       - break_tick: optimal break insertion tick (or null)
       - optimal_break_minutes: computed optimal break duration
-      - matrix: final transition matrix used
+      - matrix: transition matrix built at tick 0
       - params: input parameters
     """
     err = validate_params(alpha, beta, gamma, steps)
@@ -315,6 +351,7 @@ def simulate_endpoint(
 
 @app.post("/api/recovery")
 def recovery_endpoint(
+    body: Optional[RecoveryRequest] = Body(default=None),
     flow: float = 0.3,
     distracted: float = 0.2,
     fatigue: float = 0.4,
@@ -324,9 +361,18 @@ def recovery_endpoint(
     """
     Compute post-break cognitive state after a rest period.
 
-    Body: current state vector + break duration in minutes.
+    Body (or query params): current state vector + break duration in minutes.
     Returns: new state vector after recovery.
     """
+    if body is not None:
+        flow, distracted, fatigue, recovery, break_minutes = (
+            body.flow, body.distracted, body.fatigue, body.recovery, body.break_minutes
+        )
+    vals = [flow, distracted, fatigue, recovery, break_minutes]
+    if not all(math.isfinite(v) for v in vals):
+        raise HTTPException(status_code=422, detail="all inputs must be finite numbers")
+    if any(v < 0 for v in vals):
+        raise HTTPException(status_code=422, detail="all inputs must be >= 0")
     current = np.array([flow, distracted, fatigue, recovery])
     # Normalize input
     s = float(current.sum())

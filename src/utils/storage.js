@@ -1,3 +1,5 @@
+import { uuid } from './uuid.js';
+
 const KEYS = {
   CALIBRATION: 'mindflow_calibration',
   CALENDAR: 'mindflow_calendar',
@@ -38,6 +40,11 @@ function sanitizeTask(t) {
   if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
   if (typeof t.title !== 'string' || t.title.trim() === '') return null;
   const out = { ...t };
+  // A missing id (old schema / corrupted write) breaks React keys, edit/
+  // delete identity, and export dedupe keys — repair rather than drop.
+  if (typeof out.id !== 'string' || out.id === '') out.id = uuid();
+  if (!['academic', 'sports', 'arts', 'other'].includes(out.type)) out.type = 'other';
+  if (!['high', 'medium', 'low'].includes(out.priority)) delete out.priority;
   for (const key of ['difficulty', 'durationMins', 'priority']) {
     const n = Number(out[key]);
     if (Number.isFinite(n)) out[key] = n; else delete out[key];
@@ -162,7 +169,23 @@ export function loadGoogleExport() {
     const d = localStorage.getItem(KEYS.GOOGLE_EXPORT);
     if (!d) return {};
     const p = JSON.parse(d);
-    return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return {};
+    // Deep-validate: a non-array `events` entry used to throw inside
+    // GoogleCalendarExport AFTER the Google events were already created —
+    // the user saw "Failed to sync" although the sync succeeded, and the
+    // events became orphaned (untracked → not removable via unsync).
+    const out = {};
+    for (const [week, entry] of Object.entries(p)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const events = Array.isArray(entry.events)
+        ? entry.events.filter(e => e && typeof e === 'object' && typeof e.googleEventId === 'string' && e.googleEventId !== '')
+        : [];
+      out[week] = {
+        syncedAt: typeof entry.syncedAt === 'string' ? entry.syncedAt : null,
+        events,
+      };
+    }
+    return out;
   } catch { return {}; }
 }
 

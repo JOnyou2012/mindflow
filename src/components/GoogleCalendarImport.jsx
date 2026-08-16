@@ -21,7 +21,13 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
 
   const handleSync = useCallback(async () => {
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      // Token was cleared elsewhere (e.g. sign-out via the export widget)
+      // while imported blocks were showing — fall back to the Connect
+      // button instead of a silent no-op.
+      setSyncInfo(null);
+      return;
+    }
     setSyncing(true);
     try {
       const { blocks, eventCount, calendarName } = await fetchWeekEvents(token, weekStart);
