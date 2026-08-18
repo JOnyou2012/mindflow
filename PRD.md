@@ -55,6 +55,9 @@
 > **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
 > `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
+> **Part 8 (Schedule Image Export): 📋 PLANNED** — spec complete (steps
+> 101–110), development deferred until approved
+>
 > **🎯 Deploy-ready (2026-08-18, transition-buffer feature + mega-audit).**
 > All tiers resolved. `npm test` runs 5 suites (3,504 assertion checks),
 > 0 failures, byte-deterministic output. `npm run build` 0 errors, 0
@@ -293,6 +296,12 @@
 > that used to squeeze into the hour before/after a block may move to a
 > different day — that is the intended trade-off of reserving transition
 > time. Final state: 5 suites, 3,504 checks, 0 failures.
+>
+> **2026-08-18 (Jeremy + Claude — Part 8 planned, development deferred):**
+> Spec for **Schedule Image Export** written into the PRD as Part 8 (steps
+> 101–110). No code written yet — start only when explicitly approved.
+> Approach: dependency-free SVG → canvas → PNG download (`showSaveFilePicker`
+> for the OS save dialog / Desktop on Chromium, `<a download>` fallback).
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
@@ -3196,11 +3205,96 @@ session quality) in extended properties. All generated weeks are synced at once.
 
 ## Future Enhancements (post Stage 5)
 - [x] ~~Write scheduled study sessions back to Google Calendar~~ ✅ Implemented (steps 95–100)
+- Schedule image export (PNG download of the plan) → **spec in Part 8 (PLANNED)**
 - Two-way sync (changes in Google Calendar update MindFlow)
 - Microsoft Outlook / Apple Calendar support
 - iCal import for offline calendar files
 - Team/family calendar sharing for group study scheduling
 - Multi-calendar support (toggle which calendars to sync)
+
+---
+
+# Part 8: Schedule Image Export — 📋 PLANNED (development deferred)
+
+> **Status (2026-08-18):** Spec complete. No code written. Development starts
+> only when explicitly approved — this section is the blueprint.
+
+## Overview
+
+One-click export of the generated schedule as a **PNG picture**. A "Save as
+image" button lives in the Step 4 (plan) toolbar next to the Google Calendar
+export and captures **ALL generated weeks** as one tall portrait image
+(matches the GCal export's all-weeks scope).
+
+**"Save to desktop" reality check:** browsers cannot write files to an
+arbitrary path on the user's machine. The feature therefore uses the native
+save flow: `window.showSaveFilePicker()` on Chromium browsers (opens the OS
+save dialog — the user can pick **Desktop** as the destination), with an
+`<a download>` fallback on Safari/Firefox (lands in Downloads). This is the
+standard web equivalent of "save to desktop".
+
+## Technical Approach
+
+**Dependency-free SVG → canvas → PNG pipeline** (deliberately NOT html2canvas):
+
+1. **`src/utils/scheduleImage.js` (new, pure functions):**
+   - `buildScheduleSvg(weekResults, calendarBlocks, { palette, locale, weekStarts })`
+     → SVG string. Renders the same data PlanView already renders: day columns
+     (6:00–22:00 grid mirroring `START_H`/`END_H`/`ROW_H` geometry from
+     `src/components/PlanView.jsx:9`), fixed blocks, generated session chips
+     (startTick/endTick → y positions), per-week stats, warnings, and the
+     unscheduled list. One column block per week, stacked vertically.
+   - `svgToPngBlob(svg, scale = 2)` → draw the SVG into an `<img>` (data URL)
+     → `<canvas>` → `canvas.toBlob('image/png')`. 2× scale for crisp text.
+   - `downloadPng(blob, filename)` → `showSaveFilePicker` when available
+     (Chromium: OS save dialog, Desktop selectable), else
+     `URL.createObjectURL` + `<a download>` click.
+   - `scheduleImageFilename(date)` → `mindflow-schedule-YYYY-MM-DD.png`.
+2. **Why not html2canvas:** Tailwind v4 emits `oklch()` / CSS-variable colors
+   that DOM-screenshot libraries render incorrectly; an SVG renderer built
+   from the same data the grid uses is deterministic, crisp at 2×, adds ~0KB
+   (no dependency), and is unit-testable in Node.
+3. **Theme:** capture uses the app's CURRENT theme — the component reads the
+   computed CSS variables (`getComputedStyle`) at click time and passes them
+   as the explicit `palette`, so the PNG matches what the user sees. The
+   builder is pure given the palette → tests stay deterministic with a fixed
+   palette.
+4. **Security:** task titles are user input rendered into SVG text — an
+   XML-escaping helper (`&`, `<`, `>`, `"`, `'`) is mandatory. (SVG loaded via
+   `<img>` cannot execute scripts, but unescaped text breaks the document.)
+
+## UX
+
+- Button "Save as image" (lucide `Download` icon) in the PlanView toolbar,
+  visible whenever `weekResults` is non-empty (no Google gating).
+- Click → PNG saves immediately; button disabled for the ~100ms capture.
+- Filename: `mindflow-schedule-2026-08-18.png` (current date).
+
+## i18n — 2 new keys × 6 languages
+
+- `saveImage` — button label
+- `saveImageError` — capture-failure message
+
+## Steps 101–110 (all pending — do not start without approval)
+
+**Step 101** — `src/utils/scheduleImage.js`: `buildScheduleSvg` (week headers, day grid, fixed blocks, session chips, stats, warnings, unscheduled)
+**Step 102** — XML-escaping helper for all user-provided text
+**Step 103** — `svgToPngBlob` (2× scale) + `downloadPng` (`showSaveFilePicker` → `<a download>` fallback)
+**Step 104** — `scheduleImageFilename` helper
+**Step 105** — PlanView toolbar button + theme-palette capture wiring
+**Step 106** — i18n keys `saveImage` / `saveImageError` in all 6 languages
+**Step 107** — `tests/schedule-image.test.js` (Node): SVG contains week labels, task titles, correct chip y-positions from ticks, day columns; escaping of `&`/`<`/quotes; filename format; empty-plan handling; deterministic output for a fixed palette
+**Step 108** — add the new suite to the `npm test` chain in `package.json`
+**Step 109** — PRD: check off steps 101–108, changelog entry, progress header
+**Step 110** — full verification: `npm test`, `npm run lint`, `npm run build` green
+
+## Acceptance criteria
+
+- Clicking "Save as image" downloads a PNG containing every generated week
+- Chromium opens the OS save dialog (Desktop selectable); Safari/Firefox downloads to the default folder
+- Task titles containing HTML special characters render literally
+- Works in all 6 languages including Arabic (RTL) and in dark theme
+- 0 new dependencies; lint 0 warnings; full test suite green
 
 ---
 
