@@ -303,6 +303,12 @@
 > Approach: dependency-free SVG → canvas → PNG download (`showSaveFilePicker`
 > for the OS save dialog / Desktop on Chromium, `<a download>` fallback).
 >
+> **2026-08-18 (Jeremy + Claude — logo → home):** The MindFlow logo in the
+> app bar is now a button: clicking it returns to the wizard's starting
+> step (step 1 without calibration, step 2 with), clears the generated plan,
+> any pending generate timer, error banner, open dialogs and sub-flows.
+> Saved data is kept — the full wipe remains in Settings → Reset.
+>
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
 > slide transitions (0.22s), auto-advance on single-choice answers, Enter to

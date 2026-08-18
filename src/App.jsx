@@ -197,6 +197,20 @@ export default function App() {
     }
   };
 
+  // Logo click — go "home": back to the wizard's starting step, clear the
+  // generated plan and any open dialogs/sub-flows. Saved data (calibration,
+  // tasks, calendar, settings) is kept — the full wipe lives in Settings.
+  const goHome = () => {
+    if (generateTimerRef.current) { clearTimeout(generateTimerRef.current); generateTimerRef.current = null; }
+    setWeekResults({});
+    setIsCalculating(false);
+    setError(null);
+    setShowSettings(false);
+    setSubView('overview');
+    dataVersionRef.current = 0;
+    setStep(calibration ? 2 : 1);
+  };
+
   const hasResults = Object.keys(weekResults).length > 0;
   const canGenerate = calibration && tasks.length > 0;
 
@@ -219,12 +233,18 @@ export default function App() {
     <div className="min-h-screen bg-mindflow-bg flex flex-col">
       {/* ── App bar ── */}
       <header className="h-14 shrink-0 px-4 sm:px-6 flex items-center justify-between border-b border-mindflow-border bg-mindflow-bg sticky top-0 z-40">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={goHome}
+          aria-label="MindFlow — home"
+          title="MindFlow — home"
+          className="flex items-center gap-3 text-left"
+        >
           <div className="w-9 h-9 rounded-lg bg-mindflow-accent flex items-center justify-center">
             <Brain className="w-5 h-5 text-mindflow-onaccent" />
           </div>
           <span className="text-xl text-mindflow-text leading-none">MindFlow</span>
-        </div>
+        </button>
         <button
           onClick={() => setShowSettings(true)}
           aria-label={T.settings}
