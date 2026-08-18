@@ -239,6 +239,59 @@ const weirdPrio = sortTasks(weirdPrioTasks);
 assert(weirdPrio.length === 3, 'C6: unknown priority does not drop tasks');
 assert(weirdPrio[0].id === 'w1' && weirdPrio[1].id === 'w2' && weirdPrio[2].id === 'w3', 'C6b: unknown priority ranks as medium (stable, deterministic order)');
 
+// Transition buffer around fixed events (findFreeSlots bufferTicks param).
+// 1 tick = 10 min; the 15-min setting rounds up to 2 ticks.
+const bufferFixture = [{ id: 'bf', day: 'Mon', startHour: 10, durationHours: 2, label: 'Class', type: 'academic', isFixed: true }]; // ticks 60-72
+const bufferedSlots = findFreeSlots(bufferFixture, 2);
+assert(bufferedSlots.length === 2, 'C7: block + 2-tick buffer → two free slots');
+assert(bufferedSlots[0].endTick === 58, 'C7b: morning slot ends 20 min before the block');
+assert(bufferedSlots[1].startTick === 74, 'C7c: afternoon slot starts 20 min after the block');
+
+const unbufferedSlots = findFreeSlots(bufferFixture, 0);
+assert(unbufferedSlots[1].startTick === 72, 'C9: buffer 0 → slot starts exactly at block end (backward compatible)');
+
+const bigBufferSlots = findFreeSlots(bufferFixture, 3);
+assert(bigBufferSlots[0].endTick === 57 && bigBufferSlots[1].startTick === 75, 'C10: 30-min buffer → 3-tick padding on each side');
+
+// Generate-level invariant: with the default settings (15 min), no session
+// may start or end inside the 20-min transition zone around a fixed event.
+const bufferBlocks = ALL_DAYS.map(d => ({ id: 'buf-' + d, day: d, startHour: 12, durationHours: 1, label: 'Class', type: 'academic', isFixed: true })); // ticks 72-78 → padded 70-80
+const bufferedPlan = generateWeeklySchedule(bufferBlocks, [
+  { id: 'bt1', title: 'BT1', type: 'academic', durationMins: 60, difficulty: 3, priority: 'high', deadline: null },
+  { id: 'bt2', title: 'BT2', type: 'academic', durationMins: 60, difficulty: 3, priority: 'medium', deadline: null },
+], 1.0, {});
+let defaultBufferViolations = 0;
+for (const day of ALL_DAYS) {
+  for (const s of (bufferedPlan.days[day]?.sessions || [])) {
+    if (!(s.endTick <= 70 || s.startTick >= 80)) defaultBufferViolations++;
+  }
+}
+assert(defaultBufferViolations === 0, 'C8: default 15-min buffer — no session inside the transition zone');
+
+// Explicit 30-min setting → 3-tick zone [69, 81]
+const bigBufferPlan = generateWeeklySchedule(bufferBlocks, [
+  { id: 'bt4', title: 'BT4', type: 'academic', durationMins: 60, difficulty: 3, priority: 'high', deadline: null },
+], 1.0, { transitionBufferMins: 30 });
+let bigBufferViolations = 0;
+for (const day of ALL_DAYS) {
+  for (const s of (bigBufferPlan.days[day]?.sessions || [])) {
+    if (!(s.endTick <= 69 || s.startTick >= 81)) bigBufferViolations++;
+  }
+}
+assert(bigBufferViolations === 0, 'C11: 30-min buffer → transition zone enforced');
+
+// Explicit 0 → sessions respect the bare block only [72, 78]
+const noBufferPlan = generateWeeklySchedule(bufferBlocks, [
+  { id: 'bt5', title: 'BT5', type: 'academic', durationMins: 60, difficulty: 3, priority: 'high', deadline: null },
+], 1.0, { transitionBufferMins: 0 });
+let noBufferViolations = 0;
+for (const day of ALL_DAYS) {
+  for (const s of (noBufferPlan.days[day]?.sessions || [])) {
+    if (!(s.endTick <= 72 || s.startTick >= 78)) noBufferViolations++;
+  }
+}
+assert(noBufferViolations === 0, 'C12: buffer 0 → no padding applied');
+
 // ===========================================================================
 // 8. Settings edge cases
 // ===========================================================================

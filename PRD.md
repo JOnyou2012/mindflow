@@ -55,10 +55,10 @@
 > **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
 > `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
-> **🎯 Deploy-ready (2026-08-16, pre-deployment mega-audit).** All tiers
-> resolved. `npm test` runs 5 suites (3,497 assertion checks), 0 failures,
-> byte-deterministic output. `npm run build` 0 errors, 0 warnings. Project
-> lint: 0 warnings. `npm audit`: 0 vulnerabilities.
+> **🎯 Deploy-ready (2026-08-18, transition-buffer feature + mega-audit).**
+> All tiers resolved. `npm test` runs 5 suites (3,504 assertion checks),
+> 0 failures, byte-deterministic output. `npm run build` 0 errors, 0
+> warnings. Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -268,6 +268,31 @@
 > **Remaining manual deploy steps:** set `MDFLOW_FRONTEND_ORIGIN` in the
 > Render dashboard; add the final production domain to Google Cloud Console
 > OAuth "Authorized JavaScript origins".
+>
+> **2026-08-18 (Jeremy + Claude — transition buffer between events):** New
+> `transitionBufferMins` setting (Off / 15 / 30 min, default 15) — study
+> sessions no longer start the minute a fixed event ends or run right up to
+> the next one. Users get rest/travel time to move between events.
+> **1) Scheduler** — `findFreeSlots(blocks, bufferTicks)` pads every merged
+> block interval on both sides before slot computation, so free time
+> inherently excludes the transition zones; `generateWeeklySchedule` reads
+> `settings.transitionBufferMins` (whitelisted 0/15/30, default 15) and
+> converts to ticks via `Math.ceil(mins / 10)` — 1 tick = 10 min, so the
+> 15-min option enforces "at least 15 minutes" (2 ticks ≈ 20 min). Applies
+> to custom calendar blocks AND Google-imported blocks (both enter
+> `allBlocks`). The existing 30-min inter-session gap (`GAP_TICKS`) is
+> unchanged. **2) Settings UI** — segmented Off/15/30 control in the
+> settings dialog (chronotype pattern); storage.js `DEFAULTS` +
+> whitelist sanitization in `loadSettings`; added to the generate-failure
+> diagnostic log. **3) i18n** — `settingsTransition` / `transitionOff` /
+> `transitionMins` keys in all 6 languages. **4) Tests** — 8 new asserts
+> (findFreeSlots geometry for 0/2/3-tick buffers; generate-level
+> no-session-in-transition-zone invariants for default/30/0 settings);
+> test 15.5 updated to assert the buffer invariant instead of pinning the
+> landing day. **5) Known behavior note:** with the default buffer, a task
+> that used to squeeze into the hour before/after a block may move to a
+> different day — that is the intended trade-off of reserving transition
+> time. Final state: 5 suites, 3,504 checks, 0 failures.
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
@@ -1067,6 +1092,9 @@ UserSettings = {
   chronotype: 'morning' | 'neutral' | 'night',
   maxHoursPerDay: number,       // default 8
   maxHoursWeekend: number,      // default 4
+  transitionBufferMins: 0 | 15 | 30,  // default 15 — rest/travel time
+                                      // around fixed events (15 min → 2
+                                      // ticks ≈ 20 min; tick = 10 min)
 }
 
 MarkovTimePoint = {

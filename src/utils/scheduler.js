@@ -284,7 +284,7 @@ export function sortTasks(tasks) {
 // Slot Computation (overlapping-block aware)
 // ===========================================================================
 
-export function findFreeSlots(blocksForDay) {
+export function findFreeSlots(blocksForDay, bufferTicks = 0) {
   if (!blocksForDay || blocksForDay.length === 0) {
     const dur = DAY_END_TICK - DAY_START_TICK;
     return [{
@@ -296,8 +296,11 @@ export function findFreeSlots(blocksForDay) {
   const sorted = [...blocksForDay].sort((a, b) => (a.startHour || 0) - (b.startHour || 0));
   const merged = [];
   for (const b of sorted) {
-    const bs = Math.max(DAY_START_TICK, Math.round((b.startHour || 0) * 6));
-    const be = Math.min(DAY_END_TICK, Math.round(((b.startHour || 0) + (b.durationHours || 0)) * 6));
+    // Transition buffer: pad each block on both sides so sessions never
+    // start the minute an event ends or run right up to the next one —
+    // users need time to move and settle (settings.transitionBufferMins).
+    const bs = Math.max(DAY_START_TICK, Math.round((b.startHour || 0) * 6) - bufferTicks);
+    const be = Math.min(DAY_END_TICK, Math.round(((b.startHour || 0) + (b.durationHours || 0)) * 6) + bufferTicks);
     // Blocks entirely outside the study window (e.g. 23:00–01:00) or
     // zero-length produce bs >= be — an inverted interval that used to
     // fabricate phantom slots past DAY_END_TICK. They occupy no time here.
@@ -1078,6 +1081,11 @@ export default function generateWeeklySchedule(
   const chronotype = s.chronotype || 'morning';
   const maxWeekday = s.maxHoursPerDay ?? 8;
   const maxWeekend = s.maxHoursWeekend ?? 4;
+  // Transition buffer around fixed events (custom + Google-imported):
+  // 0/15/30 minutes, default 15. Ticks are 10 min, so 15 min rounds up to
+  // 2 ticks — the enforced gap is "at least 15 minutes".
+  const bufferMins = [0, 15, 30].includes(s.transitionBufferMins) ? s.transitionBufferMins : 15;
+  const bufferTicks = Math.ceil(bufferMins / 10);
 
   const blocksByDay = {};
   ALL_DAYS.forEach(d => { blocksByDay[d] = blockList.filter(b => b.day === d); });
@@ -1092,7 +1100,7 @@ export default function generateWeeklySchedule(
     if (isPastDay(day)) continue;
 
     const capTicks = Math.round((WEEKEND_DAYS.has(day) ? maxWeekend : maxWeekday) * 6);
-    for (const slot of findFreeSlots(blocksByDay[day])) {
+    for (const slot of findFreeSlots(blocksByDay[day], bufferTicks)) {
       let adjustedSlot = { ...slot };
 
       // Clamp boundaries: no studying before 8am or after 9pm

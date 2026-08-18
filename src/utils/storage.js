@@ -98,7 +98,7 @@ export function saveSettings(settings) {
   try { localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings)); } catch (e) { console.warn('localStorage full, settings not saved:', e); return false; } return true;
 }
 export function loadSettings() {
-  const DEFAULTS = { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4 };
+  const DEFAULTS = { chronotype: 'morning', maxHoursPerDay: 8, maxHoursWeekend: 4, transitionBufferMins: 15 };
   try {
     const d = localStorage.getItem(KEYS.SETTINGS);
     if (d) {
@@ -117,6 +117,9 @@ export function loadSettings() {
             : DEFAULTS.chronotype,
           maxHoursPerDay: clamp(parsed.maxHoursPerDay, 1, 16, DEFAULTS.maxHoursPerDay),
           maxHoursWeekend: clamp(parsed.maxHoursWeekend, 0, 12, DEFAULTS.maxHoursWeekend),
+          transitionBufferMins: [0, 15, 30].includes(parsed.transitionBufferMins)
+            ? parsed.transitionBufferMins
+            : DEFAULTS.transitionBufferMins,
         };
       }
     }

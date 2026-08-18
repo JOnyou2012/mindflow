@@ -171,6 +171,7 @@ export default function App() {
           alpha: calibration?.alphaScore,
           chronotype: settings?.chronotype,
           maxHoursPerDay: settings?.maxHoursPerDay,
+          transitionBufferMins: settings?.transitionBufferMins,
           timestamp: new Date().toISOString(),
         });
         setError(T.scheduleGenFailed || 'Failed to generate schedule.');
@@ -466,6 +467,22 @@ export default function App() {
                       className="w-16 bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-1.5 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none"
                     />
                     <span className="text-xs text-mindflow-muted">{T.hours}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-mindflow-text w-28 shrink-0">{T.settingsTransition}</span>
+                  <div className="flex rounded-lg border border-mindflow-border overflow-hidden">
+                    {[0, 15, 30].map(b => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setSettings(s => ({ ...s, transitionBufferMins: b }))}
+                        className={`px-4 py-1.5 text-sm ${settings.transitionBufferMins === b ? 'bg-mindflow-accent-soft text-mindflow-accent font-medium' : 'text-mindflow-muted hover:text-mindflow-text'}`}
+                      >
+                        {b === 0 ? T.transitionOff : T.transitionMins.replace('{n}', b)}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

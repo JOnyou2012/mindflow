@@ -221,6 +221,9 @@ const t = {
     // Settings extras
     settingsWeekday: 'Weekday',
     settingsWeekend: 'Weekend',
+    settingsTransition: 'Transition time',
+    transitionOff: 'Off',
+    transitionMins: '{n} min',
 
     // Calendar stats
     calBlock: 'block',
@@ -562,6 +565,9 @@ const t = {
     // Settings extras
     settingsWeekday: '工作日',
     settingsWeekend: '周末',
+    settingsTransition: '过渡时间',
+    transitionOff: '关',
+    transitionMins: '{n} 分钟',
 
     // Calendar stats
     calBlock: '个时间段',
@@ -848,6 +854,9 @@ const t = {
     // Settings extras
     settingsWeekday: '工作日',
     settingsWeekend: '週末',
+    settingsTransition: '過渡時間',
+    transitionOff: '關',
+    transitionMins: '{n} 分鐘',
 
     // Calendar stats
     calBlock: '個時段',
@@ -1134,6 +1143,9 @@ const t = {
     // Settings extras
     settingsWeekday: 'Día laborable',
     settingsWeekend: 'Fin de semana',
+    settingsTransition: 'Tiempo de transición',
+    transitionOff: 'Apagado',
+    transitionMins: '{n} min',
 
     // Calendar stats
     calBlock: 'bloque',
@@ -1420,6 +1432,9 @@ const t = {
     // Settings extras
     settingsWeekday: 'कार्यदिवस',
     settingsWeekend: 'सप्ताहांत',
+    settingsTransition: 'इवेंट के बीच समय',
+    transitionOff: 'बंद',
+    transitionMins: '{n} मिनट',
 
     // Calendar stats
     calBlock: 'ब्लॉक',
@@ -1706,6 +1721,9 @@ const t = {
     // Settings extras
     settingsWeekday: 'يوم عمل',
     settingsWeekend: 'عطلة نهاية الأسبوع',
+    settingsTransition: 'وقت الانتقال',
+    transitionOff: 'إيقاف',
+    transitionMins: '{n} دقيقة',
 
     // Calendar stats
     calBlock: 'كتلة',
