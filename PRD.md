@@ -48,17 +48,17 @@
 
 ---
 
-> **Progress: 85 / 85 core steps complete — 100%** | **All audits resolved ✅**
+> **Progress: 95 / 95 core steps complete — 100%** | **All audits resolved ✅**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
 > **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
 > `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
 >
-> **Part 8 (Schedule Image Export): 📋 PLANNED** — spec complete (steps
-> 101–110), development deferred until approved
+> **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
+> 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
 >
-> **🎯 Deploy-ready (2026-08-18, transition-buffer feature + mega-audit).**
+> **🎯 Deploy-ready (2026-08-19, schedule image export + logo fresh-start).**
 > All tiers resolved. `npm test` runs 5 suites (3,504 assertion checks),
 > 0 failures, byte-deterministic output. `npm run build` 0 errors, 0
 > warnings. Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
@@ -272,6 +272,16 @@
 > Render dashboard; add the final production domain to Google Cloud Console
 > OAuth "Authorized JavaScript origins".
 >
+> **2026-08-19 (Jeremy + Claude — logo → home is now a FRESH start):**
+> Bug #15: `goHome` used `setStep(calibration ? 2 : 1)`, so calibrated users
+> landed on Schedule instead of the wizard start. Home now wipes the
+> wizard's data — calibration, tasks, calendar, Google-import cache,
+> generated plan — and lands on step 1 with the Stroop start screen,
+> exactly like first launch. App preferences (theme, language, schedule
+> settings) are kept; the full data wipe in Settings is unchanged.
+> Reproduced and verified in-browser. Supersedes the 2026-08-18
+> "logo → home" note below (saved wizard data is no longer kept).
+>
 > **2026-08-18 (Jeremy + Claude — transition buffer between events):** New
 > `transitionBufferMins` setting (Off / 15 / 30 min, default 15) — study
 > sessions no longer start the minute a fixed event ends or run right up to
@@ -305,9 +315,9 @@
 >
 > **2026-08-18 (Jeremy + Claude — logo → home):** The MindFlow logo in the
 > app bar is now a button: clicking it returns to the wizard's starting
-> step (step 1 without calibration, step 2 with), clears the generated plan,
-> any pending generate timer, error banner, open dialogs and sub-flows.
-> Saved data is kept — the full wipe remains in Settings → Reset.
+> step, clears the generated plan, any pending generate timer, error
+> banner, open dialogs and sub-flows. *(Superseded 2026-08-19 — see bug
+> #15: Home now wipes the wizard's data and lands on a fresh step 1.)*
 >
 > **2026-08-07 (question flows):** Form entry inside steps 2–3 replaced with
 > one-question-per-screen flows (`src/components/QuestionFlow.jsx`) — fast
@@ -3066,6 +3076,7 @@ This PRD incorporates fixes for every known bug from previous iterations:
 12. **Image export hangs in automation/headless Chrome** — `showSaveFilePicker` exists but its promise never settles (no native dialog) → button stuck disabled, no download. Fixed in `downloadPng`: short-circuit when `navigator.webdriver === true`, plus a 30s race fallback to `<a download>` for kiosk/embedded contexts (found 2026-08-19 during Part 8 e2e verification)
 13. **Arabic export text clipped off-canvas** — `direction="rtl"` on the SVG root flips `text-anchor="start"` to the right edge, pushing left-anchored labels (week header, stats, chip labels) outside the canvas (0 visible glyph pixels). Removed the attribute; Arabic shapes RTL via the bidi algorithm without it (found 2026-08-19 during hardening round 2; empirically verified before/after)
 14. **Malformed session objects emit NaN coordinates** — sessions without `startTick`/`endTick` produced `y="NaN"` in the SVG, breaking document geometry. Guarded with `Number(x) || 0` (found during hardening re-review)
+15. **Logo "home" skipped the wizard start for calibrated users** — `goHome` used `setStep(calibration ? 2 : 1)`, so returning users landed on Schedule (step 2) instead of the beginning. Home is now a FRESH start, exactly like first launch: wipes the wizard's data (calibration, tasks, calendar, Google-import cache, generated plan) and lands on step 1 with the Stroop start screen. App preferences (theme, language, schedule settings) are kept (found 2026-08-19 by user testing; reproduced and verified in-browser)
 
 ---
 
@@ -3217,7 +3228,7 @@ session quality) in extended properties. All generated weeks are synced at once.
 
 ## Future Enhancements (post Stage 5)
 - [x] ~~Write scheduled study sessions back to Google Calendar~~ ✅ Implemented (steps 95–100)
-- Schedule image export (PNG download of the plan) → **spec in Part 8 (PLANNED)**
+- [x] ~~Schedule image export (PNG download of the plan)~~ ✅ Implemented (Part 8, steps 101–110)
 - Two-way sync (changes in Google Calendar update MindFlow)
 - Microsoft Outlook / Apple Calendar support
 - iCal import for offline calendar files

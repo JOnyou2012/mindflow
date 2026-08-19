@@ -10,7 +10,7 @@ import {
   saveCalendar, loadCalendar,
   saveTasks, loadTasks,
   saveSettings, loadSettings,
-  clearAll, loadGoogleCache,
+  clearAll, loadGoogleCache, clearGoogleCache,
 } from './utils/storage.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
@@ -197,9 +197,10 @@ export default function App() {
     }
   };
 
-  // Logo click — go "home": back to the wizard's starting step, clear the
-  // generated plan and any open dialogs/sub-flows. Saved data (calibration,
-  // tasks, calendar, settings) is kept — the full wipe lives in Settings.
+  // Logo click — go "home": a FRESH start, exactly like first launch.
+  // Wipes the wizard's data (calibration, tasks, calendar, Google import
+  // cache, generated plan) and lands on step 1 with the Stroop start
+  // screen. App preferences (theme, language, schedule settings) are kept.
   const goHome = () => {
     if (generateTimerRef.current) { clearTimeout(generateTimerRef.current); generateTimerRef.current = null; }
     setWeekResults({});
@@ -208,7 +209,15 @@ export default function App() {
     setShowSettings(false);
     setSubView('overview');
     dataVersionRef.current = 0;
-    setStep(calibration ? 2 : 1);
+    setCalibrationState(null);
+    try { localStorage.removeItem('mindflow_calibration'); } catch {}
+    setTasksState([]);
+    saveTasks([]);
+    setCalendarBlocksState([]);
+    saveCalendar([]);
+    setGoogleBlocks([]);
+    clearGoogleCache();
+    setStep(1);
   };
 
   const hasResults = Object.keys(weekResults).length > 0;

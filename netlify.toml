@@ -11,3 +11,8 @@
 # api.js is optional infrastructure — the app runs fully client-side
 # by default.  Import api.js in a component to enable server-side
 # simulation via the Python backend.
+#
+# ⚠️ If a Content-Security-Policy header is ever added here, img-src MUST
+# include blob: — the schedule image export rasterizes its SVG through
+# <img src="blob:..."> and a CSP without blob: silently breaks it
+# (works locally, fails in production).
