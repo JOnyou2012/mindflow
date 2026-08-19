@@ -1,5 +1,4 @@
 {
-  "_comment": "If a Content-Security-Policy header is ever added: img-src MUST include blob: (schedule image export rasterizes via <img src=blob:>), and index.html's Google-Fonts link + inline onload handler plus the Google Identity Services bootstrap need style-src/script-src allowances (fonts.googleapis.com, the GIS inline-script hash or nonce, frame-src accounts.google.com). A draft policy was simulated locally on 2026-08-19 and broke both — adjust and re-verify before enabling.",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],

@@ -272,6 +272,21 @@
 > Render dashboard; add the final production domain to Google Cloud Console
 > OAuth "Authorized JavaScript origins".
 >
+> **⚠️ vercel.json — no comment keys.** Vercel validates `vercel.json`
+> against a strict schema and rejects unknown keys, so JSON comments are
+> impossible; a `_comment` key caused a failed Production deployment on
+> 2026-08-19 (deploy worked locally, broke only on Vercel). Keep deploy
+> notes here in the PRD instead. **CSP note (applies if a
+> Content-Security-Policy header is ever added to vercel.json or
+> netlify.toml):** `img-src` MUST include `blob:` — the schedule image
+> export rasterizes its SVG through `<img src="blob:...">`, and a CSP
+> without `blob:` silently breaks it (works locally, fails in production).
+> The Google-Fonts `<link>` + inline `onload` handler and the Google
+> Identity Services bootstrap additionally need `style-src`/`script-src`
+> allowances (`fonts.googleapis.com`, the GIS inline-script hash or nonce,
+> `frame-src accounts.google.com`). A draft policy was simulated locally on
+> 2026-08-19 and broke both — adjust and re-verify before enabling.
+>
 > **2026-08-19 (Jeremy + Claude — logo → home is now a FRESH start):**
 > Bug #15: `goHome` used `setStep(calibration ? 2 : 1)`, so calibrated users
 > landed on Schedule instead of the wizard start. Home now wipes the
