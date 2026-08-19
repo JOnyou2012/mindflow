@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, RefreshCw, CalendarX2, Download } from 'lucide-react';
 import { typeColor, typeTextColor } from '../utils/theme.js';
 import { getStoredLang, langToLocale, getDayShortNames } from '../utils/i18n.js';
 import { isGoogleConfigured } from '../utils/googleAuthCore.js';
+import { buildScheduleSvg, svgToPngBlob, downloadPng, scheduleImageFilename } from '../utils/scheduleImage.js';
 import GoogleCalendarExport from './GoogleCalendarExport.jsx';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -30,12 +31,16 @@ function weekLabel(ws) {
   return `${s} – ${e}, ${end.getFullYear()}`;
 }
 
+function todayIso() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
 function dayInfo(ws, dayName) {
   const [y, m, d] = ws.split('-').map(Number);
   const date = new Date(y, m - 1, d + DAYS.indexOf(dayName));
   const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const todayIso = (() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; })();
-  return { dateNum: date.getDate(), isToday: iso === todayIso, isPast: iso < todayIso };
+  return { dateNum: date.getDate(), isToday: iso === todayIso(), isPast: iso < todayIso() };
 }
 
 /**
@@ -88,6 +93,62 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
   // Re-sync when results change (e.g. async regeneration) — the default week
   // may shift to the first week with scheduled sessions
   useEffect(() => { setSelIdx(defaultIdx); }, [defaultIdx]);
+
+  // ── Schedule image export ──
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  // A regenerated plan means a previously failed export no longer reflects
+  // the current data — drop any stale failure message (mirrors the GCal
+  // widget, which resets its status on planVersion change).
+  useEffect(() => { setSaveError(null); }, [planVersion]);
+
+  const handleSaveImage = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      // Capture the app's CURRENT theme — the SVG must match what the user
+      // sees, so the builder gets the live CSS variables as an explicit
+      // palette (which also keeps it pure/deterministic for tests).
+      const styles = getComputedStyle(document.documentElement);
+      const read = (name, fallback) => (styles.getPropertyValue(name) || '').trim() || fallback;
+      const palette = {
+        bg: read('--color-mindflow-bg', '#ffffff'),
+        surface: read('--color-mindflow-surface', '#ffffff'),
+        surfaceAlt: read('--color-mindflow-surface-alt', '#f8f9fa'),
+        border: read('--color-mindflow-border', '#dadce0'),
+        borderLight: read('--color-mindflow-border-light', '#e8eaed'),
+        text: read('--color-mindflow-text', '#3c4043'),
+        heading: read('--color-mindflow-heading', '#202124'),
+        muted: read('--color-mindflow-muted', '#5f6368'),
+        accent: read('--color-mindflow-accent', '#1669d4'),
+        accentSoft: read('--color-mindflow-accent-soft', '#e8f0fe'),
+        onAccent: read('--color-mindflow-onaccent', '#ffffff'),
+        warning: read('--color-mindflow-warning', '#c26400'),
+        danger: read('--color-mindflow-danger', '#d93025'),
+        typeText: {
+          academic: read('--type-academic-text', '#0277bd'),
+          sports: read('--type-sports-text', '#0b8043'),
+          arts: read('--type-arts-text', '#7b1fa2'),
+          other: read('--type-other-text', '#5f6368'),
+        },
+      };
+      const svg = buildScheduleSvg(weekResults, calendarBlocks, {
+        palette,
+        locale: langToLocale(getStoredLang()),
+        labels: T,
+        today: todayIso(),
+      });
+      const blob = await svgToPngBlob(svg, 2);
+      await downloadPng(blob, scheduleImageFilename(new Date()));
+    } catch (err) {
+      console.error('Schedule image export failed:', err);
+      setSaveError(T.saveImageError || 'Could not save the image. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const idx = Math.max(0, Math.min(selIdx, allWeeks.length - 1));
   const ws = allWeeks[idx];
   const result = weekResults[ws] || null;
@@ -156,6 +217,17 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         <h2 className="text-lg text-mindflow-heading font-normal">{weekLabel(ws)}</h2>
 
         <div className="ml-auto flex items-center gap-3">
+          {/* Image export needs no Google config — always available with a plan */}
+          {Object.keys(weekResults).length > 0 && (
+            <button
+              type="button"
+              onClick={handleSaveImage}
+              disabled={isSaving}
+              className="rounded-full border border-mindflow-border px-4 py-1.5 text-sm font-medium text-mindflow-text hover:bg-mindflow-surface-alt disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />{T.saveImage}
+            </button>
+          )}
           {isGoogleConfigured && Object.keys(weekResults).length > 0 && (
             <GoogleCalendarExport weekResults={weekResults} planVersion={planVersion} T={T} />
           )}
@@ -172,6 +244,10 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
           </span>
         </div>
       </div>
+
+      {saveError && (
+        <p className="text-xs text-mindflow-danger">{saveError}</p>
+      )}
 
       {/* Stats */}
       {statCells.length > 0 && (
