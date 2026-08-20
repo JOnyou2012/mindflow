@@ -58,10 +58,18 @@
 > **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
 > 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
 >
-> **🎯 Deploy-ready (2026-08-19, schedule image export + logo fresh-start).**
-> All tiers resolved. `npm test` runs 5 suites (3,504 assertion checks),
-> 0 failures, byte-deterministic output. `npm run build` 0 errors, 0
-> warnings. Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
+> **🎯 Deploy-ready + production-verified (2026-08-20, live Vercel e2e).**
+> `https://mindflow-liart.vercel.app/` exercised end-to-end in headless
+> Chrome (full wizard, real 60s Stroop, task flow, plan render,
+> save-as-image, settings, deep links, corrupted-storage resilience,
+> bug #15 logo fresh-start): 0 console errors, 0 exceptions, 0 failed
+> requests. All tiers resolved. `npm test` runs 6 suites (4,274
+> assertion checks), 0 failures. `npm run build` 0 errors, 0 warnings.
+> Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
+> Note: the Render backend (`mindflow-api.onrender.com`) is offline and
+> the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
+> entry below; neither affects the site (backend is optional, the
+> production domain is public).
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -287,6 +295,44 @@
 > `frame-src accounts.google.com`). A draft policy was simulated locally on
 > 2026-08-19 and broke both — adjust and re-verify before enabling.
 >
+> **2026-08-20 (Jeremy + Claude — production debugging e2e):** Live Vercel
+> deployment (`https://mindflow-liart.vercel.app/`) exercised end-to-end
+> with headless Chrome via CDP (no Playwright needed — see the prod-e2e
+> harness notes in the session memory). Three rounds, every one with
+> **0 console errors, 0 uncaught exceptions, 0 failed requests:**
+> **1) Full wizard** — skip calibration → schedule → add task through the
+> question flow → generate → plan renders with real content (task title,
+> week grid, stats). Save-as-image button clicked, capture completes,
+> button re-enables.
+> **2) Real Stroop path** — the actual 60s test (89 keypresses, 84 trials)
+> → Focus Score 0.91 with correct breakdown math → Save & Continue
+> persists calibration.
+> **3) Settings, deep links, resilience** — dark theme + Arabic RTL apply
+> live; `/some/deep/route` serves the app (vercel.json rewrite works);
+> garbage seeded into all 5 localStorage keys reloads cleanly (no crash,
+> no error banner); bug #15 verified live: logo click lands on a fresh
+> step 1, calibration wiped, settings/theme kept.
+> **Findings (no user impact):**
+> **1) Render backend down** — `mindflow-api.onrender.com` returns a fast
+> 404 from Render's edge (service deleted/suspended, not cold-starting).
+> Zero impact: no component imports `api.js`; the app is fully
+> client-side. Redeploy via `render.yaml` or accept as intentionally
+> offline. **2) Preview deployments are behind Vercel SSO** — every
+> `mindflow-*.vercel.app` URL 302s to a Vercel login for anonymous
+> clients; share the production domain, not preview links. (Check
+> Vercel → Settings → Deployment Protection if previews must be public.)
+> **3) Root-cause confirmed** for the 2026-08-19 failed deployment
+> (`4e55c77` → `mindflow-oap82r780`): the `_comment` key in vercel.json;
+> fixed by `23b6af8`, which deployed successfully.
+> **4) Production == HEAD verified** — deployed HTML is byte-identical to
+> the local build of `23b6af8` (matching asset hashes). Import case-sensitivity
+> audited: all relative imports resolve with exact case on a Linux-style
+> filesystem. "Capacity 97%" / "Balance 15.6%" for a single-task week
+> checked against `computeStats` — intentional formulas, not bugs.
+> **Final state:** 6 suites, **4,274** assertion checks, 0 failures;
+> `npm run build` 0 errors 0 warnings; lint 0. (The header's previous
+> "5 suites, 3,504" predated Part 8's schedule-image suite.)
+
 > **2026-08-19 (Jeremy + Claude — logo → home is now a FRESH start):**
 > Bug #15: `goHome` used `setStep(calibration ? 2 : 1)`, so calibrated users
 > landed on Schedule instead of the wizard start. Home now wipes the
