@@ -58,12 +58,15 @@
 > **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
 > 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
 >
-> **🎯 Deploy-ready + production-verified (2026-08-20, live Vercel e2e).**
+> **🎯 Deploy-ready + production-verified (2026-08-20, live Vercel e2e ×2).**
 > `https://mindflow-liart.vercel.app/` exercised end-to-end in headless
 > Chrome (full wizard, real 60s Stroop, task flow, plan render,
 > save-as-image, settings, deep links, corrupted-storage resilience,
-> bug #15 logo fresh-start): 0 console errors, 0 exceptions, 0 failed
-> requests. All tiers resolved. `npm test` runs 6 suites (4,274
+> bug #15 logo fresh-start, multi-week cascade, calendar interactions,
+> stale-plan regen, task edit/delete/duplicate, Arabic RTL round-trip,
+> dark round-trip, timezone extremes UTC+14/−12, mobile 390px, a11y
+> scan): 0 console errors, 0 exceptions, 0 failed requests — no app
+> bugs found. All tiers resolved. `npm test` runs 6 suites (4,274
 > assertion checks), 0 failures. `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 > Note: the Render backend (`mindflow-api.onrender.com`) is offline and
@@ -295,6 +298,40 @@
 > `frame-src accounts.google.com`). A draft policy was simulated locally on
 > 2026-08-19 and broke both — adjust and re-verify before enabling.
 >
+> **2026-08-20 (Jeremy + Claude — production perfection pass #2):** Deeper
+> live-Vercel sweep of everything the first pass didn't reach. Every
+> section ran with **0 console errors, 0 uncaught exceptions, 0 failed
+> requests.** **1) Multi-week cascade** — 6 tasks (incl. an overdue one
+> and a next-Monday deadline) + School Day preset + custom "Dentist"
+> event (Mon–Fri 16:00, added through the calendar question flow):
+> week 0 renders 16 chips; weeks 1–4 render the fixed commitments with
+> correct "No study sessions" notices; prev/next/Today navigation works.
+> **2) Calendar interactions** — preset apply, custom-event flow,
+> conflict validation (9–10 over School Day correctly rejected with the
+> conflict message — exercised live), edit popover, delete.
+> **3) Stale-plan flow** — chronotype change shows "Schedule Changed —
+> Regenerate" + Regen button; Regen clears the banner and re-schedules
+> (task lands on its Friday deadline day with the no-buffer-day warning).
+> **4) Task lifecycle** — delete via `title`-labelled trash button,
+> edit through the prefilled question flow (Save Changes persists),
+> duplicate detection shows `A task named "X" already exists.`
+> **5) i18n/dark round-trips** — ar→en switches restore LTR + English;
+> dark theme sets `#131314` body bg and back to white.
+> **6) Timezone sweep** — Pacific/Kiritimati (UTC+14), Etc/GMT+12
+> (UTC−12), America/Los_Angeles via CDP `Emulation.setTimezoneOverride`:
+> local-vs-UTC date divergence observed (GMT+12: Aug 19 vs Aug 20),
+> week-Monday and today-highlight computed correctly in all three, 0
+> errors. **7) Mobile** — 390px viewport: no horizontal overflow.
+> **8) A11y** — every button/input/select/img has an accessible name
+> (0 problems). **9) Perf** — cold load ~1.3s to Load, warm ~180ms,
+> JS bundle 467ms parse, no render-blocking stalls.
+> **10) Code review** of WeeklyCalendar, PlanView, storage, main.jsx,
+> ErrorBoundary, uuid, theme — no defects found; sanitization covers
+> all persisted shapes; GCal gating verified (no client ID → UI absent,
+> components tree-shaken). The "Capacity 97%" / "Balance 15.6%" numbers
+> for single-task weeks were confirmed as the intended `computeStats`
+> formulas. **No app bugs found — the deployed version is clean.**
+
 > **2026-08-20 (Jeremy + Claude — production debugging e2e):** Live Vercel
 > deployment (`https://mindflow-liart.vercel.app/`) exercised end-to-end
 > with headless Chrome via CDP (no Playwright needed — see the prod-e2e
