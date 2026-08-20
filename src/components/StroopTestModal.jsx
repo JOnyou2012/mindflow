@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Brain, RefreshCw, Target } from 'lucide-react';
+import { scoreStroopTrials } from '../utils/stroopScoring.js';
 
 // 4 colors mapped to 4 keyboard keys — user must learn this mapping.
 // Color names are translated so non-English users see words in their own
@@ -154,73 +155,14 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
     return () => clearInterval(timerRef.current);
   }, [phase]);
 
-  // -- Scoring (research-backed multi-factor) ---------------------------------
-
-  // Helper: median of sorted array (robust to outliers with small samples)
-  const median = (arr) => {
-    if (arr.length === 0) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-  };
+  // -- Scoring (pure module — src/utils/stroopScoring.js, scoring v2) ----------
 
   const computeResults = () => {
-    const trials = trialsRef.current;
-    if (trials.length === 0) {
-      setResults({ accuracy: 0, avgResponseTimeMs: 0, alphaScore: 0.5, trialCount: 0 });
-      setPhase('results');
-      return;
-    }
-
-    const correct = trials.filter(t => t.correct);
-    const accuracy = correct.length / trials.length;
-
-    const rts = trials.map(t => t.rt);
-    const meanRT = rts.reduce((a, b) => a + b, 0) / rts.length;
-
-    // RT variability (standard deviation) — higher = poorer sustained attention
-    const variance = rts.reduce((s, rt) => s + (rt - meanRT) ** 2, 0) / rts.length;
-    const rtSD = Math.sqrt(variance);
-
-    // Lapses — attention failures (RT > 1500ms)
-    const lapses = trials.filter(t => t.rt > 1500).length;
-
-    // Stroop interference: incongruent RT minus congruent RT
-    // Uses median instead of mean — robust to outliers with small congruent samples
-    const congruent = trials.filter(t => t.trialType === TRIAL_TYPES.CONGRUENT);
-    const incongruent = trials.filter(t => t.trialType === TRIAL_TYPES.INCONGRUENT);
-    const congruentRT = congruent.length >= 3
-      ? median(congruent.map(t => t.rt))
-      : median(trials.map(t => t.rt));   // fallback: median of all trials
-    const incongruentRT = incongruent.length > 0
-      ? median(incongruent.map(t => t.rt))
-      : meanRT;
-    const interference = congruent.length >= 3
-      ? Math.max(0, incongruentRT - congruentRT)
-      : 0;  // insufficient congruent trials → don't penalize
-
-    // Multi-factor composite score (each factor contributes to 0-100 scale)
-    const accuracyScore = accuracy * 30;                                     // max 30
-    const speedScore = Math.max(0, 25 - (meanRT - 400) / 40);               // 400ms→25, 1400ms→0
-    const consistencyScore = Math.max(0, 25 - rtSD / 16);                   // SD 0→25, SD 400→0
-    const lapsePenalty = Math.min(20, lapses * 4);                           // each lapse costs 4
-    const interferencePenalty = Math.min(15, interference / 12);            // v5: /12 (was /10), max 15 (was 20)
-
-    const total = accuracyScore + speedScore + consistencyScore
-                - lapsePenalty - interferencePenalty;
-
-    // Map to 0.5–1.5 range (total is roughly 0-100, so divide by ~55)
-    const alphaScore = Math.max(0.5, Math.min(1.5, total / 55));
-
-    setResults({
-      accuracy,
-      avgResponseTimeMs: Math.round(meanRT),
-      rtVariabilityMs: Math.round(rtSD),
-      lapses,
-      interferenceMs: Math.round(interference),
-      alphaScore: Math.round(alphaScore * 100) / 100,
-      trialCount: trials.length,
-    });
+    // All scoring math lives in scoreStroopTrials (unit-tested). See the
+    // module header for why v2 rebuilt the composite: v1 triple-counted
+    // slowness and pushed careful, accurate users to the 0.5 floor.
+    const results = scoreStroopTrials(trialsRef.current);
+    setResults(results);
     setPhase('results');
   };
 
@@ -434,26 +376,26 @@ export default function StroopTestModal({ onComplete, onSkip, existingCalibratio
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibAccuracyLabel} ({((results.accuracy * 100).toFixed(0))}%)</span>
-            <span className="text-mindflow-heading tabular-nums">{(results.accuracy * 30).toFixed(1)} / 30</span>
+            <span className="text-mindflow-heading tabular-nums">{results.accuracyScore.toFixed(1)} / 50</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibSpeedLabel} ({results.avgResponseTimeMs}ms)</span>
-            <span className="text-mindflow-heading tabular-nums">{Math.max(0, (25 - (results.avgResponseTimeMs - 400) / 40)).toFixed(1)} / 25</span>
+            <span className="text-mindflow-heading tabular-nums">{results.speedScore.toFixed(1)} / 20</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-mindflow-muted">{T.calibConsistencyLabel} (SD {results.rtVariabilityMs}ms)</span>
-            <span className="text-mindflow-heading tabular-nums">{Math.max(0, (25 - results.rtVariabilityMs / 16)).toFixed(1)} / 25</span>
+            <span className="text-mindflow-heading tabular-nums">{results.consistencyScore.toFixed(1)} / 15</span>
           </div>
           {results.lapses > 0 && (
             <div className="flex justify-between text-xs">
               <span className="text-mindflow-warning">{T.calibLapsesLabel} ({results.lapses} × {'>'}1.5s)</span>
-              <span className="text-mindflow-warning tabular-nums">−{Math.min(20, results.lapses * 4).toFixed(0)}</span>
+              <span className="text-mindflow-warning tabular-nums">−{results.lapsePenalty.toFixed(1)}</span>
             </div>
           )}
           {results.interferenceMs > 0 && (
             <div className="flex justify-between text-xs">
               <span className="text-mindflow-muted">{T.calibInterferenceLabel} ({results.interferenceMs}ms)</span>
-              <span className="text-mindflow-warning tabular-nums">−{Math.min(15, results.interferenceMs / 12).toFixed(0)}</span>
+              <span className="text-mindflow-warning tabular-nums">−{results.interferencePenalty.toFixed(1)}</span>
             </div>
           )}
         </div>

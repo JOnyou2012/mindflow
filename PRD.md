@@ -66,12 +66,15 @@
 > stale-plan regen, task edit/delete/duplicate, Arabic RTL round-trip,
 > dark round-trip, timezone extremes UTC+14/−12, mobile 390px, a11y
 > scan): 0 console errors, 0 exceptions, 0 failed requests — no app
-> bugs found. All tiers resolved. `npm test` runs 6 suites (4,274
-> assertion checks), 0 failures. `npm run build` 0 errors, 0 warnings.
+> bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
+> scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
+> RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
+> All tiers resolved. `npm test` runs 7 suites (4,312 assertion
+> checks), 0 failures. `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 > Note: the Render backend (`mindflow-api.onrender.com`) is offline and
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
-> entry below; neither affects the site (backend is optional, the
+> entries below; neither affects the site (backend is optional, the
 > production domain is public).
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
@@ -298,6 +301,35 @@
 > `frame-src accounts.google.com`). A draft policy was simulated locally on
 > 2026-08-19 and broke both — adjust and re-verify before enabling.
 >
+> **2026-08-20 (Jeremy + Claude — Stroop scoring v2, user-reported unfairness):**
+> User report: "only a few wrong and a few slow reactions, but my focus
+> score was 0.5." Analysis confirmed a real flaw in the v1 composite:
+> slowness was triple-counted (mean → speed, SD → consistency, >1.5s →
+> lapse penalty) and interference/12 dominated, so a careful user at
+> ~95% accuracy / ~750ms / a few lapses computed to alpha ≈ 0.5–0.75,
+> while fast random keypresses (~30% accuracy, low SD, no lapses)
+> scored ≈ 0.9 — an inverted fairness curve. Additionally the /55
+> divisor made 1.5 mathematically unreachable (max total 80 → 1.45).
+> **Scoring v2** (new pure module `src/utils/stroopScoring.js` + tests):
+> **1) Accuracy-dominant** — 50 of 85 points; near-perfect accuracy can
+> never land near the floor. **2) Speed/consistency measured on CORRECT
+> trials only** — slow wrong answers count once (in accuracy), never
+> three times. **3) Median RT, not mean** — a few slow outliers don't
+> tank speed. **4) Accuracy-gated speed credit** — below ~30% accuracy
+> (near chance on 4 choices) fast keypresses earn nothing, so random
+> tapping can't score as "average capacity". **5) Mild capped
+> penalties** — lapses ≤ −6; interference has an 80ms healthy-tolerance
+> band, beyond it −/30 capped at −5. **6) Linear 0.5–1.5 mapping**
+> (÷85) — both ends reachable; 42.5/85 = population average 1.0.
+> Results screen breakdown rows updated to the new component scores
+> (/50, /20, /15, capped penalties). Verified: 38 new unit tests
+> (`tests/stroop-scoring.test.js`, added to `npm test`) — the user
+> scenario now scores 1.18 (was ~0.5), fast random tapping 0.64 (was
+> ~0.9), perfect run reaches 1.5, empty/malformed input safe; live
+> browser runs of the 60s test: word-answerer (classic Stroop error,
+> 25% accuracy) → 0.65, ink-color-answerer (100% accuracy, 610ms) →
+> 1.42. Full suite 4,312 checks green, lint 0, build 0 errors.
+
 > **2026-08-20 (Jeremy + Claude — production perfection pass #2):** Deeper
 > live-Vercel sweep of everything the first pass didn't reach. Every
 > section ran with **0 console errors, 0 uncaught exceptions, 0 failed
