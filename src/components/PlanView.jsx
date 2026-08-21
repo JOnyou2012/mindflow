@@ -49,7 +49,7 @@ function dayInfo(ws, dayName) {
  * Fixed commitments render as solid chips, generated study sessions as tinted,
  * bordered chips. Weeks without generated results still show the calendar grid.
  */
-export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, onRegenerate, planVersion, T }) {
+export default function PlanView({ weekResults, calendarBlocks, isStale, isCalculating, genProgress, onRegenerate, planVersion, T }) {
   // Build all navigable weeks: 2 weeks before today through 8 weeks after.
   // Computed per render (no memo) — it's cheap O(11) date math, and
   // recomputing keeps "today" correct across midnight while the app is open,
@@ -174,14 +174,29 @@ export default function PlanView({ weekResults, calendarBlocks, isStale, isCalcu
         <div className="flex items-center gap-3 rounded-lg border border-mindflow-warning/40 bg-mindflow-warning/10 px-4 py-2.5">
           <AlertTriangle className="w-4 h-4 text-mindflow-warning shrink-0" />
           <p className="text-sm text-mindflow-text flex-1">{T.scheduleChanged}</p>
-          <button
-            type="button"
-            onClick={onRegenerate}
-            disabled={isCalculating}
-            className="flex items-center gap-1.5 rounded-full bg-mindflow-accent px-4 py-1.5 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover disabled:opacity-50"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />{T.regen}
-          </button>
+          {isCalculating ? (
+            <div className="flex items-center gap-2" role="status">
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={genProgress}
+                aria-label={T.generating}
+                className="w-32 h-1.5 rounded-full bg-mindflow-surface-alt overflow-hidden"
+              >
+                <div className="h-full rounded-full bg-mindflow-accent" style={{ width: genProgress + '%' }} />
+              </div>
+              <span className="text-xs text-mindflow-muted tabular-nums">{genProgress}%</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onRegenerate}
+              className="flex items-center gap-1.5 rounded-full bg-mindflow-accent px-4 py-1.5 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />{T.regen}
+            </button>
+          )}
         </div>
       )}
 

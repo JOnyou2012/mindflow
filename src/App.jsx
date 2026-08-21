@@ -72,13 +72,20 @@ export default function App() {
   // Leaving a step resets any active sub-flow
   useEffect(() => { setSubView('overview'); }, [step]);
 
-  // Clean up the generate timer on unmount
+  // Clean up the generate/hold timers on unmount
   useEffect(() => () => {
     if (generateTimerRef.current) clearTimeout(generateTimerRef.current);
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
   }, []);
 
   const dataVersionRef = useRef(0);
   const generateTimerRef = useRef(null);
+  // Reveal-hold timers: generation is near-instant, so the plan reveal is
+  // held for a random 0.5–3s while a progress bar fills (see handleGenerate).
+  const holdTimerRef = useRef(null);
+  const progressTimerRef = useRef(null);
+  const [genProgress, setGenProgress] = useState(0);
   const isStale = Object.keys(weekResults).length > 0 && dataVersionRef.current > 0;
 
   const setCalibration = (cal) => { setCalibrationState(cal); const ok = saveCalibration(cal); if (!ok && cal) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
@@ -101,6 +108,11 @@ export default function App() {
     }
     if (tasks.length === 0) { setError(T.noTasks); return; }
     setIsCalculating(true);
+    // Randomized reveal hold: an instant flip to the plan reads as
+    // "nothing happened". Hold the reveal for a random 0.5–3s while the
+    // progress bar fills, then commit.
+    const holdMs = 500 + Math.random() * 2500;
+    const startedAt = performance.now();
     if (generateTimerRef.current) clearTimeout(generateTimerRef.current);
     generateTimerRef.current = setTimeout(() => {
       generateTimerRef.current = null;
@@ -158,12 +170,27 @@ export default function App() {
         // No post-loop attach needed: on exit, `remaining` is either empty
         // or exactly the last generated week's own unscheduled list, which
         // is already recorded in results.
-        setWeekResults(results);
-        setPlanVersion(v => v + 1);
-        dataVersionRef.current = 0;
-        setIsCalculating(false);
-        if (onDone) onDone();
+        const commit = () => {
+          if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+          if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+          setWeekResults(results);
+          setPlanVersion(v => v + 1);
+          dataVersionRef.current = 0;
+          setIsCalculating(false);
+          setGenProgress(0);
+          if (onDone) onDone();
+        };
+        // Fill the bar over the hold window, then reveal once it elapses.
+        progressTimerRef.current = setInterval(() => {
+          setGenProgress(Math.min(100, Math.round(((performance.now() - startedAt) / holdMs) * 100)));
+        }, 50);
+        const remainingHold = Math.max(0, holdMs - (performance.now() - startedAt));
+        if (remainingHold > 0) holdTimerRef.current = setTimeout(commit, remainingHold);
+        else commit();
       } catch (err) {
+        if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+        if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+        setGenProgress(0);
         console.error('Schedule generation failed:', err, {
           taskCount: tasks.length,
           blockCount: calendarBlocks.length,
@@ -203,6 +230,9 @@ export default function App() {
   // screen. App preferences (theme, language, schedule settings) are kept.
   const goHome = () => {
     if (generateTimerRef.current) { clearTimeout(generateTimerRef.current); generateTimerRef.current = null; }
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+    setGenProgress(0);
     setWeekResults({});
     setIsCalculating(false);
     setError(null);
@@ -338,6 +368,7 @@ export default function App() {
             calendarBlocks={calendarBlocks}
             isStale={isStale}
             isCalculating={isCalculating}
+            genProgress={genProgress}
             onRegenerate={() => handleGenerate()}
             planVersion={planVersion}
             T={T}
@@ -365,16 +396,31 @@ export default function App() {
                 {T.navContinue}
               </button>
             )}
-            {step === 3 && (
+            {step === 3 && (isCalculating ? (
+              <div className="flex items-center gap-3" role="status">
+                <span className="text-sm text-mindflow-muted">{T.generating}</span>
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={genProgress}
+                  aria-label={T.generating}
+                  className="w-48 h-1.5 rounded-full bg-mindflow-surface-alt overflow-hidden"
+                >
+                  <div className="h-full rounded-full bg-mindflow-accent" style={{ width: genProgress + '%' }} />
+                </div>
+                <span className="text-sm text-mindflow-muted tabular-nums w-9 text-right">{genProgress}%</span>
+              </div>
+            ) : (
               <button
                 onClick={() => handleGenerate(() => setStep(4))}
-                disabled={!canGenerate || isCalculating}
+                disabled={!canGenerate}
                 className="rounded-full bg-mindflow-accent px-6 py-2 text-sm font-medium text-mindflow-onaccent hover:bg-mindflow-accent-hover shadow-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Play className="w-4 h-4" />
-                {isCalculating ? T.generating : T.generate}
+                {T.generate}
               </button>
-            )}
+            ))}
           </div>
         )}
         {step === 4 && (

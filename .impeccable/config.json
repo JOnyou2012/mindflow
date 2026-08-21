@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "createdAt": "2026-08-21T15:30:13.973Z",
+        "reason": "user-pinned GCal canon (PRODUCT.md/DESIGN.md: Google Calendar world, Roboto/system stack) + user chose 'Stay GCal-straight' in the 2026-08-21 critique"
+      }
+    ]
+  }
+}
