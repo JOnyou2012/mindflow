@@ -58,7 +58,7 @@
 > **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
 > 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
 >
-> **🎯 Deploy-ready + production-verified (2026-08-20, live Vercel e2e ×2).**
+> **🎯 Deployed + production-verified (2026-08-20, live Vercel e2e ×2).**
 > `https://mindflow-liart.vercel.app/` exercised end-to-end in headless
 > Chrome (full wizard, real 60s Stroop, task flow, plan render,
 > save-as-image, settings, deep links, corrupted-storage resilience,
@@ -69,8 +69,8 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 7 suites (4,312 assertion
-> checks), 0 failures. `npm run build` 0 errors, 0 warnings.
+> All tiers resolved. `npm test` runs 7 suites (3,596 assertion
+> checks — deterministic recount 2026-08-21), 0 failures. `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 > Note: the Render backend (`mindflow-api.onrender.com`) is offline and
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
@@ -301,6 +301,22 @@
 > `frame-src accounts.google.com`). A draft policy was simulated locally on
 > 2026-08-19 and broke both — adjust and re-verify before enabling.
 >
+> **2026-08-21 (Jeremy + Claude — PRD sync for the last 3 commits):**
+> Verified the PRD reflects GitHub commits `15b51be` (Stroop scoring v2),
+> `513dd0c` (production perfection pass #2) and `0261d9d` (production
+> debugging e2e) — all three already carried audit entries + header
+> updates. Consistency pass: master-table Stroop row tagged with scoring
+> v2; both stale "Next: Deploy" lines replaced with the deployed +
+> production-verified status and the remaining optional follow-ups (GCal
+> un-pause, Render redeploy); Part 8 Step 110 / acceptance numbers
+> updated; cumulative-bugs list gained #16 (Stroop v1 unfairness);
+> closing summary updated to 95/95 + Part 8, live URL, 7 suites.
+> **Test-total correction:** a deterministic recount of `npm test`
+> gives 119 + 761 + 1,419 + 924 + 281 + 54 + 38 = **3,596** checks across
+> 7 suites — the "4,274" (6 suites) and "4,312" (7 suites) figures in
+> the 2026-08-20 entries over-counted by 716 and are corrected here.
+> `npm test`: 0 failures; `npm run build`: 0 errors.
+>
 > **2026-08-20 (Jeremy + Claude — Stroop scoring v2, user-reported unfairness):**
 > User report: "only a few wrong and a few slow reactions, but my focus
 > score was 0.5." Analysis confirmed a real flaw in the v1 composite:
@@ -328,7 +344,7 @@
 > ~0.9), perfect run reaches 1.5, empty/malformed input safe; live
 > browser runs of the 60s test: word-answerer (classic Stroop error,
 > 25% accuracy) → 0.65, ink-color-answerer (100% accuracy, 610ms) →
-> 1.42. Full suite 4,312 checks green, lint 0, build 0 errors.
+> 1.42. Full suite 3,596 checks green (recounted 2026-08-21), lint 0, build 0 errors.
 
 > **2026-08-20 (Jeremy + Claude — production perfection pass #2):** Deeper
 > live-Vercel sweep of everything the first pass didn't reach. Every
@@ -398,7 +414,7 @@
 > audited: all relative imports resolve with exact case on a Linux-style
 > filesystem. "Capacity 97%" / "Balance 15.6%" for a single-task week
 > checked against `computeStats` — intentional formulas, not bugs.
-> **Final state:** 6 suites, **4,274** assertion checks, 0 failures;
+> **Final state:** 6 suites, **3,558** assertion checks (corrected 2026-08-21), 0 failures;
 > `npm run build` 0 errors 0 warnings; lint 0. (The header's previous
 > "5 suites, 3,504" predated Part 8's schedule-image suite.)
 
@@ -792,6 +808,8 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 > > set it + re-add the GSI script (steps in index.html comment) to go live.
 > > `npm test` & `npm run build` pass clean (3,481 checks, 0 failures,
 > > deterministic; 0 lint warnings; 0 audit vulns; 0 build warnings).
+> > *(Done — deployed to Vercel 2026-08-14; production-verified by three
+> > live e2e sweeps on 2026-08-20. See the 2026-08-20 audit entries.)*
 >
 > **2026-08-08 (scheduling fix):** Three interrelated fixes to the scheduling engine:
 > **1) Spread-across-day incentive** — the scoring function had a ~0.13-point bias
@@ -862,7 +880,7 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 | **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality | 100% |
 | **14–26** | Scheduler | `src/utils/scheduler.js` — create | ✅ 13/13 — production-quality | 100% |
 | **27–30** | Welcome Screen | `src/components/WelcomeScreen.jsx` — create | ✅ 4/4 — production-quality | 100% |
-| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality | 100% |
+| **31–36** | Stroop Test | `src/components/StroopTestModal.jsx` — create | ✅ 6/6 — production-quality (scoring v2 2026-08-20) | 100% |
 | **37–44** | Task Form | `src/components/TaskInputForm.jsx` — create | ✅ 8/8 — production-quality | 100% |
 | **45–50** | Calendar | `src/components/WeeklyCalendar.jsx` — create | ✅ 6/6 — production-quality | 100% |
 | **51–54** | Chart | `src/components/SessionChart.jsx` — create | ✅ 4/4 — production-quality | 100% |
@@ -951,7 +969,13 @@ TOTAL                           95/95   100%
 >   Calendar pending (code built but removed due to runtime crash)
 >   (code built but removed due to runtime crash)
 >
-> **Next:** Deploy. Google Calendar paused. Image export (Part 8) complete.
+> **Next (2026-08-21):** No unfinished core steps — 95/95 + Part 8 done. The
+> app is deployed and production-verified at
+> `https://mindflow-liart.vercel.app/` (three 2026-08-20 e2e sweeps, 0
+> console errors / 0 exceptions / 0 failed requests; Stroop scoring v2
+> shipped). Optional follow-ups: un-pause Google Calendar (set
+> `VITE_GOOGLE_CLIENT_ID` + re-add the GSI script, see Part 7), redeploy the
+> Render backend via `render.yaml`, or start new features.
 
 ---
 
@@ -3207,6 +3231,7 @@ This PRD incorporates fixes for every known bug from previous iterations:
 13. **Arabic export text clipped off-canvas** — `direction="rtl"` on the SVG root flips `text-anchor="start"` to the right edge, pushing left-anchored labels (week header, stats, chip labels) outside the canvas (0 visible glyph pixels). Removed the attribute; Arabic shapes RTL via the bidi algorithm without it (found 2026-08-19 during hardening round 2; empirically verified before/after)
 14. **Malformed session objects emit NaN coordinates** — sessions without `startTick`/`endTick` produced `y="NaN"` in the SVG, breaking document geometry. Guarded with `Number(x) || 0` (found during hardening re-review)
 15. **Logo "home" skipped the wizard start for calibrated users** — `goHome` used `setStep(calibration ? 2 : 1)`, so returning users landed on Schedule (step 2) instead of the beginning. Home is now a FRESH start, exactly like first launch: wipes the wizard's data (calibration, tasks, calendar, Google-import cache, generated plan) and lands on step 1 with the Stroop start screen. App preferences (theme, language, schedule settings) are kept (found 2026-08-19 by user testing; reproduced and verified in-browser)
+16. **Stroop scoring v1 unfair to careful users (user-reported)** — slowness was triple-counted (mean → speed, SD → consistency, >1.5s → lapse) and the interference penalty dominated, so a user at ~95% accuracy / ~750ms / a few lapses scored alpha ≈ 0.5 while fast random keypresses (~30% accuracy) scored ≈ 0.9 — an inverted fairness curve; the /55 divisor also made 1.5 mathematically unreachable. Rebuilt as scoring v2 in the pure module `src/utils/stroopScoring.js`: accuracy-dominant (50/85 pts), speed/consistency on correct trials only, median RT, accuracy-gated speed credit, capped penalties, linear 0.5–1.5 mapping. The user's scenario now scores 1.18, random tapping 0.64, a perfect run 1.5; 38 new unit tests (found 2026-08-20 by user report; see audit entry)
 
 ---
 
@@ -3470,7 +3495,7 @@ standard web equivalent of "save to desktop".
 **Step 107** ✅ — `tests/schedule-image.test.js` (Node, 54 assertions): SVG contains week labels, task titles, correct chip y-positions from ticks, day columns; escaping of `&`/`<`/quotes; filename format; empty-plan handling; deterministic output for a fixed palette; hardening edge cases (today/past highlighting, multi-week gap geometry, malformed sessions, hostile week keys, no-stats weeks, Arabic bidi without direction flip)
 **Step 108** ✅ — new suite added to the `npm test` chain in `package.json`
 **Step 109** ✅ — PRD: steps 101–108 checked off, changelog entry, progress header
-**Step 110** ✅ — full verification: `npm test` (4,274 assertions across 6 suites, 0 failures), `npm run lint` (0 warnings), `npm run build` green, plus end-to-end browser verification (light + dark themes, Arabic RTL, multi-week portrait, picker branches — all pixel-checked)
+**Step 110** ✅ — full verification: `npm test` (3,558 assertions across 6 suites at the time; now 7 suites / 3,596 checks after the Stroop scoring v2 suite joined `npm test` on 2026-08-20, 0 failures), `npm run lint` (0 warnings), `npm run build` green, plus end-to-end browser verification (light + dark themes, Arabic RTL, multi-week portrait, picker branches — all pixel-checked)
 
 ## Acceptance criteria
 
@@ -3478,7 +3503,7 @@ standard web equivalent of "save to desktop".
 - Chromium opens the OS save dialog (Desktop selectable); Safari/Firefox downloads to the default folder ✅ (e2e used the `<a download>` fallback; the picker path is feature-gated on `navigator.webdriver !== true`)
 - Task titles containing HTML special characters render literally ✅ (unit-tested + e2e: `Physics & Lab report`, `Read <chapter 5>`, `Essay "first draft"`)
 - Works in all 6 languages including Arabic (RTL) and in dark theme ✅ (unit: `direction="rtl"` for `ar`; e2e: dark theme exported `#131314` background, pixel-verified)
-- 0 new dependencies; lint 0 warnings; full test suite green ✅ (4,274 assertions, 6 suites)
+- 0 new dependencies; lint 0 warnings; full test suite green ✅ (3,596 assertions, 7 suites — the 2026-08-20 Stroop scoring v2 suite joined after Part 8 shipped)
 
 ---
 
@@ -3490,7 +3515,10 @@ standard web equivalent of "save to desktop".
 > type-based colors + extended properties. Duplicate-safe, batched, unsync-capable.
 > All ~2,135 existing tests pass, build 0 errors.
 >
-> **85 core steps = 100% complete. All audits resolved. Production-hardened.**
-> Stage 5 (Google Calendar) paused. Deploy-ready.
+> **95/95 core steps + Part 8 (10/10) = 100% complete. All audits resolved.
+> Deployed + production-verified — live at `https://mindflow-liart.vercel.app/`
+> (three 2026-08-20 e2e sweeps: 0 console errors, 0 exceptions, 0 failed
+> requests; Stroop scoring v2 shipped). Stage 5 (Google Calendar) paused.
+> `npm test`: 7 suites, 3,596 checks, 0 failures.**
 >
 > **Every session**: *"Check the checklist. npm test && npm run build."*
