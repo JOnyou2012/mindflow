@@ -10,7 +10,8 @@
 
 import {
   calculateMarkovTimeline, findBurnoutTick, optimizeWithBreak,
-  computeRecoveryState, computeAttentionResidue, computeCognitiveCapacity,
+  computeOptimalBreakDuration, computeRecoveryState,
+  computeAttentionResidue, computeCognitiveCapacity,
 } from '../src/utils/markovEngine.js';
 
 let passed = 0, failed = 0;
@@ -274,6 +275,95 @@ for (let i = 0; i < 20; i++) {
     assert(p.flow >= 0 && p.flow <= 1, `N10d: flow in [0,1]: ${p.flow}`);
   }
 }
+
+// ===========================================================================
+// 11. v6 Realism calibration
+// ===========================================================================
+// v6 retuned the engine so curves match real-life cognitive behavior:
+// a normal person doing a normal task stays mostly in flow; circadian
+// timing (γ), difficulty (β) and calibration (α) all produce visible,
+// ordered effects; and burnout breaks are realistic (15-30 min), not 60.
+// These tests lock in the v6 calibration targets.
+
+console.log('\n📋 11. v6 Realism calibration');
+
+// R11.1: Normal session sanity — v5 ended a 60-min β=3 task at flow 0.11 /
+// fatigue 0.52. A normal hour of work should keep flow > 50% and fatigue < 30%.
+const rNormal60 = calculateMarkovTimeline(1.0, 3, 1.0, 6);
+assert(rNormal60[6].flow > 0.5, `R11.1a: 60min normal task keeps flow > 0.5 (${rNormal60[6].flow.toFixed(3)})`);
+assert(rNormal60[6].fatigue < 0.3, `R11.1b: 60min normal task fatigue < 0.3 (${rNormal60[6].fatigue.toFixed(3)})`);
+assert(findBurnoutTick(rNormal60, 0.50) === -1,
+  'R11.1c: 60min normal task does not trigger burnout');
+
+// R11.2: Circadian channel must be alive — v5's clamp() pinned γ≥1 to exactly
+// 1.0, making 10am and 10pm curves bit-identical. γ=1.25 must now be
+// substantially worse than γ=1.0, and γ=0.7 (sports at peak time) better.
+const rG10 = calculateMarkovTimeline(1.0, 3, 1.0, 9);
+const rG125 = calculateMarkovTimeline(1.0, 3, 1.25, 9);
+const rG07 = calculateMarkovTimeline(1.0, 3, 0.7, 9);
+assert(rG125[9].fatigue > rG10[9].fatigue * 1.5,
+  `R11.2a: γ=1.25 fatigue ≥ 1.5× γ=1.0 (${(rG125[9].fatigue / rG10[9].fatigue).toFixed(2)}×)`);
+assert(rG07[9].fatigue < rG10[9].fatigue,
+  `R11.2b: γ=0.7 fatigue < γ=1.0 (${rG07[9].fatigue.toFixed(3)} < ${rG10[9].fatigue.toFixed(3)})`);
+assert(rG125[9].flow < rG10[9].flow,
+  'R11.2c: bad timing also costs flow');
+
+// R11.3: Difficulty ordering — harder tasks must produce strictly more
+// fatigue at the same duration (v5 left β out of the Distracted row, so
+// β=1 and β=5 sessions looked nearly identical).
+let rPrevFatigue = -1;
+let rDiffMonotonic = true;
+for (const b of [1, 2, 3, 4, 5]) {
+  const f = calculateMarkovTimeline(1.0, b, 1.0, 9)[9].fatigue;
+  if (f <= rPrevFatigue) rDiffMonotonic = false;
+  rPrevFatigue = f;
+}
+assert(rDiffMonotonic, 'R11.3: fatigue at 90 min strictly increases with difficulty β=1→5');
+
+// R11.4: Calibration ordering — lower α (worse Stroop score) tires faster
+const rA07 = calculateMarkovTimeline(0.7, 4, 1.0, 9)[9].fatigue;
+const rA10 = calculateMarkovTimeline(1.0, 4, 1.0, 9)[9].fatigue;
+const rA13 = calculateMarkovTimeline(1.3, 4, 1.0, 9)[9].fatigue;
+assert(rA07 > rA10 && rA10 > rA13, 'R11.4: fatigue decreases as α improves (0.7 > 1.0 > 1.3)');
+
+// R11.5: Hard 2-hour task burns out — the break feature must fire for the
+// hardest typical session (v6 tuning target)
+const rHard2h = calculateMarkovTimeline(1.0, 5, 1.0, 12);
+assert(findBurnoutTick(rHard2h, 0.50) > 0, 'R11.5: 2h β=5 task triggers burnout');
+
+// R11.6: Moderate 2.5h task does NOT burn out — β=2 should stay comfortable
+const rMod = calculateMarkovTimeline(1.0, 2, 1.0, 15);
+assert(findBurnoutTick(rMod, 0.50) === -1, 'R11.6: 2.5h β=2 task stays below burnout');
+assert(rMod[15].fatigue < 0.25, `R11.6b: moderate task stays fresh (${rMod[15].fatigue.toFixed(3)})`);
+
+// R11.7: Flow collapse visible in marathons — flow at 3h must be well below 2h
+const rMarathon = calculateMarkovTimeline(1.0, 4, 1.0, 18);
+assert(rMarathon[18].flow < rMarathon[12].flow * 0.7,
+  `R11.7: flow collapses after 2h in a marathon (2h:${rMarathon[12].flow.toFixed(3)}, 3h:${rMarathon[18].flow.toFixed(3)})`);
+
+// R11.8: Break realism — a burnout break for a mid-session burnout should be
+// 10-30 minutes, not the v5 60-minute default
+const rBreakSession = calculateMarkovTimeline(0.8, 4, 1.15, 18);
+const rBreakTick = findBurnoutTick(rBreakSession, 0.50);
+if (rBreakTick > 0) {
+  const rBreakLen = computeOptimalBreakDuration(rBreakSession, rBreakTick, 0.30);
+  assert(rBreakLen >= 10 && rBreakLen <= 30,
+    `R11.8: optimal break in [10,30] min (${rBreakLen})`);
+  const rOpt = optimizeWithBreak(0.8, 4, 1.15, 18, rBreakTick, rBreakLen);
+  assert(rOpt.optimized[rOpt.optimized.length - 1].fatigue < rBreakSession[rBreakSession.length - 1].fatigue,
+    'R11.8b: taking the break lowers end-of-session fatigue');
+}
+
+// R11.9: Even trivial tasks cost SOME fatigue (v6 floor)
+const rEasy = calculateMarkovTimeline(1.0, 1, 1.0, 6);
+assert(rEasy[6].fatigue > 0.01,
+  `R11.9: 60min β=1 task still costs fatigue > 1% (${rEasy[6].fatigue.toFixed(3)})`);
+
+// R11.10: Recovery converts most regained capacity to flow (v5 parked ~35%
+// of post-break state in the Recovery pool)
+const rRec = computeRecoveryState([0.5, 0.2, 0.3, 0.0], 15);
+assert(rRec[0] > rRec[2], `R11.10: post-break flow > fatigue (${rRec.map(x => x.toFixed(2)).join(',')})`);
+assert(rRec[3] < 0.15, `R11.10b: recovery pool stays small (${rRec[3].toFixed(3)})`);
 
 // ===========================================================================
 // Done

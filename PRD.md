@@ -69,13 +69,35 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 7 suites (3,596 assertion
-> checks — deterministic recount 2026-08-21), 0 failures. `npm run build` 0 errors, 0 warnings.
+> All tiers resolved. `npm test` runs 7 suites (3,613 assertion
+> checks — deterministic recount 2026-08-22, engine v6 +17), 0 failures.
+> `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 > Note: the Render backend (`mindflow-api.onrender.com`) is offline and
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
+>
+> **2026-08-22 (Jeremy + Claude — Markov engine v6 realism retune):**
+> The engine's cognitive curves were not real-life sensible. Five defects
+> fixed in `src/utils/markovEngine.js` (see Part 3 + bug-fix entry #17):
+> (1) the circadian channel was DEAD — `clamp()` pinned every γ≥1.0 to
+> exactly 1.0, so 10am and 10pm curves were bit-identical (now clamped to
+> [0.5, 2.0] and γ also acts on flow retention — γ=1.25 now produces
+> ≥1.5× the fatigue of γ=1.0); (2) instant burnout — a normal 60-min
+> β=3 task ended at flow 11% / fatigue 52%, and even β=1 hit 48% (all
+> modifiers recentered so α=1.0/β=3/γ=1.0 is neutral ×1.0; the same task
+> now ends at flow 67% / fatigue 20%); (3) difficulty was nearly
+> invisible — β now also scales Distracted→Fatigue and the escape rate
+> (90-min fatigue: β=5 → 46%, β=1 → 5%); (4) every burnout recommended a
+> 60-min break (now 10–30 min typical); (5) drain was keyed to session
+> *fraction* (a 60-min task half-drained by minute 30) — now absolute
+> time with a 2h midpoint, plus a visible ~2h flow-collapse tipping
+> point, a gentler warmup, and post-break recovery that converts 85% of
+> regained capacity to flow. Burnout hierarchy now matches real life:
+> β=5 burns out at 2h, β=4 marathon ≈2h20m, β=3 ≈2h50m, β=2 never.
+> 17 new regression tests (`tests/engine-v3.test.js` §11) lock in the
+> calibration; all 7 suites green, lint 0, build 0 errors.
 >
 > **2026-08-11/12 (Jeremy — production hardening sprint):** Three-pass
 > comprehensive audit + fix cycle across all 20 source files, config, build
@@ -316,6 +338,19 @@
 > 7 suites — the "4,274" (6 suites) and "4,312" (7 suites) figures in
 > the 2026-08-20 entries over-counted by 716 and are corrected here.
 > `npm test`: 0 failures; `npm run build`: 0 errors.
+>
+> **2026-08-22 (Jeremy + Claude — PRD sync for the Markov engine v6
+> realism retune):** The engine's curves were probed against real-life
+> scenarios and found unrealistic in five compounding ways (dead
+> circadian channel, burnout in ~50 min for every task, β=1 ≈ β=5,
+> 60-min breaks for every burnout, drain keyed to session fraction).
+> `markovEngine.js` retuned to v6 — Part 3 (Math Model) rewritten with
+> the v6 formulas + measured calibration targets, cumulative-bugs list
+> gained #17, TIER 5 audit section annotated, master table row updated.
+> `tests/engine-v3.test.js` gained §11 (17 realism regression tests) —
+> the engine suite went 924 → 941, so the deterministic recount is now
+> 119 + 761 + 1,419 + **941** + 281 + 54 + 38 = **3,613** checks.
+> `npm test`: 0 failures; `npm run build`: 0 errors; lint 0.
 >
 > **2026-08-20 (Jeremy + Claude — Stroop scoring v2, user-reported unfairness):**
 > User report: "only a few wrong and a few slow reactions, but my focus
@@ -752,6 +787,14 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 >
 > ### ⚪ TIER 5 — Markov Engine (low impact, math is already solid) ✅ ALL FIXED (2026-08-11)
 >
+> **2026-08-22 v6 realism retune** — the 2026-08-11 audit cleared the engine's
+> numerical safety, but a realism probe found its *curves* were not real-life
+> sensible (dead circadian channel, burnout in ~50 min for every task,
+> β=1 ≈ β=5, 60-min breaks for every burnout, fraction-based drain). Full
+> retune in `markovEngine.js` — see Part 3 (Math Model v6), bug-fix entry #17,
+> and the 2026-08-22 audit note at the top. 17 new §11 regression tests;
+> 3,613 total assertions green.
+>
 > **E1 — Binary search lower bound prevents convergence**: ✅ **FIXED.**
 > Changed `lo = 1` to `lo = 0`, allowing sub-1-minute break convergence.
 >
@@ -875,7 +918,7 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 
 | Step # | Section | What | Status | % |
 |--------|---------|------|--------|---|
-| **1–6** | Markov Engine | `src/utils/markovEngine.js` — verify & fix | ✅ 6/6 — production-quality | 100% |
+| **1–6** | Markov Engine | `src/utils/markovEngine.js` — verify & fix | ✅ 6/6 — production-quality (v6 realism retune 2026-08-22) | 100% |
 | **7–9** | Stylesheet | `src/index.css` — append 6 style blocks | ✅ 3/3 — production-quality | 100% |
 | **10–13** | localStorage | `src/utils/storage.js` — create | ✅ 4/4 — production-quality | 100% |
 | **14–26** | Scheduler | `src/utils/scheduler.js` — create | ✅ 13/13 — production-quality | 100% |
@@ -1059,7 +1102,7 @@ The dashboard shows a yellow banner: *"Schedule is out of date. Regenerate?"*
 
 ---
 
-# Part 3: Math Model (v2 — Non-Linear Dynamics)
+# Part 3: Math Model (v6 — Realism-Calibrated Non-Linear Dynamics)
 
 ## Brain States
 
@@ -1070,7 +1113,30 @@ The dashboard shows a yellow banner: *"Schedule is out of date. Regenerate?"*
 | **Fatigue** | Mental burnout | 🔴 `#ef4444` |
 | **Recovery** | Taking a break | (gap to 100%) |
 
-## Sigmoidal Transition Modifiers (v2)
+## v6 Realism Calibration Targets (2026-08-22)
+
+v5's curves were unrealistic: a normal 60-minute task ended at flow 11% /
+fatigue 52% (burnout in ~50 min for everything), circadian γ>1 was silently
+clamped to 1.0 (10am and 10pm curves were identical), and every burnout
+recommended a 60-minute break. v6 retuned the engine so that, for the
+**average user (α=1.0), average task (β=3), average time (γ=1.0)**:
+
+| Session time | Flow | Fatigue | Burnout |
+|--------------|------|---------|---------|
+| 30 min | ≈ 0.76 | ≈ 0.12 | no |
+| 60 min | ≈ 0.67 | ≈ 0.20 | no |
+| 90 min | ≈ 0.60 | ≈ 0.23 | no |
+| 120 min | ≈ 0.50 | ≈ 0.30 | no |
+| 180 min | ≈ 0.24 | ≈ 0.56 | yes (~tick 17, ≈2h50) |
+
+Difficulty ordering (90-min sessions): β=5 ends ≈ 46% fatigue, β=4 ≈ 40%,
+β=3 ≈ 23%, β=2 ≈ 7%, β=1 ≈ 5%. β=5 for 2h burns out (tick 12); β=4 marathon
+burns out ≈ 2h20m; β=2 never does.
+γ=1.25 (circadian trough) produces ≥1.5× the fatigue of γ=1.0; γ=0.7
+(sports at peak time) is restorative. A burnout break is now 10–30 min.
+These targets are locked in by `tests/engine-v3.test.js` §11.
+
+## Sigmoidal Transition Modifiers (v6)
 
 Transition probabilities follow **logistic (sigmoid) curves**, not linear scaling:
 
@@ -1078,12 +1144,21 @@ Transition probabilities follow **logistic (sigmoid) curves**, not linear scalin
 σ(x; x₀, k) = 1 / (1 + e^(−k(x − x₀)))
 ```
 
-| Modifier | Sigmoid Center | Steepness | Range |
-|----------|---------------|-----------|-------|
-| `alphaFlowMod` | α = 1.0 | k = 5.0 | Strong anchor near baseline |
-| `alphaRecoveryMod` | α = 1.0 | k = 3.5 | Gentler recovery slope |
-| `betaFatigueMod` | β = 3.0 | k = 1.2 | Tipping point for hard tasks |
-| `betaDistractMod` | β = 3.5 | k = 1.5 | Harder to trigger distraction |
+v6 recenters every modifier on the **population neutral point** (α=1.0, β=3,
+γ=1.0 → multiplier exactly 1.0). v5 centered `alphaFlowMod` at 0.75, which
+penalized the average user with a 27% flow-retention hit.
+
+| Modifier | Formula (v6) | Neutral | Range |
+|----------|--------------|---------|-------|
+| `alphaFlowMod` | `1 + 0.35·(σ(α; 1.0, 4.0) − 0.5)·2` | α=1.0 → 1.0 | [0.73, 1.27] at α=[0.5,1.5] |
+| `alphaRecoveryMod` | `1 + 0.25·(σ(α; 1.0, 3.5) − 0.5)·2` | α=1.0 → 1.0 | [0.82, 1.18] |
+| `betaFatigueMult` | `max(0.35, 2·σ(β; 3.0, 1.5))` | β=3 → 1.0 | [0.35, 1.91] |
+| `betaDistractMult` | `2·σ(β; 3.2, 1.5)` | β≈3 → 0.85 | [0.07, 1.87] |
+
+v6 additions: `betaFatigueMult` also scales **Distracted→Fatigue** (v5 left β
+out of that row, so β=1 and β=5 sessions looked nearly identical), and
+`fatigueEscapeMult = 1/(0.6 + 0.4·betaFatigueMult)` makes climbing out of
+fatigue fast during easy tasks and slow during hard ones.
 
 **Why sigmoidal?** A 5% change in difficulty near your limit (β=4→5) has a much larger
 effect than the same change near your comfort zone (β=1→2). Linear modifiers can't
@@ -1091,19 +1166,22 @@ capture this tipping-point behavior.
 
 ## Base Transition Matrix (every 10 minutes)
 
+v6 recalibrated to per-10-min attention retention: a focused person loses only
+a few percent of flow per window, distraction is the minority state.
+
 ```
 FROM \ TO     Flow   Distracted  Fatigue  Recovery
-Flow           0.80     0.15       0.05     0.00
-Distracted     0.20     0.60       0.20     0.00
-Fatigue        0.05     0.15       0.80     0.00
-Recovery       0.70     0.10       0.00     0.20
+Flow           0.90     0.055      0.045    0.00
+Distracted     0.25     0.59       0.16     0.00
+Fatigue        0.05     0.12       0.80     0.03
+Recovery       0.65     0.10       0.02     0.23
 ```
 
 Each cell is modified by sigmoidal functions (not linear multiplication), then
-rows are normalized. Matrix is **rebuilt every tick** to incorporate warmup and
-state-dependent gamma.
+rows are normalized. Matrix is **rebuilt every tick** to incorporate warmup,
+state-dependent gamma, momentum, capacity and drain.
 
-## State-Dependent Circadian Sensitivity (v2)
+## State-Dependent Circadian Sensitivity (v6)
 
 Gamma effect is **amplified by current fatigue**:
 
@@ -1115,14 +1193,44 @@ When P(Fatigue) = 0: γ_eff = γ (baseline circadian effect)
 When P(Fatigue) = 0.5: γ_eff ≈ γ × 1.3 (30% stronger)
 Being tired at a bad time of day is worse than the sum of its parts.
 
-## Flow-Entry Warmup (v2)
+v6 fixes and extensions:
+- `γ_eff` is clamped to **[0.5, 2.0], not [0, 1]** — v5's `clamp()` pinned every
+  γ≥1.0 to exactly 1.0, killing the entire circadian channel (10am ≡ 10pm).
+- γ also acts on **flow retention**: `Flow→Flow ×= (2 − γ_eff)` and
+  `Distracted→Flow ×= (2 − γ_eff)`. Alertness affects attention *stability*,
+  not only fatigue accumulation. At γ=1.25, retention drops to 75%; at γ=0.7
+  (sports at peak time) retention rises to 130%.
 
-First 30 minutes (3 ticks) have reduced flow retention:
+## Flow-Entry Warmup (v6)
+
+First 30 minutes (3 ticks) have gently reduced flow retention:
 ```
-warmup(t) = 0.70 + 0.30 × (1 − e^(−t / 1.5))
+warmup(t) = 0.85 + 0.15 × (1 − e^(−t / 2.0))
 ```
-At t=0: 70% flow retention → simulating attention ramp-up
-At t=3: ~92% → nearly warmed up
+At t=0: 85% flow retention → simulating attention ramp-up
+At t=3: ≈ 100% → warmed up
+(v5 used 0.70/1.5, dropping 40% of flow in the first 10 minutes — the
+freshest minutes of a session were the worst; unrealistic.)
+
+## Temporal Cognitive Drain (v6: absolute time)
+
+Drain is a sigmoid keyed to **absolute session ticks**, midpoint at 2 hours:
+```
+drain(t) = σ(t; 12 ticks, 0.5)
+flowErosion = 1 − 0.35·drain(t)
+fatigueGravity = 1 + 0.65·drain(t)
+recoveryResistance = 1 − 0.35·drain(t)
+```
+A 60-minute task experiences almost no drain (≈5% at 1h); a 3h marathon gets
+the full decline (≈95% at 3h). v5 keyed drain to session *fraction*, so a
+60-minute task got half its drain by minute 30.
+
+## Flow Inertia & Collapse (v6)
+
+Flow retention strengthens with consecutive flow ticks (+6%/tick, max 1.6×),
+then collapses after ~2h: `collapseRisk = σ(streak − 12; 3, 0.6)`, weighted
+at 0.9 so the tipping point actually overpowers inertia (v5's 0.3/0.7 kept
+the net anchor at ≈1.04 — the collapse was invisible).
 
 ## Parameters
 
@@ -1157,16 +1265,30 @@ S(t_awake, t_break) = (1 − e^(−t_awake / 14.4h)) × e^(−t_break / 2.0h)
 
 **Combined Alertness:** `A = C − 0.5 × S`
 
-## Optimal Break Computation (v2)
+## Optimal Break Computation (v6)
 
-Recovery follows exponential decay:
+Recovery follows biexponential decay:
 ```
-F'(t_break) = F × e^(−t_break / 120min)
-t_break = −120 × ln(F_target / F_current)
+R(t) = 0.4·e^(−t / 2min) + 0.6·e^(−t / 120min)
 ```
+Inverted by binary search for `F_target / F_current`, then scaled by
+intervention effectiveness:
+```
+effectiveness = 1 − σ(fatigue; 0.55, 8.0)
+recoveryCapacity = max(0.6, flow × 0.8 + 0.2)
+t_break = t_raw / (effectiveness × recoveryCapacity)
+```
+clamped to [5, 60] min, rounded to nearest 5.
 
-Scaled by recovery capacity (flow-dependent), clamped to [5, 60] min,
-rounded to nearest 5.
+v6 changes: intervention midpoint 0.40→0.55 (a break at typical burnout
+fatigue ≈0.5 stays ~55% effective instead of ~25%) and a recovery-capacity
+floor of 0.6 (v5 compounded both penalties and recommended 60-min breaks for
+every burnout). Typical recommendation: **15–25 min**.
+
+Post-break conversion (v6): 85% of recovered capacity converts to flow
+(60% when flow was low), sensitivity floor 0.35, and 70% of recovered
+distraction converts to flow. v5 parked most recovered capacity in the
+"Recovery" pool (up to 35% of the state 30 min after a task ended).
 
 ## Cumulative Cognitive Strain (v2)
 
@@ -1192,14 +1314,16 @@ carryover = strain_prev × 0.30 × e^(−8h / 2.0h)
   bonus (flow inertia makes longer blocks more efficient).
 - **Deadline pressure:** Tasks due within 2 days get up to 20% alpha boost.
 
-## Simulation Steps (v2)
+## Simulation Steps (v6)
 
-1. Build sigmoidal transition matrix P(t) accounting for warmup and current fatigue
+1. Build sigmoidal transition matrix P(t) accounting for warmup, fatigue,
+   momentum, capacity, drain and state-dependent γ (all v6-centered)
 2. Normalize rows to sum = 1.0
 3. Start at `v = [1.0, 0, 0, 0]` (or custom initial state for cumulative fatigue)
 4. Iterate `v(t+1) = v(t) × P(t)` — matrix rebuilt each tick
-5. **Burnout** = P(Fatigue) > 50% → compute optimal break via recovery inversion
-6. Post-break: compute recovery state via exponential decay, continue simulating
+5. **Burnout** = P(Fatigue) > 50% → compute optimal break via biexponential inversion
+6. Post-break: compute recovery state via biexponential decay, continue simulating
+   with a partially reset drain (`drainTick = startTick × fatigue/0.5 + t`)
 
 ## Work-Type Fatigue Profiles
 
@@ -3232,6 +3356,12 @@ This PRD incorporates fixes for every known bug from previous iterations:
 14. **Malformed session objects emit NaN coordinates** — sessions without `startTick`/`endTick` produced `y="NaN"` in the SVG, breaking document geometry. Guarded with `Number(x) || 0` (found during hardening re-review)
 15. **Logo "home" skipped the wizard start for calibrated users** — `goHome` used `setStep(calibration ? 2 : 1)`, so returning users landed on Schedule (step 2) instead of the beginning. Home is now a FRESH start, exactly like first launch: wipes the wizard's data (calibration, tasks, calendar, Google-import cache, generated plan) and lands on step 1 with the Stroop start screen. App preferences (theme, language, schedule settings) are kept (found 2026-08-19 by user testing; reproduced and verified in-browser)
 16. **Stroop scoring v1 unfair to careful users (user-reported)** — slowness was triple-counted (mean → speed, SD → consistency, >1.5s → lapse) and the interference penalty dominated, so a user at ~95% accuracy / ~750ms / a few lapses scored alpha ≈ 0.5 while fast random keypresses (~30% accuracy) scored ≈ 0.9 — an inverted fairness curve; the /55 divisor also made 1.5 mathematically unreachable. Rebuilt as scoring v2 in the pure module `src/utils/stroopScoring.js`: accuracy-dominant (50/85 pts), speed/consistency on correct trials only, median RT, accuracy-gated speed credit, capped penalties, linear 0.5–1.5 mapping. The user's scenario now scores 1.18, random tapping 0.64, a perfect run 1.5; 38 new unit tests (found 2026-08-20 by user report; see audit entry)
+17. **Markov engine v5 curves were not real-life sensible (2026-08-22, v6 retune)** — five compounding defects made the schedule's cognitive curves unrealistic:
+   - **Circadian channel dead:** `gammaMod = clamp(effectiveGamma)` capped the modifier at 1.0, so every γ≥1.0 (i.e. all non-sports sessions at any time of day) behaved identically — a 10am and 10pm curve were bit-identical. Now clamped to [0.5, 2.0], and γ also acts on flow retention (`× (2 − γ_eff)`).
+   - **Instant burnout:** base retention 0.80 × `alphaFlowMod` (0.73 at the population mean α=1.0) pushed a normal 60-min task to flow 11% / fatigue 52% — burnout in ~50 min for everything, even β=1 tasks (48%). All modifiers recentered on neutral (α=1.0, β=3, γ=1.0 → ×1.0), base matrix recalibrated (Flow 0.90/0.055/0.045; Distracted 0.25/0.59/0.16).
+   - **Difficulty invisible:** β scaled only Flow→Fatigue, so β=1 and β=5 sessions looked nearly identical; β now also scales Distracted→Fatigue and the escape-from-fatigue rate (β=5 at 90 min now ends 46% fatigue vs β=1 at 5%).
+   - **60-min breaks for every burnout:** intervention midpoint 0.40 + a 0.3 recovery-capacity floor compounded to recommend the 60-min clamp for every mid-session burnout; midpoint moved to 0.55, floor to 0.6 → typical break 15–25 min.
+   - **Drain keyed to session fraction:** a 60-min task got half its drain by minute 30; drain is now keyed to absolute session time with a 2h midpoint. Warmup softened (0.85 floor), flow-collapse weight raised so the ~2h tipping point is actually visible, and post-break conversion now sends 85% of recovered capacity to flow instead of parking it in the Recovery pool. 17 new regression tests (`tests/engine-v3.test.js` §11) lock in the calibration targets; all ~3,300 existing assertions still pass.
 
 ---
 
