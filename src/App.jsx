@@ -14,6 +14,10 @@ import {
 } from './utils/storage.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
+// Last commit hash + commit time (UTC), injected at build time via vite
+// define — the footer watermark that identifies the deployed build.
+const BUILD_STAMP = __BUILD_STAMP__;
+
 // Compute this week's Monday as ISO date string (timezone-safe)
 function getWeekMonday() {
   const now = new Date();
@@ -437,6 +441,12 @@ export default function App() {
 
       <footer className="border-t border-mindflow-border px-6 py-4">
         <p className="text-center text-xs text-mindflow-muted">{T.appFooter}</p>
+        <p
+          className="text-center text-[10px] text-mindflow-muted/70 tabular-nums mt-0.5"
+          title="Last commit at build time"
+        >
+          {BUILD_STAMP}
+        </p>
       </footer>
 
       {/* ── Settings dialog ── */}
