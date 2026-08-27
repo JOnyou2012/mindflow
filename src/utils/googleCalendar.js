@@ -20,6 +20,30 @@ function timeoutSignal(ms) {
   return controller.signal;
 }
 
+/**
+ * Backoff delay from a 429 response's Retry-After header (PRD step 93).
+ * Accepts both header forms — delta-seconds ("5") and HTTP-date
+ * ("Fri, 31 Dec 1999 23:59:59 GMT"). Falls back to 5s when the header is
+ * missing/unparseable, clamped to [1s, 30s] so a malformed value can never
+ * hang or hammer the API.
+ */
+export function retryDelayFrom(response, fallbackMs = 5000) {
+  const header = response?.headers?.get?.('Retry-After');
+  if (typeof header === 'string' && header.trim() !== '') {
+    if (/^\d+$/.test(header.trim())) {
+      const seconds = Number(header.trim());
+      if (Number.isFinite(seconds)) return Math.max(1000, Math.min(30000, seconds * 1000));
+    } else {
+      const t = Date.parse(header);
+      if (!Number.isNaN(t)) {
+        const delta = t - Date.now();
+        if (delta > 0) return Math.max(1000, Math.min(30000, delta));
+      }
+    }
+  }
+  return fallbackMs;
+}
+
 // -- Type inference (keyword-based) -------------------------------------------
 
 const TYPE_KEYWORDS = {
@@ -39,26 +63,15 @@ function inferType(event) {
 // -- Import: Google Calendar events → MindFlow CalendarBlocks -----------------
 
 /**
- * Fetch events from the user's primary calendar for a given week.
+ * Fetch the user's calendar list (multi-calendar support — PRD step 91).
+ * Only calendars the token can actually read events from are returned:
+ * freeBusyReader/none can only see busy/free, never event details.
  *
- * @param {string} accessToken  OAuth access token
- * @param {string} weekStartISO ISO date string for Monday of the target week
- * @returns {Promise<{ blocks: CalendarBlock[], eventCount: number, calendarName: string }>}
+ * @param {string} accessToken OAuth access token
+ * @returns {Promise<Array<{ id, summary, backgroundColor, primary, selected }>>}
  */
-export async function fetchWeekEvents(accessToken, weekStartISO) {
-  // Compute Mon 00:00 to Sun 23:59 in the user's local timezone
-  const weekStart = new Date(weekStartISO + 'T00:00:00');
-  const weekEnd = new Date(weekStartISO + 'T00:00:00');
-  weekEnd.setDate(weekEnd.getDate() + 7);
-
-  const timeMin = weekStart.toISOString();
-  const timeMax = weekEnd.toISOString();
-
-  const url = new URL(CALENDAR_API + '/calendars/primary/events');
-  url.searchParams.set('timeMin', timeMin);
-  url.searchParams.set('timeMax', timeMax);
-  url.searchParams.set('singleEvents', 'true');
-  url.searchParams.set('orderBy', 'startTime');
+export async function fetchCalendarList(accessToken) {
+  const url = new URL(CALENDAR_API + '/users/me/calendarList');
   url.searchParams.set('maxResults', '250');
 
   const response = await fetch(url.toString(), {
@@ -70,17 +83,110 @@ export async function fetchWeekEvents(accessToken, weekStartISO) {
     if (response.status === 401) throw new Error('token_expired');
     if (response.status === 403) throw new Error('permission_denied');
     if (response.status === 429) throw new Error('rate_limited');
-    throw new Error(`Calendar API error: ${response.status}`);
+    throw new Error(`CalendarList API error: ${response.status}`);
   }
 
   const data = await response.json();
-  const events = data.items || [];
-  const blocks = mapToCalendarBlocks(events, weekStartISO);
+  return (data.items || [])
+    .filter(c => c && typeof c.id === 'string' && ['owner', 'writer', 'reader'].includes(c.accessRole))
+    .map(c => ({
+      id: c.id,
+      summary: c.summaryOverride || c.summary || c.id,
+      // Sanitize the color: CSS-injected hexes must match the expected format.
+      backgroundColor: typeof c.backgroundColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.backgroundColor)
+        ? c.backgroundColor
+        : null,
+      primary: !!c.primary,
+      selected: c.selected !== false,
+    }));
+}
+
+/**
+ * Fetch events for a given week from one or more calendars.
+ * Defaults to the primary calendar for backward compatibility.
+ *
+ * Per-calendar failures (a deleted calendar, a shared calendar the token
+ * lost access to) are skipped so one bad calendar can't kill the sync;
+ * token-level failures (401/403) always throw.
+ *
+ * @param {string} accessToken  OAuth access token
+ * @param {string} weekStartISO ISO date string for Monday of the target week
+ * @param {string[]} [calendarIds] Calendar ids to fetch — defaults to ['primary']
+ * @param {object[]} [calendarMeta] Optional calendar list entries (from
+ *   fetchCalendarList) so blocks carry the source calendar's name + color.
+ * @returns {Promise<{ blocks, eventCount, calendarNames: string[], calendarName: string, failures: number }>}
+ */
+export async function fetchWeekEvents(accessToken, weekStartISO, calendarIds = null, calendarMeta = null) {
+  // Compute Mon 00:00 to Sun 23:59 in the user's local timezone
+  const weekStart = new Date(weekStartISO + 'T00:00:00');
+  const weekEnd = new Date(weekStartISO + 'T00:00:00');
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const timeMin = weekStart.toISOString();
+  const timeMax = weekEnd.toISOString();
+
+  const ids = Array.isArray(calendarIds) && calendarIds.length > 0 ? calendarIds : ['primary'];
+  const metaById = new Map((Array.isArray(calendarMeta) ? calendarMeta : []).map(c => [c?.id, c]));
+  const merged = [];
+  const seen = new Set();
+  const calendarNames = [];
+  let eventCount = 0;
+  let failures = 0;
+
+  for (const calId of ids) {
+    const url = new URL(CALENDAR_API + `/calendars/${encodeURIComponent(calId)}/events`);
+    url.searchParams.set('timeMin', timeMin);
+    url.searchParams.set('timeMax', timeMax);
+    url.searchParams.set('singleEvents', 'true');
+    url.searchParams.set('orderBy', 'startTime');
+    url.searchParams.set('maxResults', '250');
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: timeoutSignal(30000),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('token_expired');
+      if (response.status === 403) throw new Error('permission_denied');
+      if (response.status === 429) throw new Error('rate_limited');
+      failures++;
+      continue;
+    }
+
+    const data = await response.json();
+    const events = data.items || [];
+    eventCount += events.length;
+    const meta = metaById.get(calId);
+    const calendarName = meta?.summary || data.summary || 'Google Calendar';
+    calendarNames.push(calendarName);
+    const blocks = mapToCalendarBlocks(events, weekStartISO, {
+      calendarName,
+      calendarColor: meta?.backgroundColor || null,
+    });
+
+    // Dedupe on event id + day + start — the same event can only live in
+    // one calendar, but overlapping/duplicate calendars do exist in the
+    // wild and must not render twice.
+    for (const b of blocks) {
+      const key = `${b.googleEventId}::${b.day}::${b.startHour}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(b);
+      }
+    }
+  }
+
+  if (merged.length === 0 && failures > 0) {
+    throw new Error(`Calendar API error: all ${ids.length} calendar(s) failed`);
+  }
 
   return {
-    blocks,
-    eventCount: events.length,
-    calendarName: data.summary || 'Google Calendar',
+    blocks: merged,
+    eventCount,
+    calendarNames,
+    calendarName: calendarNames.join(', '),
+    failures,
   };
 }
 
@@ -92,10 +198,20 @@ export async function fetchWeekEvents(accessToken, weekStartISO) {
  * - Regular timed events: extract startHour + durationHours
  * - All-day events: map to 6am–10pm, flag isAllDay
  * - Multi-day events: split into per-day blocks
- * - Events outside 6am–10pm: clip to visible range
+ * - Events outside 6am–10pm: clip to visible range, flag `clipped`
+ *   ('early' | 'late' | 'both') so the UI can show an indicator
  * - Recurring events: singleEvents=true auto-expands, we get individual instances
+ *
+ * @param {object[]} events     Google Calendar API event objects
+ * @param {string} weekStartISO ISO Monday of the target week
+ * @param {{ calendarName?: string, calendarColor?: string }} [opts]
+ *   Source calendar metadata — attached to every block so the UI can
+ *   color-code by calendar (PRD step 91) instead of by event type.
  */
-export function mapToCalendarBlocks(events, weekStartISO) {
+export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
+  const { calendarName = null, calendarColor = null } = opts || {};
+  const visibleStartH = DAY_START_TICK / 6; // 6am
+  const visibleEndH = DAY_END_TICK / 6; // 10pm
   const blocks = [];
   const weekStart = new Date(weekStartISO + 'T00:00:00');
   // DST-safe week end: adding 7 * 86400000 ms crosses DST shifts and can
@@ -122,17 +238,21 @@ export function mapToCalendarBlocks(events, weekStartISO) {
         // Only include if within the target week
         if (cursor >= weekStart && cursor < weekEnd) {
           const day = dayMap[cursor.getDay()];
+          // Local date parts — toISOString() would shift the suffix by a
+          // day in UTC+ timezones, breaking the id's date meaning.
+          const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
           blocks.push({
-            id: `gcal-${event.id}-${cursor.toISOString().slice(0, 10)}`,
+            id: `gcal-${event.id}-${dateKey}`,
             day,
-            startHour: DAY_START_TICK / 6, // 6am
-            durationHours: (DAY_END_TICK - DAY_START_TICK) / 6, // 6am–10pm = 16h
+            startHour: visibleStartH, // 6am
+            durationHours: visibleEndH - visibleStartH, // 6am–10pm = 16h
             label: event.summary || 'Untitled event',
             type: inferType(event),
             isFixed: true,
             source: 'google',
             googleEventId: event.id,
-            googleCalendarName: event.organizer?.displayName || 'Google Calendar',
+            googleCalendarName: calendarName || event.organizer?.displayName || 'Google Calendar',
+            googleCalendarColor: calendarColor,
             isAllDay: true,
             recurrenceRule: event.recurrence?.[0] || null,
           });
@@ -150,12 +270,16 @@ export function mapToCalendarBlocks(events, weekStartISO) {
         const startHour = startDt.getHours() + startDt.getMinutes() / 60;
         const durationHours = (endDt - startDt) / 3600000;
 
-        // Clip to visible range (6am–10pm)
-        const visibleStart = Math.max(startHour, DAY_START_TICK / 6);
-        const visibleEnd = Math.min(startHour + durationHours, DAY_END_TICK / 6);
+        // Clip to visible range (6am–10pm); remember what was cut so the
+        // UI can flag "starts before 6:00" / "ends after 22:00" instead of
+        // silently showing a truncated block (PRD step 93).
+        const visibleStart = Math.max(startHour, visibleStartH);
+        const visibleEnd = Math.min(startHour + durationHours, visibleEndH);
+        const clippedEarly = startHour < visibleStartH;
+        const clippedLate = startHour + durationHours > visibleEndH;
 
         if (visibleEnd > visibleStart) {
-          blocks.push({
+          const block = {
             id: `gcal-${event.id}`,
             day,
             startHour: visibleStart,
@@ -165,10 +289,15 @@ export function mapToCalendarBlocks(events, weekStartISO) {
             isFixed: true,
             source: 'google',
             googleEventId: event.id,
-            googleCalendarName: event.organizer?.displayName || 'Google Calendar',
+            googleCalendarName: calendarName || event.organizer?.displayName || 'Google Calendar',
+            googleCalendarColor: calendarColor,
             isAllDay: false,
             recurrenceRule: isRecurring ? (event.recurrence?.[0] || null) : null,
-          });
+          };
+          if (clippedEarly || clippedLate) {
+            block.clipped = clippedEarly && clippedLate ? 'both' : clippedEarly ? 'early' : 'late';
+          }
+          blocks.push(block);
         }
       }
     }
@@ -342,8 +471,8 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
         if (response.status === 401) throw new Error('token_expired');
         if (response.status === 403) throw new Error('permission_denied');
         if (response.status === 429) {
-          // Rate limited — wait and retry once
-          await new Promise(r => setTimeout(r, 5000));
+          // Rate limited — honor the server's Retry-After, wait and retry once
+          await new Promise(r => setTimeout(r, retryDelayFrom(response)));
           const retry = await fetch(CALENDAR_API + '/calendars/primary/events', {
             method: 'POST',
             headers: {

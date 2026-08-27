@@ -18,6 +18,7 @@ import {
   clearToken,
   onTokenExpired,
 } from './googleAuthCore.js';
+import { clearGoogleCache, clearGoogleCalendars } from './storage.js';
 
 /**
  * Provider — wrap the app root. If VITE_GOOGLE_CLIENT_ID is unset,
@@ -53,6 +54,12 @@ export function GoogleAuthProvider({ clientId, children }) {
   const signOut = useCallback(() => {
     clearToken();
     setSignedIn(false);
+    // PRD step 94: sign-out clears all cached calendar data (imported
+    // events + calendar selection). Export tracking deliberately survives —
+    // the user may re-connect and still need to unsync previously created
+    // events; clearing it would orphan them in Google Calendar.
+    clearGoogleCache();
+    clearGoogleCalendars();
   }, []);
 
   const value = {

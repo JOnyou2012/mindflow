@@ -324,6 +324,20 @@ const t = {
     gcalNetworkError: 'Network error. Check your connection.',
     gcalUnknownError: 'An unexpected error occurred. Please try again.',
 
+    // Google Calendar — multi-calendar picker
+    gcalCalendarsTitle: 'Calendars to sync',
+    gcalCalendarsLoading: 'Loading calendars...',
+    gcalCalendarsError: 'Could not load your calendars. Try again.',
+    gcalCalendarsNone: 'No readable calendars found.',
+    gcalCalendarsNoneSelected: 'No calendars selected.',
+    gcalCalendarsFailures: '{n} calendar(s) could not be fetched.',
+    gcalPrimaryCalendar: 'primary',
+
+    // Google Calendar — clipped events (outside 6:00–22:00)
+    gcalClippedEarly: 'starts before 6:00',
+    gcalClippedLate: 'ends after 22:00',
+    gcalClippedBoth: 'extends beyond 6:00–22:00',
+
     // Accessibility
     ariaPrevWeek: 'Previous week',
     ariaNextWeek: 'Next week',
@@ -620,6 +634,20 @@ const t = {
     gcalRateLimited: '请求过多。请稍候。',
     gcalNetworkError: '网络错误。请检查连接。',
     gcalUnknownError: '发生意外错误。请重试。',
+
+    // Google Calendar — 多日历选择
+    gcalCalendarsTitle: '要同步的日历',
+    gcalCalendarsLoading: '正在加载日历...',
+    gcalCalendarsError: '无法加载日历列表。请重试。',
+    gcalCalendarsNone: '未找到可读取的日历。',
+    gcalCalendarsNoneSelected: '未选择任何日历。',
+    gcalCalendarsFailures: '{n} 个日历获取失败。',
+    gcalPrimaryCalendar: '主日历',
+
+    // Google Calendar — 超出显示范围的事件（6:00–22:00 之外）
+    gcalClippedEarly: '早于 6:00 开始',
+    gcalClippedLate: '晚于 22:00 结束',
+    gcalClippedBoth: '超出 6:00–22:00 范围',
     ariaPrevWeek: '上一周',
     ariaNextWeek: '下一周',
     ariaClose: '关闭',
@@ -911,6 +939,20 @@ const t = {
     gcalRateLimited: '請求過多。請稍候。',
     gcalNetworkError: '網路錯誤。請檢查連線。',
     gcalUnknownError: '發生未預期錯誤。請重試。',
+
+    // Google Calendar — 多日曆選擇
+    gcalCalendarsTitle: '要同步的日曆',
+    gcalCalendarsLoading: '正在載入日曆...',
+    gcalCalendarsError: '無法載入日曆清單。請重試。',
+    gcalCalendarsNone: '找不到可讀取的日曆。',
+    gcalCalendarsNoneSelected: '未選擇任何日曆。',
+    gcalCalendarsFailures: '{n} 個日曆擷取失敗。',
+    gcalPrimaryCalendar: '主要日曆',
+
+    // Google Calendar — 超出顯示範圍的事件（6:00–22:00 之外）
+    gcalClippedEarly: '早於 6:00 開始',
+    gcalClippedLate: '晚於 22:00 結束',
+    gcalClippedBoth: '超出 6:00–22:00 範圍',
     ariaPrevWeek: '上一週',
     ariaNextWeek: '下一週',
     ariaClose: '關閉',
@@ -1202,6 +1244,20 @@ const t = {
     gcalRateLimited: 'Demasiadas solicitudes. Espera un momento.',
     gcalNetworkError: 'Error de red. Verifica tu conexión.',
     gcalUnknownError: 'Error inesperado. Inténtalo de nuevo.',
+
+    // Google Calendar — selector de calendarios múltiples
+    gcalCalendarsTitle: 'Calendarios para sincronizar',
+    gcalCalendarsLoading: 'Cargando calendarios...',
+    gcalCalendarsError: 'No se pudieron cargar tus calendarios. Inténtalo de nuevo.',
+    gcalCalendarsNone: 'No se encontraron calendarios legibles.',
+    gcalCalendarsNoneSelected: 'No hay calendarios seleccionados.',
+    gcalCalendarsFailures: 'No se pudieron obtener {n} calendario(s).',
+    gcalPrimaryCalendar: 'principal',
+
+    // Google Calendar — eventos recortados (fuera de 6:00–22:00)
+    gcalClippedEarly: 'empieza antes de las 6:00',
+    gcalClippedLate: 'termina después de las 22:00',
+    gcalClippedBoth: 'se extiende fuera de 6:00–22:00',
     ariaPrevWeek: 'Semana anterior',
     ariaNextWeek: 'Semana siguiente',
     ariaClose: 'Cerrar',
@@ -1493,6 +1549,20 @@ const t = {
     gcalRateLimited: 'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
     gcalNetworkError: 'नेटवर्क त्रुटि। अपना कनेक्शन जांचें।',
     gcalUnknownError: 'अप्रत्याशित त्रुटि। कृपया पुनः प्रयास करें।',
+
+    // Google Calendar — बहु-कैलेंडर चयनकर्ता
+    gcalCalendarsTitle: 'सिंक करने के लिए कैलेंडर',
+    gcalCalendarsLoading: 'कैलेंडर लोड हो रहे हैं...',
+    gcalCalendarsError: 'आपके कैलेंडर लोड नहीं हो सके। फिर से कोशिश करें।',
+    gcalCalendarsNone: 'कोई पठनीय कैलेंडर नहीं मिला।',
+    gcalCalendarsNoneSelected: 'कोई कैलेंडर चयनित नहीं है।',
+    gcalCalendarsFailures: '{n} कैलेंडर प्राप्त नहीं हो सके।',
+    gcalPrimaryCalendar: 'मुख्य',
+
+    // Google Calendar — कटे हुए इवेंट (6:00–22:00 से बाहर)
+    gcalClippedEarly: 'सुबह 6:00 से पहले शुरू होता है',
+    gcalClippedLate: 'रात 22:00 के बाद समाप्त होता है',
+    gcalClippedBoth: '6:00–22:00 से बाहर तक फैला है',
     ariaPrevWeek: 'पिछला सप्ताह',
     ariaNextWeek: 'अगला सप्ताह',
     ariaClose: 'बंद करें',
@@ -1784,6 +1854,20 @@ const t = {
     gcalRateLimited: 'طلبات كثيرة جدًا. يرجى الانتظار.',
     gcalNetworkError: 'خطأ في الشبكة. تحقق من اتصالك.',
     gcalUnknownError: 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
+
+    // Google Calendar — منتقي التقويمات المتعددة
+    gcalCalendarsTitle: 'تقويمات للمزامنة',
+    gcalCalendarsLoading: 'جارٍ تحميل التقويمات...',
+    gcalCalendarsError: 'تعذر تحميل تقويماتك. حاول مرة أخرى.',
+    gcalCalendarsNone: 'لم يتم العثور على تقويمات قابلة للقراءة.',
+    gcalCalendarsNoneSelected: 'لم يتم تحديد أي تقويمات.',
+    gcalCalendarsFailures: 'تعذر جلب {n} تقويم/تقويمات.',
+    gcalPrimaryCalendar: 'رئيسي',
+
+    // Google Calendar — الأحداث المقتطعة (خارج 6:00–22:00)
+    gcalClippedEarly: 'يبدأ قبل الساعة 6:00',
+    gcalClippedLate: 'ينتهي بعد الساعة 22:00',
+    gcalClippedBoth: 'يمتد خارج نطاق 6:00–22:00',
     ariaPrevWeek: 'الأسبوع السابق',
     ariaNextWeek: 'الأسبوع التالي',
     ariaClose: 'إغلاق',

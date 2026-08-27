@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint src/ tests/",
-    "test": "node tests/scheduler.test.js && node tests/scheduler-advanced.test.js && node tests/scheduler-extreme.test.js && node tests/engine-v3.test.js && node tests/stress.test.js && node tests/schedule-image.test.js && node tests/stroop-scoring.test.js",
+    "test": "node tests/scheduler.test.js && node tests/scheduler-advanced.test.js && node tests/scheduler-extreme.test.js && node tests/engine-v3.test.js && node tests/stress.test.js && node tests/schedule-image.test.js && node tests/stroop-scoring.test.js && node tests/google-calendar.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -48,12 +48,17 @@
 
 ---
 
-> **Progress: 95 / 95 core steps complete — 100%** | **All audits resolved ✅**
+> **Progress: 104 / 104 core steps complete — 100%** | **All audits resolved ✅**
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
-> **Stage 5 (Google Calendar): PAUSED** — code complete, UI gated behind
-> `VITE_GOOGLE_CLIENT_ID` (hidden until OAuth client ID is configured)
+> **Stage 5 (Google Calendar): ACTIVATED (2026-08-27)** — steps 86–94
+> implemented (multi-calendar sync + picker, calendar color-coding,
+> clipped-event ↑↓ indicators, Retry-After backoff, central sign-out
+> clearing) and the GCP OAuth client is configured (Testing status —
+> test user jonyou2019@gmail.com). Client ID in gitignored `.env`, GSI
+> script live in `index.html`. Remaining: set `VITE_GOOGLE_CLIENT_ID`
+> on Vercel + redeploy + live smoke test.
 >
 > **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
 > 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
@@ -69,14 +74,63 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 7 suites (3,613 assertion
-> checks — deterministic recount 2026-08-22, engine v6 +17), 0 failures.
+> All tiers resolved. `npm test` runs 8 suites (5,815 assertion
+> checks — recount 2026-08-27, google-calendar suite +67; counts every
+> "N passed" summary line), 0 failures.
 > `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
 > Note: the Render backend (`mindflow-api.onrender.com`) is offline and
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
+>
+> **2026-08-27 (Jeremy + Claude — Google Calendar Stage 5 completion):**
+> Steps 86–94 were the last unfinished block — the code existed but was
+> paused behind `VITE_GOOGLE_CLIENT_ID`. All code gaps are now closed:
+>
+> **1) Multi-calendar sync (step 91).** `fetchCalendarList()` fetches the
+> user's readable calendars (freeBusyReader/none filtered, colors
+> sanitized); `fetchWeekEvents()` now accepts a calendar list, fetches
+> each in turn, merges + dedupes blocks, attaches per-calendar
+> name/color, and skips dead calendars while surfacing token errors.
+> `GoogleCalendarImport` gained a picker: toggle checkboxes with color
+> dots, persisted selection (`mindflow_google_calendars`), live re-sync
+> on toggle, "N of M calendars failed" warnings. Google blocks in
+> WeeklyCalendar now render in their source calendar's color (falling
+> back to the type color).
+>
+> **2) Clipped-event indicators (step 93).** Events outside 6:00–22:00
+> were silently truncated; `mapToCalendarBlocks` now flags `clipped:
+> 'early' | 'late' | 'both'` and the grid shows an ↑/↓ badge with the
+> details in the tooltip (10 new i18n keys × 6 languages). Also fixed an
+> all-day id bug the new tests caught: `toISOString().slice(0,10)`
+> shifted the date suffix by a day in UTC+ timezones — now local parts.
+>
+> **3) Retry-After backoff (step 93).** `retryDelayFrom()` parses both
+> header forms (delta-seconds + HTTP-date, clamped 1–30s, 5s fallback);
+> the export 429 path now honors it instead of a fixed 5s wait.
+>
+> **4) Sign-out hygiene (step 94).** `GoogleAuthProvider.signOut` now
+> centrally clears the imported-events cache + calendar selection
+> (export tracking deliberately survives so unsync still works after
+> re-connect).
+>
+> New suite `tests/google-calendar.test.js` (67 checks: mapping rules,
+> clipping, dedupe, partial failures, list filtering, Retry-After,
+> 429-retry timing) wired into `npm test` — 8 suites, 0 failures, lint
+> 0 warnings, build 0 errors.
+>
+> **Remaining for live activation (external, not code):** the GCP OAuth
+> client is configured (Testing status, test user jonyou2019@gmail.com;
+> origins localhost:5173 + mindflow-liart.vercel.app) and the client ID
+> is in the gitignored `.env` — the GSI script is re-added in
+> `index.html`. What's left: set `VITE_GOOGLE_CLIENT_ID` as a Vercel
+> project env var, redeploy, and run the live smoke test: connect →
+> picker → import → export → unsync (as the test user — other Google
+> accounts will get "Access blocked" until Google verifies the app).
+> Note: recurring events (step 90) are handled server-side via
+> `singleEvents=true` + cancelled filtering — no client-side RRULE
+> parser.
 >
 > **2026-08-22 (Jeremy + Claude — Markov engine v6 realism retune):**
 > The engine's cognitive curves were not real-life sensible. Five defects
@@ -905,8 +959,9 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 >
 > **Known gaps:** Backend (main.py) not yet upgraded to v3 engine math (still uses
 > single-exponential recovery, no flow collapse/momentum/capacity). Google Calendar
-> integration (steps 86–94, 0/9) pending — coded but removed due to runtime crash,
-> needs proper error boundaries.
+> integration (steps 86–94) is code-complete as of 2026-08-27 (multi-calendar,
+> clipped indicators, Retry-After, central sign-out clearing) but not yet live —
+> gated on the external GCP OAuth setup (step 86) + a live activation test.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Read the AI Agent Rules at the top, then check the checklist. What's our
@@ -930,7 +985,7 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 | **55–65** | Dashboard | `src/components/MarkovAnalyticsDashboard.jsx` — create | ✅ 11/11 — production-quality | 100% |
 | **66–74** | App Shell | `src/App.jsx` — rewrite | ✅ 9/9 — production-quality | 100% |
 | **75–85** | Integration | Manual walkthrough | ✅ 11/11 — all flows verified | 100% |
-| **86–94** | Google Calendar | OAuth + auto-sync | ❌ 0/9 | 0% |
+| **86–94** | Google Calendar | OAuth + auto-sync | ✅ 9/9 code — GCP config (step 86) + live activation pending | 100% code |
 | **101–110** | Image Export | `src/utils/scheduleImage.js` + PlanView button | ✅ 10/10 | 100% |
 
 > \* Step 66–74 is 0% toward the PRD-specified full rewrite, but the existing prototype
@@ -953,10 +1008,10 @@ Steps 51–54 Session Chart       ███████████████�
 Steps 55–65 Dashboard           ████████████████████████ 11/11 100%
 Steps 66–74 App Shell           ████████████████████████ 9/9   100%
 Steps 75–85 Integration         ████████████████████████ 11/11 100%
-Steps 86–94 Google Calendar      ░░░░░░░░░░░░░░░░░░░░░░░░ PAUSED
+Steps 86–94 Google Calendar      ████████████████████████ 9/9   100% code
 Steps 101–110 Image Export       ████████████████████████ 10/10 100%
 ────────────────────────────────────────────────────────────────
-TOTAL                           95/95   100%
+TOTAL                           104/104 100% code
 ```
 
 ### Stage Completion
@@ -967,7 +1022,7 @@ TOTAL                           95/95   100%
 | **Stage 2: Core Components** | 14–65 | 52/52 | **100%** | ✅ All 6 UI components complete |
 | **Stage 3: App Shell** | 66–74 | 9/9 | **100%** | ✅ Tab navigation + Generate flow |
 | **Stage 4: Integration** | 75–85 | 11/11 | **100%** | ✅ All flows verified |
-| **Stage 5: Google Calendar** | 86–94 | PAUSED | — | ⏸️ Code complete, deferred |
+| **Stage 5: Google Calendar** | 86–94 | 9/9 code | **100% code** | 🟡 Code complete (2026-08-27) — GCP config + live activation pending |
 | **Stage 6: Image Export** | 101–110 | 10/10 | **100%** | ✅ PNG export, both themes verified |
 
 > **Stage 1** (Foundation) is complete and production-quality:
@@ -1009,16 +1064,18 @@ TOTAL                           95/95   100%
 >   keys per language, per-key English fallback, persisted to localStorage
 > - 1,957+ tests across 4 suites, 0 failures, 0 build errors
 > - Settings: language complete (130+ keys, all UI strings translated), Google
->   Calendar pending (code built but removed due to runtime crash)
->   (code built but removed due to runtime crash)
+>   Calendar code-complete (2026-08-27 — multi-calendar picker, clipped
+>   indicators, Retry-After; gated on GCP OAuth config, step 86)
 >
-> **Next (2026-08-21):** No unfinished core steps — 95/95 + Part 8 done. The
-> app is deployed and production-verified at
+> **Next (2026-08-27):** No unfinished code steps — 104/104 core steps
+> complete. The app is deployed and production-verified at
 > `https://mindflow-liart.vercel.app/` (three 2026-08-20 e2e sweeps, 0
 > console errors / 0 exceptions / 0 failed requests; Stroop scoring v2
-> shipped). Optional follow-ups: un-pause Google Calendar (set
-> `VITE_GOOGLE_CLIENT_ID` + re-add the GSI script, see Part 7), redeploy the
-> Render backend via `render.yaml`, or start new features.
+> shipped). Remaining follow-ups: activate Google Calendar (external GCP
+> setup per step 86: client ID → `VITE_GOOGLE_CLIENT_ID` on Vercel →
+> re-add the GSI script in `index.html` → live smoke test connect →
+> picker → import → export → unsync), redeploy the Render backend via
+> `render.yaml`, or start new features.
 
 ---
 
@@ -3429,12 +3486,24 @@ session quality) in extended properties. All generated weeks are synced at once.
 ### Steps 86–94: Google Calendar Sync
 
 **Step 86** — Create Google Cloud Project & OAuth consent screen
-- [ ] 86. Create project in Google Cloud Console
-- [ ] 86. Enable Google Calendar API
-- [ ] 86. Configure OAuth consent screen (test users, scopes)
-- [ ] 86. Create OAuth 2.0 Web Client ID
-- [ ] 86. Add `http://localhost:5173` to authorized JS origins
-- [ ] 86. Store Client ID in `.env` as `VITE_GOOGLE_CLIENT_ID`
+> ✅ GCP SETUP DONE (2026-08-27). Project "MindFlow", Calendar API
+> enabled, External consent screen with the two calendar scopes, OAuth
+> Web Client ID created with origins `http://localhost:5173` +
+> `https://mindflow-liart.vercel.app`, app in Testing status (test
+> user: jonyou2019@gmail.com — only that account can sign in until
+> Google verification). Client ID lives in gitignored `.env` (see
+> `.env.example` for the template); GSI `<script>` tag re-added in
+> `index.html`.
+> ⚠️ STILL PENDING: set `VITE_GOOGLE_CLIENT_ID` as a Vercel project env
+> var (production + preview) and redeploy — the env var is read at
+> build time — then run the live smoke test (connect → picker → import
+> → export → unsync) as the jonyou2019@gmail.com test user.
+- [x] 86. Create project in Google Cloud Console
+- [x] 86. Enable Google Calendar API
+- [x] 86. Configure OAuth consent screen (test users, scopes)
+- [x] 86. Create OAuth 2.0 Web Client ID
+- [x] 86. Add `http://localhost:5173` to authorized JS origins
+- [x] 86. Store Client ID in `.env` as `VITE_GOOGLE_CLIENT_ID`
 
 **Step 87** — Install dependencies & create `src/utils/googleCalendar.js`
 - [x] 87. `npm install @react-oauth/google`
@@ -3460,14 +3529,14 @@ session quality) in extended properties. All generated weeks are synced at once.
 - [x] 89. Google-synced blocks are locked (can't edit/delete manually)
 
 **Step 90** — Handle recurring events
-- [ ] 90. Parse `recurrence` RRULE from Google events
-- [ ] 90. Expand recurring events within the current week
-- [ ] 90. Handle exceptions (cancelled/modified instances)
+- [x] 90. Parse `recurrence` RRULE from Google events *(captured as `recurrenceRule`; no client-side parser — `singleEvents=true` makes Google expand recurrences server-side, the equivalent result)*
+- [x] 90. Expand recurring events within the current week *(via `singleEvents=true`)*
+- [x] 90. Handle exceptions (cancelled/modified instances) *(cancelled skipped, moved instances arrive as standalone events)*
 
 **Step 91** — Multi-calendar support
-- [ ] 91. Fetch user's calendar list from `calendarList.list`
-- [ ] 91. Let user toggle which calendars to sync
-- [ ] 91. Color-code by source calendar
+- [x] 91. Fetch user's calendar list from `calendarList.list` *(via `fetchCalendarList()`, freeBusyReader/none filtered)*
+- [x] 91. Let user toggle which calendars to sync *(checkbox picker, persisted `mindflow_google_calendars`, live re-sync on toggle)*
+- [x] 91. Color-code by source calendar *(blocks carry `googleCalendarColor`)*
 
 **Step 92** — Sync status & caching
 - [x] 92. Show "Last synced: 2 min ago" in header
@@ -3476,19 +3545,19 @@ session quality) in extended properties. All generated weeks are synced at once.
 - [x] 92. Manual refresh button
 
 **Step 93** — Error handling & edge cases
-- [ ] 93. Token expired → prompt re-login (auto-refresh not possible with implicit flow)
+- [x] 93. Token expired → prompt re-login (auto-refresh not possible with implicit flow) *(expiry tracked with 30s margin; expired tokens discarded + UI flips to Connect)*
 - [x] 93. Network error → cached data fallback + retry button
-- [ ] 93. All-day events → map to 6am–10pm block
-- [ ] 93. Multi-day events → split into per-day blocks
-- [ ] 93. Events outside 6am–10pm → shown as "early/late" indicator
+- [x] 93. All-day events → map to 6am–10pm block
+- [x] 93. Multi-day events → split into per-day blocks
+- [x] 93. Events outside 6am–10pm → shown as "early/late" indicator *(clipped flag + ↑/↓ badge + tooltip; entirely-outside events are dropped)*
 - [x] 93. Zero events → "No events found this week" message
-- [ ] 93. Rate limiting → batch requests, respect `Retry-After` headers
+- [x] 93. Rate limiting → batch requests, respect `Retry-After` headers *(export: 10/batch + `retryDelayFrom()` honoring delta-seconds + HTTP-date, clamped 1–30s; import: `rate_limited` surfaced to the user)*
 
 **Step 94** — Privacy & security
 - [x] 94. Calendar data never leaves the browser (no server upload)
 - [x] 94. Access token stored in memory only (not localStorage)
-- [ ] 94. Refresh token handled by GIS library (implicit flow — no refresh token)
-- [x] 94. Sign-out clears all cached calendar data
+- [x] 94. Refresh token handled by GIS library (implicit flow — no refresh token) *(implicit flow has no refresh token by design; ~1h expiry + re-prompt covers it)*
+- [x] 94. Sign-out clears all cached calendar data *(now central in `GoogleAuthProvider.signOut`: import cache + calendar selection; export tracking survives for unsync)*
 - [x] 94. Scope limited to `calendar.readonly` + `calendar.events`
 
 ### Steps 95–100: Export (NEW — MindFlow → Google)
@@ -3518,7 +3587,7 @@ session quality) in extended properties. All generated weeks are synced at once.
 - Microsoft Outlook / Apple Calendar support
 - iCal import for offline calendar files
 - Team/family calendar sharing for group study scheduling
-- Multi-calendar support (toggle which calendars to sync)
+- [x] ~~Multi-calendar support (toggle which calendars to sync)~~ ✅ Implemented (2026-08-27, step 91)
 
 ---
 

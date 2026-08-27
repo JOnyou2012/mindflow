@@ -6,6 +6,7 @@ const KEYS = {
   TASKS: 'mindflow_tasks',
   SETTINGS: 'mindflow_settings',
   GOOGLE_CACHE: 'mindflow_google_cache',
+  GOOGLE_CALENDARS: 'mindflow_google_calendars',
   GOOGLE_EXPORT: 'mindflow_google_export',
   SCHEMA_VERSION: 'mindflow_schema_version',
 };
@@ -156,6 +157,35 @@ export function loadGoogleCache() {
 
 export function clearGoogleCache() {
   try { localStorage.removeItem(KEYS.GOOGLE_CACHE); } catch {}
+}
+
+// -- Google Calendar selection (multi-calendar sync, PRD step 91) -------------
+// Stores the user's chosen calendar ids so the next sync doesn't reset
+// back to primary-only. Not the calendar list itself — that refreshes from
+// Google on every connect (names/colors change, calendars get deleted).
+
+export function saveGoogleCalendars(ids) {
+  try {
+    if (Array.isArray(ids)) {
+      const clean = ids.filter(id => typeof id === 'string' && id !== '');
+      localStorage.setItem(KEYS.GOOGLE_CALENDARS, JSON.stringify(clean));
+    }
+  } catch (e) { console.warn('localStorage full, Google calendar selection not saved:', e); return false; }
+  return true;
+}
+
+export function loadGoogleCalendars() {
+  try {
+    const d = localStorage.getItem(KEYS.GOOGLE_CALENDARS);
+    if (!d) return [];
+    const p = JSON.parse(d);
+    if (!Array.isArray(p)) return [];
+    return p.filter(id => typeof id === 'string' && id !== '');
+  } catch { return []; }
+}
+
+export function clearGoogleCalendars() {
+  try { localStorage.removeItem(KEYS.GOOGLE_CALENDARS); } catch {}
 }
 
 // -- Google Calendar export tracking ------------------------------------------

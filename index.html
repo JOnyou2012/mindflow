@@ -22,9 +22,11 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MindFlow — Smart Study Scheduler" />
     <meta name="twitter:description" content="Predict burnout before it happens. A personalized weekly study plan powered by a Markov-chain cognitive model." />
-    <!-- Google Calendar (Stage 5) is paused pre-launch. To re-enable:
-         1. Re-add: <script src="https://accounts.google.com/gsi/client" async defer></script>
-         2. Set VITE_GOOGLE_CLIENT_ID at build time (gates the connect/import/export UI). -->
+    <!-- Google Identity Services — OAuth popup for Google Calendar sync.
+         Loaded async so a blocked/slow accounts.google.com can never stall
+         first paint; googleAuthCore polls for window.google and surfaces a
+         readable error if it never arrives. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <title>MindFlow — Smart Study Scheduler</title>
     <!-- Blocking script: apply dark theme and language before first paint to
          prevent FOWT (flash of wrong theme) and wrong screen-reader language. -->

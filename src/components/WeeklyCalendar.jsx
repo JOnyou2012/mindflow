@@ -471,6 +471,13 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                     const top = Math.max(0, (b.startHour - START_H) * ROW_H);
                     const blockEnd = Math.min(b.startHour + b.durationHours, END_H);
                     const blockH = Math.max(24, (blockEnd - Math.max(b.startHour, START_H)) * ROW_H);
+                    const clipNote = b.clipped === 'both' ? T.gcalClippedBoth
+                      : b.clipped === 'early' ? T.gcalClippedEarly
+                      : b.clipped === 'late' ? T.gcalClippedLate
+                      : null;
+                    const title = b.label
+                      + ' — ' + (b.googleCalendarName || T.gcalGoogleBlockTooltip || 'synced from Google Calendar')
+                      + (clipNote ? ' (' + clipNote + ')' : '');
                     return (
                       <div
                         key={b.id}
@@ -478,10 +485,10 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                         style={{
                           top: top + 1 + 'px',
                           height: blockH - 2 + 'px',
-                          backgroundColor: c.color,
+                          backgroundColor: b.googleCalendarColor || c.color,
                           zIndex: 5,
                         }}
-                        title={b.label + ' — ' + (T.gcalGoogleBlockTooltip || 'synced from Google Calendar')}
+                        title={title}
                       >
                         <p className="text-[11px] font-medium text-white truncate pr-3">{b.label}</p>
                         {blockH >= 40 && (
@@ -496,6 +503,17 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                           <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                           <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                         </svg>
+                        {/* Clipped indicator — event extends past the visible
+                            6am-10pm window (PRD step 93) */}
+                        {clipNote && (
+                          <span
+                            className="absolute left-0.5 bottom-0.5 flex items-center gap-0.5 rounded bg-black/35 px-1 py-px text-[9px] font-medium text-white"
+                            aria-hidden="true"
+                          >
+                            {b.clipped === 'early' || b.clipped === 'both' ? '↑' : ''}
+                            {b.clipped === 'late' || b.clipped === 'both' ? '↓' : ''}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
