@@ -33,7 +33,7 @@ function GLogo({ className = 'w-4 h-4' }) {
  *   T              translations
  */
 export default function GoogleCalendarImport({ weekStart, onImport, onError, T }) {
-  const { isSignedIn, getToken, signOut } = useGoogleAuth();
+  const { isSignedIn, getToken, refreshToken, signOut } = useGoogleAuth();
   const [calendars, setCalendars] = useState(null); // calendar list, null = not loaded
   const [selectedIds, setSelectedIds] = useState(() => loadGoogleCalendars());
   const [syncInfo, setSyncInfo] = useState(null);
@@ -53,17 +53,13 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
     return fallback ? [fallback.id] : [];
   }, [selectedIds]);
 
-  const handleSync = useCallback(async (idsOverride = null) => {
-    const token = getToken();
-    if (!token) {
-      // Token was cleared elsewhere (e.g. sign-out via the export widget)
-      // while imported blocks were showing — fall back to the Connect
-      // button instead of a silent no-op.
-      setSyncInfo(null);
-      return;
-    }
-    setSyncing(true);
-    setListError(null);
+  /**
+   * One sync attempt. On a 401 the token is refreshed and the attempt is
+   * retried once — a single expired token must never sign the user out or
+   * reset the widget; only a failed re-auth does (the provider flips to
+   * signed-out itself in that case).
+   */
+  const performSync = useCallback(async (token, idsOverride, allowRetry) => {
     try {
       // Load the calendar list once per session (per connect) — it feeds
       // both the picker UI and the per-calendar block coloring.
@@ -72,15 +68,10 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
         try {
           calList = await fetchCalendarList(token);
         } catch (err) {
-          if (err.message === 'token_expired') {
-            signOut();
-            onError?.(T.gcalTokenExpired);
-            return;
+          if (err.message === 'token_expired' && allowRetry) {
+            return performSync(await refreshToken(), idsOverride, false);
           }
-          if (err.message === 'permission_denied') { onError?.(T.gcalPermissionDenied); return; }
-          if (err.message === 'rate_limited') { onError?.(T.gcalRateLimited); return; }
-          setListError(T.gcalCalendarsError);
-          return;
+          throw err;
         }
         setCalendars(calList);
       }
@@ -104,21 +95,43 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
       saveGoogleCache({ data: blocks, syncedAt, weekStart, calendarNames, eventCount });
       if (onImport) onImport(blocks);
     } catch (err) {
-      if (err.message === 'token_expired') {
-        // Clear the dead token so the next Connect opens a fresh popup.
-        signOut();
-        onError?.(T.gcalTokenExpired);
-      } else if (err.message === 'permission_denied') {
-        onError?.(T.gcalPermissionDenied);
-      } else if (err.message === 'rate_limited') {
-        onError?.(T.gcalRateLimited);
-      } else {
-        onError?.(T.gcalImportError);
+      if (err.message === 'token_expired' && allowRetry) {
+        return performSync(await refreshToken(), idsOverride, false);
       }
+      if (err.message === 'permission_denied') { onError?.(T.gcalPermissionDenied); return; }
+      if (err.message === 'rate_limited') { onError?.(T.gcalRateLimited); return; }
+      if (typeof err.message === 'string' && err.message.startsWith('CalendarList API error')) {
+        setListError(T.gcalCalendarsError);
+        return;
+      }
+      onError?.(T.gcalImportError);
+    }
+  }, [calendars, resolveSelection, refreshToken, weekStart, onImport, onError, T]);
+
+  const handleSync = useCallback(async (idsOverride = null) => {
+    setSyncing(true);
+    setListError(null);
+    try {
+      // Token-on-demand: a dead token (or none at all) triggers a quiet
+      // refresh instead of a 401 on the first API call.
+      let token = getToken();
+      if (!token) {
+        try {
+          token = await refreshToken();
+        } catch {
+          setSyncInfo(null);
+          return; // provider shows Connect; nothing to sync yet
+        }
+      }
+      await performSync(token, idsOverride, true);
+    } catch {
+      // Only token-refresh failures escape performSync (everything else is
+      // mapped inside). The provider already flipped state if needed.
+      onError?.(T.gcalTokenExpired);
     } finally {
       setSyncing(false);
     }
-  }, [getToken, signOut, calendars, resolveSelection, weekStart, onImport, onError, T]);
+  }, [getToken, refreshToken, performSync, onError, T]);
 
   const toggleCalendar = (id) => {
     const next = selectedIds.includes(id)

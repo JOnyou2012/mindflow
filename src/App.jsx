@@ -11,7 +11,11 @@ import {
   saveTasks, loadTasks,
   saveSettings, loadSettings,
   clearAll, loadGoogleCache, clearGoogleCache,
+  loadGoogleExport, saveGoogleExport,
 } from './utils/storage.js';
+import { unsyncTaskEvents } from './utils/googleCalendar.js';
+import { useGoogleAuth } from './utils/googleAuthContext.js';
+import { isGoogleConfigured } from './utils/googleAuthCore.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
 
 // Last commit hash + commit time (UTC), injected at build time via vite
@@ -29,6 +33,7 @@ function getWeekMonday() {
 }
 
 export default function App() {
+  const { isSignedIn: googleSignedIn, getToken: getGoogleToken, refreshToken: refreshGoogleToken } = useGoogleAuth();
   const getWeekStart = (offset = 0) => {
     const [y, m, d] = getWeekMonday().split('-').map(Number);
     const date = new Date(y, m - 1, d + offset * 7);
@@ -94,8 +99,45 @@ export default function App() {
 
   const setCalibration = (cal) => { setCalibrationState(cal); const ok = saveCalibration(cal); if (!ok && cal) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
   const setCalendarBlocks = (blocks) => { setCalendarBlocksState(blocks); const ok = saveCalendar(blocks); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
-  const setTasks = (t) => { setTasksState(t); const ok = saveTasks(t); if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); } dataVersionRef.current++; };
+  const setTasks = (t) => {
+    // Task deletions must propagate to Google Calendar: every event mapped
+    // to a removed task is calendar.events.delete'd (per-event unsync).
+    const removedIds = tasks.filter(old => !t.some(n => n.id === old.id)).map(x => x.id);
+    setTasksState(t);
+    const ok = saveTasks(t);
+    if (!ok) { setError(T.saveFailed || 'Failed to save data. Storage may be full.'); }
+    dataVersionRef.current++;
+    if (removedIds.length > 0 && isGoogleConfigured) handleGoogleTaskUnsync(removedIds);
+  };
   const setSettings = (s) => { setSettingsState(s); saveSettings(s); dataVersionRef.current++; };
+
+  /**
+   * Delete the Google Calendar events belonging to deleted tasks.
+   * Mappings are cleared ONLY for events the API confirmed gone — on any
+   * failure they stay tracked so a later retry or bulk Remove can still
+   * clean them up (we never claim an unsync that didn't happen).
+   * Signed-out (no token at all) → skip silently rather than surprise the
+   * user with a consent popup during task management.
+   */
+  const handleGoogleTaskUnsync = useCallback(async (taskIds) => {
+    if (!getGoogleToken() && !googleSignedIn) return;
+    try {
+      const token = await refreshGoogleToken();
+      let tracking = loadGoogleExport();
+      for (const id of taskIds) {
+        const res = await unsyncTaskEvents(token, id, tracking);
+        tracking = res.tracking;
+        if (res.failed > 0) {
+          setError(T.gcalUnsyncRetry);
+          break;
+        }
+      }
+      saveGoogleExport(tracking);
+    } catch {
+      // Token refresh failed — mappings stay in the tracking store so the
+      // events can be removed later (bulk Remove after reconnecting).
+    }
+  }, [getGoogleToken, googleSignedIn, refreshGoogleToken, T]);
 
   // Google Calendar import handler
   const handleGoogleImport = (importedBlocks) => {

@@ -13,6 +13,10 @@ import {
   mapToCalendarBlocks,
   retryDelayFrom,
   exportSessions,
+  deleteSyncedEvents,
+  unsyncTaskEvents,
+  zonedISOFromParts,
+  DEFAULT_CALENDAR_TIME_ZONE,
 } from '../src/utils/googleCalendar.js';
 
 // ---------------------------------------------------------------------------
@@ -443,6 +447,32 @@ function mockFetch(routes) {
 }
 
 // ---------------------------------------------------------------------------
+// zonedISOFromParts — wall-clock time in a target zone → UTC instant,
+// independent of the machine's own timezone (PRD bug: events landed 15h off)
+// ---------------------------------------------------------------------------
+
+{
+  // Hong Kong is UTC+8 with no DST — fully deterministic in any TZ
+  assert(
+    zonedISOFromParts(2026, 8, 29, 10, 0, 'Asia/Hong_Kong') === '2026-08-29T02:00:00.000Z',
+    'HK Sat 10:00 → 02:00Z (UTC+8)',
+  );
+  assert(
+    zonedISOFromParts(2026, 12, 29, 10, 0, 'Asia/Hong_Kong') === '2026-12-29T02:00:00.000Z',
+    'HK winter also UTC+8 (no DST)',
+  );
+  assert(
+    zonedISOFromParts(2026, 8, 29, 10, 0, 'America/Los_Angeles') === '2026-08-29T17:00:00.000Z',
+    'LA August 10:00 → 17:00Z (PDT, UTC-7)',
+  );
+  assert(
+    zonedISOFromParts(2026, 8, 29, 0, 0, 'Asia/Hong_Kong') === '2026-08-28T16:00:00.000Z',
+    'HK midnight → previous UTC day',
+  );
+  assert(DEFAULT_CALENDAR_TIME_ZONE === 'Asia/Hong_Kong', 'default timezone is Asia/Hong_Kong');
+}
+
+// ---------------------------------------------------------------------------
 // exportSessions 429 path — honors Retry-After (via mocked POST sequence).
 // Retry-After: 1 forces the 1s clamp; the old fixed 5s wait would take ~5s,
 // so elapsed < 4000ms proves the header is honored.
@@ -453,13 +483,18 @@ function mockFetch(routes) {
   const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
 
   let postCalls = 0;
+  let postedBody = null;
   const restore = mockFetch([
+    // NOTE: the /events routes must precede the metadata route — mockFetch
+    // matches by substring and '/calendars/primary' would swallow them.
     ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
-    ['/calendars/primary/events', 'POST', async () => {
+    ['/calendars/primary/events', 'POST', async (url, opts) => {
       postCalls++;
+      postedBody = JSON.parse(opts.body);
       if (postCalls === 1) return { status: 429, headers: { 'Retry-After': '1' }, body: {} };
       return { status: 200, body: { id: 'created-1' } };
     }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
   ]);
 
   try {
@@ -471,6 +506,213 @@ function mockFetch(routes) {
     assert(result.created === 1 && result.failed === 0, 'event created after retry');
     assert(elapsed >= 900, `Retry-After wait actually happened (elapsed ${elapsed}ms)`);
     assert(elapsed < 4000, `Retry-After honored over the old fixed 5s wait (elapsed ${elapsed}ms)`);
+
+    // Timezone correctness — the payload must be HK wall time, not the
+    // machine zone, with the zone attached to both start and end.
+    assert(postedBody.start.dateTime === '2026-08-24T02:00:00.000Z', `Mon 10:00 HK → 02:00Z (got ${postedBody.start.dateTime})`);
+    assert(postedBody.end.dateTime === '2026-08-24T03:00:00.000Z', 'Mon 11:00 HK → 03:00Z');
+    assert(postedBody.start.timeZone === 'Asia/Hong_Kong', 'start.timeZone = calendar zone');
+    assert(postedBody.end.timeZone === 'Asia/Hong_Kong', 'end.timeZone = calendar zone');
+    assert(result.events[0].taskId === 't1', 'created record carries taskId for per-task unsync');
+    assert(result.events[0].sessionKey === 't1::2026-08-24::Mon::60', 'created record carries sessionKey');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// exportSessions — timezone fallback + local skip-keys
+// ---------------------------------------------------------------------------
+
+{
+  // Primary calendar metadata unavailable → default Asia/Hong_Kong
+  const session = { startTick: 60, endTick: 66, task: { id: 't1', title: 'Study', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
+
+  let postedBody = null;
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async (url, opts) => {
+      postedBody = JSON.parse(opts.body);
+      return { status: 200, body: { id: 'created-2' } };
+    }],
+    ['/calendars/primary', 'GET', async () => ({ status: 500, body: {} })],
+  ]);
+
+  try {
+    await exportSessions('token', [WEEK], weekResults);
+    assert(postedBody.start.timeZone === 'Asia/Hong_Kong', 'metadata failure falls back to Asia/Hong_Kong');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // Sessions whose sessionKey is already in local tracking are skipped
+  // before any API call (re-sync idempotence keyed by stored tracking)
+  const session = { startTick: 60, endTick: 66, task: { id: 't1', title: 'Study', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
+
+  let postCalls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async () => { postCalls++; return { status: 200, body: { id: 'x' } }; }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+
+  try {
+    const result = await exportSessions('token', [WEEK], weekResults, null, new Set(['t1::2026-08-24::Mon::60']));
+    assert(postCalls === 0 && result.skipped === 1, 'locally-tracked sessionKey skipped without an API call');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// deleteSyncedEvents / unsyncTaskEvents — per-task delete, 404-as-gone
+// ---------------------------------------------------------------------------
+
+{
+  const restore = mockFetch([
+    ['/calendars/primary/events/e-ok', 'DELETE', async () => ({ status: 200, body: {} })],
+    ['/calendars/primary/events/e-gone', 'DELETE', async () => ({ status: 404, body: {} })],
+    ['/calendars/primary/events/e-410', 'DELETE', async () => ({ status: 410, body: {} })],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [
+      { googleEventId: 'e-ok' }, { googleEventId: 'e-gone' }, { googleEventId: 'e-410' },
+    ]);
+    assert(res.deleted === 3 && res.failed === 0, '200/404/410 all count as deleted (404 = already gone)');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // Delete task A's events only; task B's mapping stays. The 404 for A2
+  // clears its mapping too.
+  const tracking = {
+    '2026-08-24': {
+      syncedAt: '2026-08-27T00:00:00.000Z',
+      events: [
+        { googleEventId: 'eA1', taskId: 'taskA', sessionKey: 'taskA::2026-08-24::Mon::60' },
+        { googleEventId: 'eA2', taskId: 'taskA', sessionKey: 'taskA::2026-08-24::Tue::60' },
+        { googleEventId: 'eB1', taskId: 'taskB', sessionKey: 'taskB::2026-08-24::Mon::72' },
+      ],
+    },
+  };
+
+  let deletedIds = [];
+  const restore = mockFetch([
+    ['/calendars/primary/events/eA1', 'DELETE', async () => { deletedIds.push('eA1'); return { status: 200, body: {} }; }],
+    ['/calendars/primary/events/eA2', 'DELETE', async () => { deletedIds.push('eA2'); return { status: 404, body: {} }; }],
+    ['/calendars/primary/events/eB1', 'DELETE', async () => { deletedIds.push('eB1'); return { status: 200, body: {} }; }],
+  ]);
+
+  try {
+    const res = await unsyncTaskEvents('token', 'taskA', tracking);
+    assert(res.deleted === 2 && res.failed === 0, 'both of task A\'s events deleted (404 counts as gone)');
+    assert(deletedIds.length === 2 && !deletedIds.includes('eB1'), 'task B\'s event untouched');
+    const kept = res.tracking['2026-08-24'].events;
+    assert(kept.length === 1 && kept[0].googleEventId === 'eB1', 'tracking keeps only task B\'s mapping');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // A failed delete keeps the mapping — retryable, never silently dropped
+  const tracking = {
+    '2026-08-24': {
+      syncedAt: '2026-08-27T00:00:00.000Z',
+      events: [{ googleEventId: 'eA1', taskId: 'taskA' }],
+    },
+  };
+  const restore = mockFetch([
+    ['/calendars/primary/events/eA1', 'DELETE', async () => ({ status: 500, body: {} })],
+  ]);
+  try {
+    const res = await unsyncTaskEvents('token', 'taskA', tracking);
+    assert(res.failed === 1 && res.deleted === 0, 'failed delete reported as failed');
+    assert(res.tracking['2026-08-24'].events.length === 1, 'mapping kept after failed delete');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // Unknown task id → no-op, tracking untouched
+  const tracking = { '2026-08-24': { syncedAt: 'x', events: [{ googleEventId: 'eA1', taskId: 'taskA' }] } };
+  const restore = mockFetch([]);
+  try {
+    const res = await unsyncTaskEvents('token', 'nope', tracking);
+    assert(res.deleted === 0 && res.failed === 0, 'unknown task id is a no-op');
+    assert(res.tracking['2026-08-24'].events.length === 1, 'tracking untouched');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zone-aware import mapping — events land on the calendar-zone day/hour,
+// not the machine-zone day/hour (fixed UTC instants → deterministic
+// assertions on any machine).
+// ---------------------------------------------------------------------------
+
+{
+  // HK Sat 10:00–11:30 as a UTC instant
+  const blocks = mapToCalendarBlocks([makeTimedEvent({
+    start: '2026-08-29T02:00:00.000Z',
+    end: '2026-08-29T03:30:00.000Z',
+  })], WEEK, { timeZone: 'Asia/Hong_Kong' });
+
+  assert(blocks.length === 1, 'zone-mapped event included');
+  assert(blocks[0].day === 'Sat', `HK Saturday stays Saturday (got ${blocks[0].day})`);
+  assert(blocks[0].startHour === 10 && blocks[0].durationHours === 1.5, 'HK wall hours extracted');
+}
+
+{
+  // HK Monday 05:30 = Sunday 21:30Z — a LA machine would map this to
+  // Sunday; the calendar zone must keep it on Monday, inside the week.
+  const blocks = mapToCalendarBlocks([makeTimedEvent({
+    start: '2026-08-23T21:30:00.000Z',
+    end: '2026-08-23T22:30:00.000Z',
+  })], WEEK, { timeZone: 'Asia/Hong_Kong' });
+
+  assert(blocks.length === 1 && blocks[0].day === 'Mon', 'HK Monday 05:30 included as Mon');
+  assert(blocks[0].clipped === 'early', '05:30 start flagged clipped early');
+}
+
+{
+  // fetchWeekEvents uses the primary calendar's zone from meta (no extra
+  // metadata call) and maps fetched events into that zone.
+  const event = makeTimedEvent({ id: 'eSat', start: '2026-08-29T02:00:00.000Z', end: '2026-08-29T03:00:00.000Z' });
+  let metaCalls = 0;
+  const restore = mockFetch([
+    ['/calendars/calA/events', 'GET', async () => ({ status: 200, body: { summary: 'Main', items: [event] } })],
+    ['/calendars/primary', 'GET', async () => { metaCalls++; return { status: 200, body: { timeZone: 'Asia/Hong_Kong' } }; }],
+  ]);
+  try {
+    const meta = [{ id: 'calA', summary: 'Main', primary: true, timeZone: 'Asia/Hong_Kong' }];
+    const { blocks } = await fetchWeekEvents('token', WEEK, ['calA'], meta);
+    assert(metaCalls === 0, 'primary timeZone from meta skips the metadata call');
+    assert(blocks[0].day === 'Sat' && blocks[0].startHour === 10, 'fetched event mapped in calendar zone');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // Without meta, fetchWeekEvents falls back to the metadata call then
+  // the default zone — still never the machine zone.
+  const event = makeTimedEvent({ id: 'eMon', start: '2026-08-24T02:00:00.000Z', end: '2026-08-24T03:00:00.000Z' });
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { summary: 'Primary', items: [event] } })],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const { blocks } = await fetchWeekEvents('token', WEEK);
+    assert(blocks[0].day === 'Mon' && blocks[0].startHour === 10, 'default-calendar fetch mapped in the metadata zone');
   } finally {
     restore();
   }

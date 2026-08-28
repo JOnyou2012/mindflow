@@ -12,7 +12,7 @@ import { saveGoogleExport, loadGoogleExport } from '../utils/storage.js';
  *   T             translations
  */
 export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
-  const { isSignedIn, signIn, signOut, getToken } = useGoogleAuth();
+  const { isSignedIn, signOut, refreshToken } = useGoogleAuth();
   const [status, setStatus] = useState('idle'); // idle | syncing | synced | error
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [syncResult, setSyncResult] = useState(null);
@@ -33,63 +33,83 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
     return sum + Object.values(r.days).reduce((s, d) => s + (d.sessions?.length || 0), 0);
   }, 0);
 
-  const handleExport = useCallback(async () => {
-    if (!isSignedIn) {
-      try {
-        await signIn();
-      } catch (err) {
-        // Popup blocked / access denied — tell the user, don't silently idle.
-        setStatus('error');
-        setErrorMsg(err.message || T.gcalExportError.replace('{detail}', ''));
-        return;
-      }
+  const saveTracking = (result) => {
+    const existing = loadGoogleExport();
+    for (const evt of result.events) {
+      const key = evt.weekStart;
+      if (!existing[key]) existing[key] = { syncedAt: new Date().toISOString(), events: [] };
+      existing[key].events.push(evt);
+      existing[key].syncedAt = new Date().toISOString();
     }
+    saveGoogleExport(existing);
+  };
 
-    const token = getToken();
-    if (!token) return;
-
-    setStatus('syncing');
+  const handleExport = useCallback(async () => {
     setErrorMsg(null);
     setProgress({ current: 0, total: totalSessions });
 
+    // Token-on-demand before a write: a missing/expired token must trigger
+    // a quiet refresh, not a 401 storm. If even the refresh fails, surface
+    // the error but leave the widget in place.
+    let token;
     try {
-      const result = await exportSessions(token, weekStarts, weekResults, (current, total) => {
-        setProgress({ current, total });
-      });
-      setSyncResult(result);
-      setStatus('synced');
-
-      // Save export tracking
-      const existing = loadGoogleExport();
-      for (const evt of result.events) {
-        const key = evt.weekStart;
-        if (!existing[key]) existing[key] = { syncedAt: new Date().toISOString(), events: [] };
-        existing[key].events.push(evt);
-        existing[key].syncedAt = new Date().toISOString();
-      }
-      saveGoogleExport(existing);
+      token = await refreshToken();
     } catch (err) {
       setStatus('error');
+      setErrorMsg(err.message || T.gcalExportError.replace('{detail}', ''));
+      return;
+    }
+
+    setStatus('syncing');
+    // Local idempotence: sessions already present in the tracking store are
+    // skipped before any API call, on top of the API-side dedup.
+    const alreadySyncedKeys = new Set(
+      Object.values(loadGoogleExport())
+        .flatMap(e => e?.events || [])
+        .map(ev => ev?.sessionKey)
+        .filter(Boolean),
+    );
+
+    const runExport = async (tok) => {
+      const result = await exportSessions(tok, weekStarts, weekResults, (current, total) => {
+        setProgress({ current, total });
+      }, alreadySyncedKeys);
+      setSyncResult(result);
+      setStatus('synced');
+      saveTracking(result);
+    };
+
+    try {
+      await runExport(token);
+    } catch (err) {
       if (err.message === 'token_expired') {
-        // Clear the dead token so the next Connect opens a fresh popup.
-        signOut();
-        setErrorMsg(T.gcalTokenExpired);
+        // One 401: refresh and retry once (export is idempotent — dedup
+        // makes a partial export safe to re-run). Never reset the UI to
+        // Connect for a single expired token.
+        try {
+          token = await refreshToken();
+          await runExport(token);
+        } catch (err2) {
+          setStatus('error');
+          setErrorMsg(err2.message === 'token_expired'
+            ? T.gcalTokenExpired
+            : T.gcalExportError.replace('{detail}', err2.message || ''));
+        }
       } else if (err.message === 'permission_denied') {
         // The scope was revoked in Google settings — the token is useless
         // for export. Sign out so the next Connect re-requests consent
         // instead of failing forever with the same dead token.
         signOut();
+        setStatus('error');
         setErrorMsg(T.gcalPermissionDenied);
       } else {
+        setStatus('error');
         setErrorMsg(T.gcalExportError.replace('{detail}', err.message || ''));
       }
     }
-  }, [isSignedIn, signIn, signOut, getToken, weekStarts, weekResults, totalSessions, T]);
+  }, [refreshToken, signOut, weekStarts, weekResults, totalSessions, T]);
 
   const handleUnsync = useCallback(async () => {
-    const token = getToken();
-    if (!token) return;
-
     setStatus('syncing');
     const exportData = loadGoogleExport();
     const allEvents = weekStarts.reduce((arr, ws) => {
@@ -102,8 +122,21 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
       return;
     }
 
+    // Token-on-demand: Remove must not fail on a dead token just because
+    // the user last connected a while ago.
+    let token;
     try {
-      const res = await deleteSyncedEvents(token, allEvents);
+      token = await refreshToken();
+    } catch (err) {
+      setStatus('error');
+      setErrorMsg(err.message || T.gcalExportError.replace('{detail}', ''));
+      return;
+    }
+
+    const runDelete = (tok) => deleteSyncedEvents(tok, allEvents);
+
+    try {
+      let res = await runDelete(token);
       if (res.failed > 0) {
         // Keep tracking so the user can retry — don't orphan events in
         // Google Calendar by pretending the unsync fully succeeded.
@@ -117,13 +150,35 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
       setSyncResult(null);
       setStatus('idle');
     } catch (err) {
-      setStatus('error');
       if (err.message === 'token_expired') {
+        try {
+          token = await refreshToken();
+          const res = await runDelete(token);
+          if (res.failed > 0) {
+            setStatus('error');
+            setErrorMsg(T.gcalExportFailed.replace('{n}', res.failed) + ' ' + T.gcalUnsyncRetry);
+            return;
+          }
+          for (const ws of weekStarts) delete exportData[ws];
+          saveGoogleExport(exportData);
+          setSyncResult(null);
+          setStatus('idle');
+        } catch (err2) {
+          setStatus('error');
+          setErrorMsg(err2.message === 'token_expired'
+            ? T.gcalTokenExpired
+            : T.gcalExportError.replace('{detail}', err2.message || ''));
+        }
+      } else if (err.message === 'permission_denied') {
         signOut();
-        setErrorMsg(T.gcalTokenExpired);
-      } else setErrorMsg(T.gcalExportError.replace('{detail}', err.message || ''));
+        setStatus('error');
+        setErrorMsg(T.gcalPermissionDenied);
+      } else {
+        setStatus('error');
+        setErrorMsg(T.gcalExportError.replace('{detail}', err.message || ''));
+      }
     }
-  }, [getToken, signOut, weekStarts, T]);
+  }, [refreshToken, signOut, weekStarts, T]);
 
   // Signed-out state (errors take precedence — a failed sign-in leaves
   // isSignedIn false, and swallowing the error here made it invisible)

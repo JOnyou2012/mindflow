@@ -15,8 +15,9 @@ import {
   getAccessToken,
   isSignedIn,
   requestAccessToken,
+  getFreshToken,
   clearToken,
-  onTokenExpired,
+  onTokenChange,
 } from './googleAuthCore.js';
 import { clearGoogleCache, clearGoogleCalendars } from './storage.js';
 
@@ -32,9 +33,16 @@ export function GoogleAuthProvider({ clientId, children }) {
     if (!clientId || clientId.startsWith('your-')) return;
     initGoogleAuth(clientId);
 
-    const unsub = onTokenExpired((reason) => {
-      setSignedIn(false);
-      if (reason !== 'user_signed_out') setError(reason);
+    // 'token_acquired' keeps the app signed-in through silent refreshes
+    // (getFreshToken) — the UI must not flip to Connect mid-flow.
+    const unsub = onTokenChange((event) => {
+      if (event === 'token_acquired') {
+        setSignedIn(true);
+        setError(null);
+      } else {
+        setSignedIn(false);
+        if (event !== 'user_signed_out') setError(event);
+      }
     });
 
     return unsub;
@@ -45,6 +53,17 @@ export function GoogleAuthProvider({ clientId, children }) {
     try {
       await requestAccessToken();
       setSignedIn(true);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const refreshToken = useCallback(async () => {
+    try {
+      const token = await getFreshToken();
+      setSignedIn(true);
+      return token;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -65,6 +84,7 @@ export function GoogleAuthProvider({ clientId, children }) {
   const value = {
     isSignedIn: signedIn || isSignedIn(),
     signIn,
+    refreshToken,
     signOut,
     getToken: getAccessToken,
     error,
