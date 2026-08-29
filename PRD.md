@@ -86,6 +86,32 @@
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
 >
+> **2026-08-29 (Jeremy + Claude — two-way sync):**
+> The Future-Enhancements item "two-way sync (changes in Google Calendar
+> update MindFlow)" is implemented, both directions:
+>
+> **Google → MindFlow (auto-refresh):** while connected, the import
+> widget polls every 60s and on window focus, re-fetching the selected
+> calendars. `blocksDiffer()` change detection means a no-change poll
+> never re-imports (which would spuriously mark the plan stale);
+> Google-side edits/moves/deletes land in the grid and — since real
+> changes DO re-import — correctly bump the plan to stale.
+>
+> **MindFlow → Google (editable imported events):** imported blocks are
+> now clickable in the grid. Editing title/time PATCHes the real event
+> (`updateGoogleEvent`, zoned via `buildZonedTimesForBlock` in the
+> event's own calendar zone, token-on-demand + one 401 refresh retry +
+> 429/5xx/network retries); deleting a G-block DELETEs the real event
+> after a confirm (`deleteGoogleEvent`, 404/410 = already gone).
+> All-day events are title-only (their span belongs to Google's all-day
+> semantics). Blocks now carry `googleCalendarId` +
+> `googleCalendarTimeZone` from import so edits target the right
+> calendar. Type stays a MindFlow-local classification (calendar color
+> is Google's). 6 new i18n keys × 6 languages.
+>
+> Suite: 133 google-calendar checks (5,881 total), 0 failures, lint
+> clean, build clean.
+>
 > **2026-08-29 (Jeremy + Claude — GCal Remove fix, round 3):**
 > The 15:50 HKT re-test ran against the ROUND-1 build (round 2 had not
 > been deployed yet), so its three failures — no orphan sweep, no
@@ -1068,9 +1094,9 @@ COLORS array converted to `getColors(T)` / `getColorByKey(T)` helpers.
 >
 > **Known gaps:** Backend (main.py) not yet upgraded to v3 engine math (still uses
 > single-exponential recovery, no flow collapse/momentum/capacity). Google Calendar
-> integration (steps 86–94) is code-complete as of 2026-08-27 (multi-calendar,
-> clipped indicators, Retry-After, central sign-out clearing) but not yet live —
-> gated on the external GCP OAuth setup (step 86) + a live activation test.
+> integration (steps 86–94) is production-verified as of 2026-08-29 (all 8 acceptance
+> steps PASS on Vercel) — remaining P2 niceties: multi-tab plan state, Safari/Firefox
+> popup pass, non-primary calendar toggles untested live.
 >
 > Give this entire file to your AI at the start of every session. Say:
 > *"Read the AI Agent Rules at the top, then check the checklist. What's our
@@ -3692,7 +3718,7 @@ session quality) in extended properties. All generated weeks are synced at once.
 ## Future Enhancements (post Stage 5)
 - [x] ~~Write scheduled study sessions back to Google Calendar~~ ✅ Implemented (steps 95–100)
 - [x] ~~Schedule image export (PNG download of the plan)~~ ✅ Implemented (Part 8, steps 101–110)
-- Two-way sync (changes in Google Calendar update MindFlow)
+- [x] ~~Two-way sync (changes in Google Calendar update MindFlow)~~ ✅ Implemented (2026-08-29 — auto-refresh poll + focus refresh with change detection; imported blocks editable: PATCH/DELETE push back to Google)
 - Microsoft Outlook / Apple Calendar support
 - iCal import for offline calendar files
 - Team/family calendar sharing for group study scheduling

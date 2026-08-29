@@ -338,6 +338,14 @@ const t = {
     gcalClippedLate: 'ends after 22:00',
     gcalClippedBoth: 'extends beyond 6:00–22:00',
 
+    // Google Calendar — two-way sync (edit/delete imported events)
+    gcalEditGoogleEvent: 'Edit Google Calendar event',
+    gcalGoogleEditHint: 'click to edit in Google Calendar',
+    gcalDeleteGoogleConfirm: 'Delete this event from Google Calendar? This cannot be undone.',
+    gcalEventUpdateError: 'Could not update the event in Google Calendar. Try again.',
+    gcalEventDeleteError: 'Could not delete the event in Google Calendar. Try again.',
+    gcalAllDayTimeLocked: 'All-day events keep their full-day span — only the title is editable.',
+
     // Accessibility
     ariaPrevWeek: 'Previous week',
     ariaNextWeek: 'Next week',
@@ -648,6 +656,14 @@ const t = {
     gcalClippedEarly: '早于 6:00 开始',
     gcalClippedLate: '晚于 22:00 结束',
     gcalClippedBoth: '超出 6:00–22:00 范围',
+
+    // Google Calendar — 双向同步（编辑/删除导入的事件）
+    gcalEditGoogleEvent: '编辑 Google 日历事件',
+    gcalGoogleEditHint: '点击可在 Google 日历中编辑',
+    gcalDeleteGoogleConfirm: '从 Google 日历删除此事件？此操作无法撤销。',
+    gcalEventUpdateError: '无法更新 Google 日历中的事件。请重试。',
+    gcalEventDeleteError: '无法删除 Google 日历中的事件。请重试。',
+    gcalAllDayTimeLocked: '全天事件保持全天跨度 — 仅标题可编辑。',
     ariaPrevWeek: '上一周',
     ariaNextWeek: '下一周',
     ariaClose: '关闭',
@@ -953,6 +969,14 @@ const t = {
     gcalClippedEarly: '早於 6:00 開始',
     gcalClippedLate: '晚於 22:00 結束',
     gcalClippedBoth: '超出 6:00–22:00 範圍',
+
+    // Google Calendar — 雙向同步（編輯/刪除匯入的事件）
+    gcalEditGoogleEvent: '編輯 Google 日曆事件',
+    gcalGoogleEditHint: '點擊可在 Google 日曆中編輯',
+    gcalDeleteGoogleConfirm: '從 Google 日曆刪除此事件？此操作無法復原。',
+    gcalEventUpdateError: '無法更新 Google 日曆中的事件。請重試。',
+    gcalEventDeleteError: '無法刪除 Google 日曆中的事件。請重試。',
+    gcalAllDayTimeLocked: '全天事件保持全天跨度 — 僅標題可編輯。',
     ariaPrevWeek: '上一週',
     ariaNextWeek: '下一週',
     ariaClose: '關閉',
@@ -1258,6 +1282,14 @@ const t = {
     gcalClippedEarly: 'empieza antes de las 6:00',
     gcalClippedLate: 'termina después de las 22:00',
     gcalClippedBoth: 'se extiende fuera de 6:00–22:00',
+
+    // Google Calendar — sincronización bidireccional
+    gcalEditGoogleEvent: 'Editar evento de Google Calendar',
+    gcalGoogleEditHint: 'haz clic para editar en Google Calendar',
+    gcalDeleteGoogleConfirm: '¿Eliminar este evento de Google Calendar? No se puede deshacer.',
+    gcalEventUpdateError: 'No se pudo actualizar el evento en Google Calendar. Inténtalo de nuevo.',
+    gcalEventDeleteError: 'No se pudo eliminar el evento en Google Calendar. Inténtalo de nuevo.',
+    gcalAllDayTimeLocked: 'Los eventos de día completo mantienen su duración — solo se puede editar el título.',
     ariaPrevWeek: 'Semana anterior',
     ariaNextWeek: 'Semana siguiente',
     ariaClose: 'Cerrar',
@@ -1563,6 +1595,14 @@ const t = {
     gcalClippedEarly: 'सुबह 6:00 से पहले शुरू होता है',
     gcalClippedLate: 'रात 22:00 के बाद समाप्त होता है',
     gcalClippedBoth: '6:00–22:00 से बाहर तक फैला है',
+
+    // Google Calendar — दो-तरफ़ा सिंक
+    gcalEditGoogleEvent: 'Google Calendar इवेंट संपादित करें',
+    gcalGoogleEditHint: 'Google Calendar में संपादित करने के लिए क्लिक करें',
+    gcalDeleteGoogleConfirm: 'Google Calendar से यह इवेंट हटाएं? इसे पूर्ववत नहीं किया जा सकता।',
+    gcalEventUpdateError: 'Google Calendar में इवेंट अपडेट नहीं हो सका। पुनः प्रयास करें।',
+    gcalEventDeleteError: 'Google Calendar में इवेंट हटाया नहीं जा सका। पुनः प्रयास करें।',
+    gcalAllDayTimeLocked: 'पूरे दिन के इवेंट अपनी अवधि बनाए रखते हैं — केवल शीर्षक संपादन योग्य है।',
     ariaPrevWeek: 'पिछला सप्ताह',
     ariaNextWeek: 'अगला सप्ताह',
     ariaClose: 'बंद करें',
@@ -1868,6 +1908,14 @@ const t = {
     gcalClippedEarly: 'يبدأ قبل الساعة 6:00',
     gcalClippedLate: 'ينتهي بعد الساعة 22:00',
     gcalClippedBoth: 'يمتد خارج نطاق 6:00–22:00',
+
+    // Google Calendar — المزامنة ثنائية الاتجاه
+    gcalEditGoogleEvent: 'تعديل حدث تقويم Google',
+    gcalGoogleEditHint: 'انقر للتعديل في تقويم Google',
+    gcalDeleteGoogleConfirm: 'حذف هذا الحدث من تقويم Google؟ لا يمكن التراجع عن ذلك.',
+    gcalEventUpdateError: 'تعذر تحديث الحدث في تقويم Google. حاول مرة أخرى.',
+    gcalEventDeleteError: 'تعذر حذف الحدث في تقويم Google. حاول مرة أخرى.',
+    gcalAllDayTimeLocked: 'تحافظ أحداث اليوم الكامل على مدتها — العنوان فقط قابل للتعديل.',
     ariaPrevWeek: 'الأسبوع السابق',
     ariaNextWeek: 'الأسبوع التالي',
     ariaClose: 'إغلاق',

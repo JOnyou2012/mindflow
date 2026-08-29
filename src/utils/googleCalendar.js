@@ -147,6 +147,100 @@ export function zonedPartsFromInstant(instantMs, timeZone) {
   };
 }
 
+/**
+ * Wall-clock times for a grid block (day + start/end hours) expressed as
+ * UTC instants + zone for the given week — used to PATCH an imported
+ * event back to Google Calendar after an in-grid edit (two-way sync).
+ */
+export function buildZonedTimesForBlock(weekStartISO, day, startHour, endHour, timeZone) {
+  const dayIdx = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(day);
+  const [wy, wm, wd] = weekStartISO.split('-').map(Number);
+  const date = new Date(wy, wm - 1, wd + dayIdx);
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate();
+  const startMin = Math.round(startHour * 60);
+  const endMin = Math.round(endHour * 60);
+  return {
+    startISO: zonedISOFromParts(y, m, d, Math.floor(startMin / 60), startMin % 60, timeZone),
+    endISO: zonedISOFromParts(y, m, d, Math.floor(endMin / 60), endMin % 60, timeZone),
+  };
+}
+
+/**
+ * Update an imported Google Calendar event (two-way sync: edits made in
+ * the MindFlow grid are pushed back to Google via PATCH).
+ * `changes` is a partial event resource ({ summary, start, end }).
+ */
+export async function updateGoogleEvent(accessToken, calendarId, eventId, changes) {
+  const url = CALENDAR_API + `/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`;
+  const attempt = async () => {
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+        signal: timeoutSignal(30000),
+      });
+      return { response, networkError: false };
+    } catch {
+      return { response: null, networkError: true };
+    }
+  };
+
+  let { response, networkError } = await attempt();
+  if (networkError || response.status === 429 || response.status >= 500) {
+    await new Promise(r => setTimeout(r, retryDelayFrom(response, networkError ? 300 : response.status === 429 ? 5000 : 1500)));
+    ({ response, networkError } = await attempt());
+  }
+  if (networkError) throw new Error('Calendar API error: network');
+  if (response.status === 401) throw new Error('token_expired');
+  if (response.status === 403) throw new Error('permission_denied');
+  if (!response.ok) throw new Error(`Calendar API error: ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Delete an imported Google Calendar event (two-way sync: deleting a
+ * G-block in the grid deletes the real event). 404/410 = already gone.
+ */
+export async function deleteGoogleEvent(accessToken, calendarId, eventId) {
+  const url = CALENDAR_API + `/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`;
+  const attempt = async () => {
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: timeoutSignal(30000),
+      });
+      return { response, networkError: false };
+    } catch {
+      return { response: null, networkError: true };
+    }
+  };
+
+  let { response, networkError } = await attempt();
+  if (networkError) {
+    await new Promise(r => setTimeout(r, 300));
+    ({ response, networkError } = await attempt());
+  }
+  if (networkError) throw new Error('Calendar API error: network');
+  if (response.ok || response.status === 404 || response.status === 410) return;
+  if (response.status === 401) throw new Error('token_expired');
+  if (response.status === 403) throw new Error('permission_denied');
+  throw new Error(`Calendar API error: ${response.status}`);
+}
+
+/**
+ * True when two imported-block sets meaningfully differ. Used by the
+ * auto-refresh loop so a no-change poll does NOT re-import (which would
+ * spuriously mark the plan stale).
+ */
+export function blocksDiffer(a, b) {
+  const key = (bl) => (bl || []).map(x =>
+    `${x.googleEventId}|${x.day}|${x.startHour}|${x.durationHours}|${x.label}|${x.clipped || ''}`
+  ).sort().join('~');
+  return key(a) !== key(b);
+}
+
 // -- Type inference (keyword-based) -------------------------------------------
 
 const TYPE_KEYWORDS = {
@@ -273,6 +367,7 @@ export async function fetchWeekEvents(accessToken, weekStartISO, calendarIds = n
     const calendarName = meta?.summary || data.summary || 'Google Calendar';
     calendarNames.push(calendarName);
     const blocks = mapToCalendarBlocks(events, weekStartISO, {
+      calendarId: calId,
       calendarName,
       calendarColor: meta?.backgroundColor || null,
       timeZone: meta?.timeZone || timeZone,
@@ -317,14 +412,16 @@ export async function fetchWeekEvents(accessToken, weekStartISO, calendarIds = n
  *
  * @param {object[]} events     Google Calendar API event objects
  * @param {string} weekStartISO ISO Monday of the target week
- * @param {{ calendarName?: string, calendarColor?: string, timeZone?: string }} [opts]
+ * @param {{ calendarName?: string, calendarColor?: string, timeZone?: string, calendarId?: string }} [opts]
  *   Source calendar metadata — attached to every block so the UI can
  *   color-code by calendar (PRD step 91) instead of by event type.
  *   timeZone maps events to grid days/hours in the CALENDAR's zone
  *   (machine zone only when absent — pure-function callers like tests).
+ *   calendarId + timeZone ride along so two-way-sync edits (PATCH/
+ *   DELETE from the grid) can target the right calendar and zone.
  */
 export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
-  const { calendarName = null, calendarColor = null, timeZone = null } = opts || {};
+  const { calendarName = null, calendarColor = null, timeZone = null, calendarId = null } = opts || {};
   const visibleStartH = DAY_START_TICK / 6; // 6am
   const visibleEndH = DAY_END_TICK / 6; // 10pm
   const blocks = [];
@@ -375,6 +472,8 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
             isFixed: true,
             source: 'google',
             googleEventId: event.id,
+            googleCalendarId: calendarId,
+            googleCalendarTimeZone: timeZone,
             googleCalendarName: calendarName || event.organizer?.displayName || 'Google Calendar',
             googleCalendarColor: calendarColor,
             isAllDay: true,
@@ -425,6 +524,8 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
             isFixed: true,
             source: 'google',
             googleEventId: event.id,
+            googleCalendarId: calendarId,
+            googleCalendarTimeZone: timeZone,
             googleCalendarName: calendarName || event.organizer?.displayName || 'Google Calendar',
             googleCalendarColor: calendarColor,
             isAllDay: false,

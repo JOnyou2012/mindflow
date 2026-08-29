@@ -17,6 +17,10 @@ import {
   unsyncTaskEvents,
   findMindFlowEvents,
   zonedISOFromParts,
+  updateGoogleEvent,
+  deleteGoogleEvent,
+  buildZonedTimesForBlock,
+  blocksDiffer,
   DEFAULT_CALENDAR_TIME_ZONE,
 } from '../src/utils/googleCalendar.js';
 
@@ -977,6 +981,117 @@ function mockFetch(routes) {
   } finally {
     restore();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Two-way sync — PATCH/DELETE imported events, zoned edit times, diffing
+// ---------------------------------------------------------------------------
+
+{
+  // Imported blocks carry their calendar id + zone so grid edits can
+  // target the right calendar.
+  const event = makeTimedEvent({ id: 'eA', start: '2026-08-24T02:00:00.000Z', end: '2026-08-24T03:00:00.000Z' });
+  const restore = mockFetch([
+    ['/calendars/calA/events', 'GET', async () => ({ status: 200, body: { summary: 'Main', items: [event] } })],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const { blocks } = await fetchWeekEvents('token', WEEK, ['calA']);
+    assert(blocks[0].googleCalendarId === 'calA', 'block carries its calendar id');
+    assert(blocks[0].googleCalendarTimeZone === 'Asia/Hong_Kong', 'block carries the mapping zone');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // buildZonedTimesForBlock — grid wall times → zoned instants
+  const { startISO, endISO } = buildZonedTimesForBlock('2026-08-24', 'Sat', 10, 11.5, 'Asia/Hong_Kong');
+  assert(startISO === '2026-08-29T02:00:00.000Z', 'Sat 10:00 HK → 02:00Z');
+  assert(endISO === '2026-08-29T03:30:00.000Z', 'Sat 11:30 HK → 03:30Z');
+}
+
+{
+  // updateGoogleEvent PATCHes with the given changes, retries 5xx once
+  let calls = 0;
+  let patchedBody = null;
+  const restore = mockFetch([
+    ['/calendars/calA/events/e1', 'PATCH', async (url, opts) => {
+      calls++;
+      patchedBody = JSON.parse(opts.body);
+      if (calls === 1) return { status: 500, body: {} };
+      return { status: 200, body: { id: 'e1', summary: patchedBody.summary } };
+    }],
+  ]);
+  try {
+    const changes = { summary: 'Renamed' };
+    const result = await updateGoogleEvent('token', 'calA', 'e1', changes);
+    assert(calls === 2, '5xx PATCH retried once');
+    assert(result.summary === 'Renamed', 'updated event returned');
+    assert(patchedBody.summary === 'Renamed', 'changes sent');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // updateGoogleEvent surfaces 401 for the caller's refresh path
+  const restore = mockFetch([
+    ['/calendars/calA/events/e1', 'PATCH', async () => ({ status: 401, body: {} })],
+  ]);
+  try {
+    let threw = null;
+    await updateGoogleEvent('token', 'calA', 'e1', { summary: 'X' }).catch(e => { threw = e; });
+    assert(threw?.message === 'token_expired', 'PATCH 401 → token_expired');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // deleteGoogleEvent: 200/404/410 all succeed silently
+  let deletedIds = [];
+  const restore = mockFetch([
+    ['/calendars/calA/events/e-ok', 'DELETE', async () => { deletedIds.push('e-ok'); return { status: 200, body: {} }; }],
+    ['/calendars/calA/events/e-404', 'DELETE', async () => { deletedIds.push('e-404'); return { status: 404, body: {} }; }],
+    ['/calendars/calA/events/e-410', 'DELETE', async () => { deletedIds.push('e-410'); return { status: 410, body: {} }; }],
+  ]);
+  try {
+    await deleteGoogleEvent('token', 'calA', 'e-ok');
+    await deleteGoogleEvent('token', 'calA', 'e-404');
+    await deleteGoogleEvent('token', 'calA', 'e-410');
+    assert(deletedIds.length === 3, '200/404/410 deletes all succeed');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // deleteGoogleEvent: network blip retried once, then surfaces
+  let calls = 0;
+  const restore = mockFetch([
+    ['/calendars/calA/events/e1', 'DELETE', async () => {
+      calls++;
+      if (calls === 1) throw new Error('net::ERR_FAILED');
+      return { status: 200, body: {} };
+    }],
+  ]);
+  try {
+    await deleteGoogleEvent('token', 'calA', 'e1');
+    assert(calls === 2, 'network error retried once');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // blocksDiffer — the auto-refresh change detector
+  const base = [{ googleEventId: 'e1', day: 'Mon', startHour: 9, durationHours: 1, label: 'A', clipped: null }];
+  assert(blocksDiffer(base, base) === false, 'identical blocks do not differ');
+  assert(blocksDiffer(base, []) === true, 'deleted block differs (Google-side delete detected)');
+  assert(blocksDiffer(base, [{ ...base[0], label: 'B' }]) === true, 'renamed block differs');
+  assert(blocksDiffer(base, [{ ...base[0], startHour: 10 }]) === true, 'moved block differs');
+  assert(blocksDiffer(base, [{ ...base[0], durationHours: 2 }]) === true, 'resized block differs');
 }
 
 summary();

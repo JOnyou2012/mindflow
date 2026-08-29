@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
-import { fetchWeekEvents, fetchCalendarList } from '../utils/googleCalendar.js';
+import { fetchWeekEvents, fetchCalendarList, blocksDiffer } from '../utils/googleCalendar.js';
 import { saveGoogleCache, saveGoogleCalendars, loadGoogleCalendars } from '../utils/storage.js';
 import { getStoredLang, langToLocale } from '../utils/i18n.js';
 import GoogleSyncButton from './GoogleSyncButton.jsx';
@@ -39,6 +39,10 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
   const [syncInfo, setSyncInfo] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [listError, setListError] = useState(null);
+  // Two-way sync bookkeeping: what the grid currently shows, and a guard
+  // so the auto-refresh poll never overlaps a manual sync.
+  const lastBlocksRef = useRef(null);
+  const syncingRef = useRef(false);
 
   /**
    * Saved selection ∩ current list; falls back to the primary calendar
@@ -85,6 +89,7 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
         const syncedAt = new Date().toISOString();
         setSyncInfo({ eventCount: 0, calendarNames: [], failures: 0, syncedAt });
         saveGoogleCache({ data: [], syncedAt, weekStart, calendarNames: [], eventCount: 0 });
+        lastBlocksRef.current = [];
         onImport([]);
         return;
       }
@@ -93,7 +98,15 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
       const syncedAt = new Date().toISOString();
       setSyncInfo({ eventCount, calendarNames, failures, syncedAt });
       saveGoogleCache({ data: blocks, syncedAt, weekStart, calendarNames, eventCount });
-      if (onImport) onImport(blocks);
+      if (onImport) {
+        // Change detection (two-way sync): a no-change poll must NOT
+        // re-import — that would bump the data version and spuriously
+        // mark the plan stale. Google-side edits/deletions DO re-import.
+        if (blocksDiffer(lastBlocksRef.current, blocks)) {
+          lastBlocksRef.current = blocks;
+          onImport(blocks);
+        }
+      }
     } catch (err) {
       if (err.message === 'token_expired' && allowRetry) {
         return performSync(await refreshToken(), idsOverride, false);
@@ -109,6 +122,8 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
   }, [calendars, resolveSelection, refreshToken, weekStart, onImport, onError, T]);
 
   const handleSync = useCallback(async (idsOverride = null) => {
+    if (syncingRef.current) return; // never overlap a running sync
+    syncingRef.current = true;
     setSyncing(true);
     setListError(null);
     try {
@@ -129,9 +144,29 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
       // mapped inside). The provider already flipped state if needed.
       onError?.(T.gcalTokenExpired);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   }, [getToken, refreshToken, performSync, onError, T]);
+
+  // Two-way sync: pull Google-side changes automatically — every 60s and
+  // whenever the tab regains focus. Skipped while hidden, while another
+  // sync is running, or while the user isn't connected. Change detection
+  // inside performSync keeps no-change polls from marking the plan stale.
+  useEffect(() => {
+    if (!isSignedIn || !syncInfo) return undefined;
+    const tick = () => {
+      if (document.hidden || syncingRef.current) return;
+      handleSync();
+    };
+    const onFocus = () => tick();
+    const interval = setInterval(tick, 60000);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isSignedIn, syncInfo, handleSync]);
 
   const toggleCalendar = (id) => {
     const next = selectedIds.includes(id)
@@ -150,6 +185,7 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
     setCalendars(null);
     setSelectedIds([]);
     setListError(null);
+    lastBlocksRef.current = [];
     onImport?.([]);
   };
 

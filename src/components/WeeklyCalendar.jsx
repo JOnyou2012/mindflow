@@ -4,6 +4,8 @@ import { TYPE_COLORS, typeColor } from '../utils/theme.js';
 import { getStoredLang, langToLocale, getDayShortNames } from '../utils/i18n.js';
 import { uuid } from '../utils/uuid.js';
 import { isGoogleConfigured } from '../utils/googleAuthCore.js';
+import { useGoogleAuth } from '../utils/googleAuthContext.js';
+import { updateGoogleEvent, deleteGoogleEvent, buildZonedTimesForBlock, DEFAULT_CALENDAR_TIME_ZONE } from '../utils/googleCalendar.js';
 import QuestionFlow from './QuestionFlow.jsx';
 import GoogleCalendarImport from './GoogleCalendarImport.jsx';
 
@@ -48,6 +50,7 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 const FRESH_ANSWERS = () => ({ label: '', type: 'academic', time: { start: 9, end: 10 }, days: [...WEEKDAYS] });
 
 export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChange, onGoogleImport, weekStart = null, onViewChange, onError, T }) {
+  const { refreshToken } = useGoogleAuth();
   const TYPE_CFG = {
     academic: { ...TYPE_ICONS.academic, label: T.typeAcademic },
     sports:   { ...TYPE_ICONS.sports, label: T.typeSports },
@@ -89,6 +92,8 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
 
   // -- Edit popover --
   const [pop, setPop] = useState(null);
+  const [popGoogle, setPopGoogle] = useState(false); // true = editing an imported Google event
+  const [popSaving, setPopSaving] = useState(false); // PATCH/DELETE in flight
   const [popLabel, setPopLabel] = useState('');
   const [popType, setPopType] = useState('academic');
   const [popStart, setPopStart] = useState(9);
@@ -257,13 +262,72 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
   // -- Edit popover handlers --
   const openEdit = (b) => {
     setPop(b);
+    setPopGoogle(false);
     setPopLabel(b.label);
     setPopType(b.type);
     setPopStart(b.startHour);
     setPopEnd(b.startHour + b.durationHours);
     setPopMsg('');
   };
-  const closePop = () => setPop(null);
+  // Imported Google events are editable too (two-way sync) — changes are
+  // PATCHed back to Google Calendar, deletes DELETE the real event.
+  const openEditGoogle = (b) => {
+    setPop(b);
+    setPopGoogle(true);
+    setPopLabel(b.label);
+    setPopType(b.type);
+    setPopStart(b.startHour);
+    setPopEnd(b.startHour + b.durationHours);
+    setPopMsg('');
+  };
+  const closePop = () => { if (!popSaving) setPop(null); };
+
+  /**
+   * PATCH the edited imported event to Google Calendar (token-on-demand,
+   * one 401 refresh + retry). All-day events are label-only — their span
+   * belongs to Google's all-day semantics, not the 6am–10pm grid.
+   */
+  const saveGoogleEdit = async () => {
+    setPopSaving(true);
+    setPopMsg('');
+    try {
+      let token;
+      try {
+        token = await refreshToken();
+      } catch (err) {
+        setPopMsg(err.message || T.gcalEventUpdateError);
+        return;
+      }
+      const changes = { summary: popLabel.trim() };
+      if (!pop.isAllDay) {
+        const tz = pop.googleCalendarTimeZone || DEFAULT_CALENDAR_TIME_ZONE;
+        const { startISO, endISO } = buildZonedTimesForBlock(weekStart, pop.day, popStart, popEnd, tz);
+        changes.start = { dateTime: startISO, timeZone: tz };
+        changes.end = { dateTime: endISO, timeZone: tz };
+      }
+      const run = (tok) => updateGoogleEvent(tok, pop.googleCalendarId, pop.googleEventId, changes);
+      try {
+        await run(token);
+      } catch (err) {
+        if (err.message === 'token_expired') {
+          token = await refreshToken();
+          await run(token);
+        } else {
+          throw err;
+        }
+      }
+      // Grid times follow the edit; clipped flags reset (the popover's
+      // time options are all inside the visible 6:00–22:00 window).
+      onGoogleImport((googleBlocks || []).map(b => b.id === pop.id
+        ? { ...b, label: popLabel.trim(), startHour: popStart, durationHours: popEnd - popStart, clipped: null }
+        : b));
+      setPop(null);
+    } catch (err) {
+      setPopMsg(err.message === 'permission_denied' ? T.gcalPermissionDenied : T.gcalEventUpdateError);
+    } finally {
+      setPopSaving(false);
+    }
+  };
 
   const saveEdit = () => {
     if (!popLabel.trim()) return;
@@ -279,15 +343,48 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
       return;
     }
 
+    if (popGoogle) {
+      saveGoogleEdit();
+      return;
+    }
+
     onChange(blocks.map(b => b.id === pop.id
       ? { ...b, label: popLabel.trim(), startHour: popStart, durationHours: dur, type: popType }
       : b));
     closePop();
   };
 
-  const deleteBlock = () => {
-    if (pop) onChange(blocks.filter(b => b.id !== pop.id));
-    closePop();
+  const deleteBlock = async () => {
+    if (!pop) { closePop(); return; }
+    if (!popGoogle) {
+      onChange(blocks.filter(b => b.id !== pop.id));
+      closePop();
+      return;
+    }
+    // Two-way sync: deleting a G-block deletes the REAL Google event.
+    if (!window.confirm(T.gcalDeleteGoogleConfirm)) return;
+    setPopSaving(true);
+    setPopMsg('');
+    try {
+      let token = await refreshToken();
+      const run = (tok) => deleteGoogleEvent(tok, pop.googleCalendarId, pop.googleEventId);
+      try {
+        await run(token);
+      } catch (err) {
+        if (err.message === 'token_expired') {
+          token = await refreshToken();
+          await run(token);
+        } else {
+          throw err;
+        }
+      }
+      onGoogleImport((googleBlocks || []).filter(b => b.id !== pop.id));
+      setPop(null);
+    } catch {
+      setPopMsg(T.gcalEventDeleteError);
+    } finally {
+      setPopSaving(false);
+    }
   };
 
   // ================================================================
@@ -465,7 +562,8 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                     );
                   })}
 
-                  {/* Google-synced blocks — readonly, with "G" badge */}
+                  {/* Google-synced blocks — editable via two-way sync (PATCH/
+                      DELETE the real event), with "G" badge */}
                   {(googleBlocks || []).filter(b => b.day === day).map(b => {
                     const c = TYPE_CFG[b.type] || TYPE_CFG.other;
                     const top = Math.max(0, (b.startHour - START_H) * ROW_H);
@@ -477,11 +575,17 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                       : null;
                     const title = b.label
                       + ' — ' + (b.googleCalendarName || T.gcalGoogleBlockTooltip || 'synced from Google Calendar')
-                      + (clipNote ? ' (' + clipNote + ')' : '');
+                      + (clipNote ? ' (' + clipNote + ')' : '')
+                      + ' · ' + T.gcalGoogleEditHint;
                     return (
                       <div
                         key={b.id}
-                        className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden cursor-default opacity-85"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${b.label}, ${fmtHr(b.startHour)} ${T.calTo} ${fmtHr(b.startHour + b.durationHours)}`}
+                        onClick={() => openEditGoogle(b)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditGoogle(b); } }}
+                        className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden cursor-pointer opacity-85 hover:opacity-100 hover:brightness-95 focus-visible:ring-2 focus-visible:ring-white/60"
                         style={{
                           top: top + 1 + 'px',
                           height: blockH - 2 + 'px',
@@ -555,9 +659,11 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             className="w-80 rounded-xl bg-mindflow-surface shadow-xl p-5 space-y-4 animate-fade-in"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 id="edit-title" className="text-mindflow-heading font-medium text-sm">{T.calEditEvent}</h3>
-              <button type="button" onClick={closePop} aria-label={T.ariaClose || 'Close'}
-                className="p-1 rounded-full text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface-alt transition-colors">
+              <h3 id="edit-title" className="text-mindflow-heading font-medium text-sm">
+                {popGoogle ? T.gcalEditGoogleEvent : T.calEditEvent}
+              </h3>
+              <button type="button" onClick={closePop} disabled={popSaving} aria-label={T.ariaClose || 'Close'}
+                className="p-1 rounded-full text-mindflow-muted hover:text-mindflow-text hover:bg-mindflow-surface-alt transition-colors disabled:opacity-40">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -566,6 +672,12 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
               <span className="font-medium text-mindflow-heading">{dayNames[pop.day] || pop.day}</span>
               <span className="text-mindflow-muted"> · </span>
               <span className="font-medium text-mindflow-heading">{fmtHr(pop.startHour)} – {fmtHr(pop.startHour + pop.durationHours)}</span>
+              {popGoogle && pop.googleCalendarName && (
+                <>
+                  <span className="text-mindflow-muted"> · </span>
+                  <span className="text-mindflow-muted">{pop.googleCalendarName}</span>
+                </>
+              )}
             </div>
 
             <div>
@@ -578,32 +690,41 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             <div>
               <label htmlFor="mf-event-time-start" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calTime}</label>
               <div className="flex items-center gap-2">
-                <select id="mf-event-time-start" value={popStart} onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
-                  className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
+                <select id="mf-event-time-start" value={popStart} disabled={popSaving || (popGoogle && pop.isAllDay)}
+                  onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
+                  className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
                   {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
                 <span className="text-mindflow-muted text-xs">{T.calTo}</span>
-                <select id="mf-event-time-end" value={popEnd} onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
-                  className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1">
+                <select id="mf-event-time-end" value={popEnd} disabled={popSaving || (popGoogle && pop.isAllDay)}
+                  onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
+                  className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
                   {TIME_OPTIONS.filter(t => t > popStart).map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
               </div>
+              {popGoogle && pop.isAllDay && (
+                <p className="text-[11px] text-mindflow-muted mt-1">{T.gcalAllDayTimeLocked}</p>
+              )}
             </div>
 
-            <div>
-              <span id="mf-event-type-label" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calType}</span>
-              <div role="radiogroup" aria-labelledby="mf-event-type-label" className="flex gap-2">
-                {Object.entries(TYPE_CFG).map(([k, c]) => (
-                  <button key={k} type="button" role="radio" aria-checked={popType === k}
-                    onClick={() => setPopType(k)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors
-                      ${popType === k ? 'text-white' : 'border border-mindflow-border text-mindflow-muted hover:text-mindflow-text'}`}
-                    style={popType === k ? { backgroundColor: c.color } : {}}>
-                    <c.icon className="w-3 h-3" />{c.label}
-                  </button>
-                ))}
+            {/* Type is a MindFlow-local classification for manual blocks;
+                imported Google events keep their calendar's color. */}
+            {!popGoogle && (
+              <div>
+                <span id="mf-event-type-label" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calType}</span>
+                <div role="radiogroup" aria-labelledby="mf-event-type-label" className="flex gap-2">
+                  {Object.entries(TYPE_CFG).map(([k, c]) => (
+                    <button key={k} type="button" role="radio" aria-checked={popType === k}
+                      onClick={() => setPopType(k)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors
+                        ${popType === k ? 'text-white' : 'border border-mindflow-border text-mindflow-muted hover:text-mindflow-text'}`}
+                      style={popType === k ? { backgroundColor: c.color } : {}}>
+                      <c.icon className="w-3 h-3" />{c.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {popMsg && (
               <div role="alert" className="flex items-start gap-2 text-xs text-mindflow-warning bg-mindflow-warning/10 rounded-lg px-3 py-2">
@@ -612,13 +733,13 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
             )}
 
             <div className="flex gap-2 pt-1">
-              <button type="button" onClick={saveEdit} disabled={!popLabel.trim()}
+              <button type="button" onClick={saveEdit} disabled={!popLabel.trim() || popSaving}
                 className="flex-1 rounded-full bg-mindflow-accent text-mindflow-onaccent py-2 text-sm font-medium
                            hover:bg-mindflow-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {T.calSaveChanges}
+                {popSaving ? T.gcalConnecting : T.calSaveChanges}
               </button>
-              <button type="button" onClick={deleteBlock} aria-label={T.calDelete || 'Delete event'}
-                className="rounded-full px-3 py-2 text-mindflow-danger hover:bg-mindflow-danger/10 transition-colors">
+              <button type="button" onClick={deleteBlock} disabled={popSaving} aria-label={T.calDelete || 'Delete event'}
+                className="rounded-full px-3 py-2 text-mindflow-danger hover:bg-mindflow-danger/10 transition-colors disabled:opacity-40">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
