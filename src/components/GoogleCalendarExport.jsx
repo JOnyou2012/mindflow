@@ -110,6 +110,10 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
   }, [refreshToken, signOut, weekStarts, weekResults, totalSessions, T]);
 
   const handleUnsync = useCallback(async () => {
+    // Destructive Calendar action — confirm first (production feedback:
+    // Remove fired silently and deleted events without warning).
+    if (!window.confirm(T.gcalUnsyncConfirm)) return;
+
     setStatus('syncing');
     const exportData = loadGoogleExport();
     const allEvents = weekStarts.reduce((arr, ws) => {
@@ -133,10 +137,19 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
       return;
     }
 
-    const runDelete = (tok) => deleteSyncedEvents(tok, allEvents);
+    // A mid-batch 401 refreshes the token once and retries the failing
+    // event instead of aborting the whole batch (production Remove bug).
+    const runDelete = (tok) => deleteSyncedEvents(tok, allEvents, () => refreshToken());
+
+    const finishSuccess = () => {
+      for (const ws of weekStarts) delete exportData[ws];
+      saveGoogleExport(exportData);
+      setSyncResult(null);
+      setStatus('idle');
+    };
 
     try {
-      let res = await runDelete(token);
+      const res = await runDelete(token);
       if (res.failed > 0) {
         // Keep tracking so the user can retry — don't orphan events in
         // Google Calendar by pretending the unsync fully succeeded.
@@ -144,11 +157,7 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
         setErrorMsg(T.gcalExportFailed.replace('{n}', res.failed) + ' ' + T.gcalUnsyncRetry);
         return;
       }
-      // Clear tracking for these weeks
-      for (const ws of weekStarts) delete exportData[ws];
-      saveGoogleExport(exportData);
-      setSyncResult(null);
-      setStatus('idle');
+      finishSuccess();
     } catch (err) {
       if (err.message === 'token_expired') {
         try {
@@ -159,10 +168,7 @@ export default function GoogleCalendarExport({ weekResults, planVersion, T }) {
             setErrorMsg(T.gcalExportFailed.replace('{n}', res.failed) + ' ' + T.gcalUnsyncRetry);
             return;
           }
-          for (const ws of weekStarts) delete exportData[ws];
-          saveGoogleExport(exportData);
-          setSyncResult(null);
-          setStatus('idle');
+          finishSuccess();
         } catch (err2) {
           setStatus('error');
           setErrorMsg(err2.message === 'token_expired'

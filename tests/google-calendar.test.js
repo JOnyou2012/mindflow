@@ -718,4 +718,90 @@ function mockFetch(routes) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Transient-failure retry (production: first refresh failed, second worked)
+// ---------------------------------------------------------------------------
+
+{
+  let calls = 0;
+  const event = makeTimedEvent({ id: 'eA', start: '2026-08-24T02:00:00.000Z', end: '2026-08-24T03:00:00.000Z' });
+  const restore = mockFetch([
+    ['/calendars/calA/events', 'GET', async () => {
+      calls++;
+      if (calls === 1) return { status: 500, body: {} };
+      return { status: 200, body: { summary: 'A', items: [event] } };
+    }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const { blocks, failures } = await fetchWeekEvents('token', WEEK, ['calA']);
+    assert(calls === 2, 'transient 500 retried once');
+    assert(blocks.length === 1 && failures === 0, 'import succeeded after the retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // 4xx passes straight through — no pointless retry on 401
+  let calls = 0;
+  const restore = mockFetch([
+    ['/calendars/calA/events', 'GET', async () => { calls++; return { status: 401, body: {} }; }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    let threw = null;
+    await fetchWeekEvents('token', WEEK, ['calA']).catch(e => { threw = e; });
+    assert(threw?.message === 'token_expired', '401 surfaced immediately (no retry)');
+    assert(calls === 1, '401 not retried');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// deleteSyncedEvents — mid-batch 401 refreshes once via on401 and retries
+// the failing event (production: Remove died on one stale token)
+// ---------------------------------------------------------------------------
+
+{
+  let deletes = 0;
+  let refreshCalls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => {
+      deletes++;
+      if (deletes === 1) return { status: 401, body: {} };
+      return { status: 200, body: {} };
+    }],
+    ['/calendars/primary/events/e2', 'DELETE', async () => ({ status: 200, body: {} })],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('stale', [{ googleEventId: 'e1' }, { googleEventId: 'e2' }], async () => {
+      refreshCalls++;
+      return 'fresh-token';
+    });
+    assert(refreshCalls === 1, 'on401 refresh called exactly once');
+    assert(res.deleted === 2 && res.failed === 0, 'both events deleted after refresh + retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // on401 refresh succeeds but the retried event still 401s → token_expired
+  let deletes = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => { deletes++; return { status: 401, body: {} }; }],
+  ]);
+  try {
+    let threw = null;
+    await deleteSyncedEvents('stale', [{ googleEventId: 'e1' }], async () => 'fresh-token')
+      .catch(e => { threw = e; });
+    assert(threw?.message === 'token_expired', 'persistent 401 surfaces as token_expired');
+    assert(deletes === 2, 'one retry with the fresh token, then give up');
+  } finally {
+    restore();
+  }
+}
+
 summary();

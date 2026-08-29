@@ -10,7 +10,7 @@ import {
   saveCalendar, loadCalendar,
   saveTasks, loadTasks,
   saveSettings, loadSettings,
-  clearAll, loadGoogleCache, clearGoogleCache,
+  clearAll, clearGoogleCache,
   loadGoogleExport, saveGoogleExport,
 } from './utils/storage.js';
 import { unsyncTaskEvents } from './utils/googleCalendar.js';
@@ -47,12 +47,12 @@ export default function App() {
   const [calendarBlocks, setCalendarBlocksState] = useState(() => loadCalendar());
   const [tasks, setTasksState] = useState(() => loadTasks());
   const [settings, setSettingsState] = useState(() => loadSettings());
-  // Google cache is week-scoped: a cache imported last week must not render
-  // as this week's blocks (the auth token is gone after reload anyway).
-  const [googleBlocks, setGoogleBlocks] = useState(() => {
-    const cache = loadGoogleCache();
-    return cache && cache.weekStart === getWeekMonday() ? cache.data : [];
-  });
+  // Google blocks are NOT restored from cache on load: the OAuth token is
+  // memory-only and therefore gone on every reload, so cached blocks would
+  // render next to a "Connect" button with no way to refresh them — the
+  // grid and the connection state must never disagree (production bug E).
+  // Re-connecting re-imports the current week.
+  const [googleBlocks, setGoogleBlocks] = useState([]);
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result

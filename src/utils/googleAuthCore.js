@@ -29,11 +29,12 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ].join(' ');
 
-// The popup can legitimately sit open for minutes while the user picks an
-// account / reads the consent screen. A short timeout fired mid-chooser and
-// reported "cancelled or timed out" while the popup was still open — so the
-// timeout is now a generous safety net only (GIS owns the real lifecycle).
-const INTERACTIVE_TIMEOUT_MS = 5 * 60 * 1000;
+// The interactive popup can legitimately sit open for minutes (account
+// chooser + 2FA + consent). NO timeout at all: GIS guarantees the callback
+// fires, and any timer we add can only misfire mid-2FA and report
+// "cancelled or timed out" while the popup is still open (the exact
+// production bug this file previously caused). Only the invisible silent
+// client keeps a timeout — there a stuck request must not hang forever.
 const SILENT_TIMEOUT_MS = 30 * 1000;
 
 // -- GIS Script Loading --------------------------------------------------------
@@ -85,22 +86,27 @@ function handleTokenResponse(response, silent = false) {
  * Wrap a TokenClient's callback in a Promise. The persistent callback stays
  * in place (restored on settle) so state updates still flow through
  * handleTokenResponse regardless of which caller requested the token.
+ *
+ * timeoutMs: null = wait for the GIS callback only (interactive — the
+ * popup owns its lifecycle); a number = safety timeout (silent client).
  */
 function requestFromClient(client, timeoutMs) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const origCallback = client.callback;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      client.callback = origCallback;
-      reject(new Error('Sign-in was cancelled or timed out.'));
-    }, timeoutMs);
+    const timer = timeoutMs === null || timeoutMs === undefined
+      ? null
+      : setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        client.callback = origCallback;
+        reject(new Error('Sign-in was cancelled or timed out.'));
+      }, timeoutMs);
 
     client.callback = (response) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       client.callback = origCallback; // restore — don't chain closures
       if (origCallback) origCallback(response);
       if (response.error) reject(new Error(response.error));
@@ -112,7 +118,7 @@ function requestFromClient(client, timeoutMs) {
     } catch (err) {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       client.callback = origCallback;
       reject(err);
     }
@@ -187,7 +193,7 @@ export async function requestAccessToken() {
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await requestFromClient(tokenClient, INTERACTIVE_TIMEOUT_MS);
+      return await requestFromClient(tokenClient, null); // no timeout — wait for the GIS callback
     } catch (err) {
       if (err.message === 'popup_closed' && attempt === 0) continue; // auto-retry once
       if (hadToken) tokenListeners.forEach(cb => cb('token_expired')); // surface only after refresh failed

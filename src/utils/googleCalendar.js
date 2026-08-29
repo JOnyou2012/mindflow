@@ -21,6 +21,28 @@ function timeoutSignal(ms) {
 }
 
 /**
+ * GET with one retry on transient failures (5xx / network). 4xx errors
+ * pass straight through — a 401 must surface immediately so the token
+ * refresh path runs instead of a pointless retry. Fixes the production
+ * "first refresh failed, second worked" import flakiness.
+ */
+async function fetchWithRetry(url, opts, attempts = 2) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await fetch(url, opts);
+      if (response.ok || response.status < 500) return response;
+      lastErr = response;
+    } catch (err) {
+      lastErr = err;
+    }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, 300));
+  }
+  if (lastErr instanceof Error) throw lastErr;
+  return lastErr;
+}
+
+/**
  * Backoff delay from a 429 response's Retry-After header (PRD step 93).
  * Accepts both header forms — delta-seconds ("5") and HTTP-date
  * ("Fri, 31 Dec 1999 23:59:59 GMT"). Falls back to 5s when the header is
@@ -155,7 +177,7 @@ export async function fetchCalendarList(accessToken) {
   const url = new URL(CALENDAR_API + '/users/me/calendarList');
   url.searchParams.set('maxResults', '250');
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithRetry(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
     signal: timeoutSignal(30000),
   });
@@ -231,7 +253,7 @@ export async function fetchWeekEvents(accessToken, weekStartISO, calendarIds = n
     url.searchParams.set('orderBy', 'startTime');
     url.searchParams.set('maxResults', '250');
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: timeoutSignal(30000),
     });
@@ -657,28 +679,51 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
  * @param {object[]} events  Array of { googleEventId } from export tracking
  * @returns {Promise<{ deleted: number, failed: number }>}
  */
-export async function deleteSyncedEvents(accessToken, events) {
+/**
+ * Delete tracked Google events (bulk Remove / per-task unsync).
+ *
+ * @param {string} accessToken
+ * @param {object[]} events  [{ googleEventId }]
+ * @param {() => Promise<string>} [on401] Optional token refresh callback —
+ *   a mid-batch 401 refreshes the token ONCE and retries that event
+ *   instead of aborting the whole batch (the production Remove failure:
+ *   one dead token killed the batch and bounced the UI to Connect).
+ * @returns {Promise<{ deleted: number, failed: number }>}
+ */
+export async function deleteSyncedEvents(accessToken, events, on401 = null) {
   let deleted = 0;
   let failed = 0;
+  let token = accessToken;
+  let refreshed = false;
+
+  const doDelete = async (evt) => {
+    const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: timeoutSignal(30000),
+    });
+    if (response.ok || response.status === 410 || response.status === 404) {
+      // 410/404 = already gone — treat as success so stale mappings
+      // clear instead of blocking every future unsync.
+      return 'deleted';
+    }
+    if (response.status === 401 && on401 && !refreshed) {
+      refreshed = true; // one refresh per batch, not per event
+      token = await on401();
+      return 'retry';
+    }
+    if (response.status === 401) return 'token_expired';
+    if (response.status === 403) return 'permission_denied';
+    return 'failed';
+  };
 
   for (const evt of events) {
     try {
-      const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: timeoutSignal(30000),
-      });
-      if (response.ok || response.status === 410 || response.status === 404) {
-        // 410/404 = already gone — treat as success so stale mappings
-        // clear instead of blocking every future unsync.
-        deleted++;
-      } else if (response.status === 401) {
-        throw new Error('token_expired');
-      } else if (response.status === 403) {
-        throw new Error('permission_denied');
-      } else {
-        failed++;
-      }
+      let outcome = await doDelete(evt);
+      if (outcome === 'retry') outcome = await doDelete(evt); // retry once with the fresh token
+      if (outcome === 'deleted') deleted++;
+      else if (outcome === 'failed') failed++;
+      else throw new Error(outcome);
     } catch (err) {
       if (err.message === 'token_expired' || err.message === 'permission_denied') throw err;
       failed++;
@@ -700,9 +745,11 @@ export async function deleteSyncedEvents(accessToken, events) {
  * @param {string} accessToken
  * @param {string} taskId
  * @param {object} tracking  Export tracking (loadGoogleExport() shape)
+ * @param {() => Promise<string>} [on401] Token refresh callback for
+ *   mid-batch 401s (same contract as deleteSyncedEvents)
  * @returns {Promise<{ tracking: object, deleted: number, failed: number }>}
  */
-export async function unsyncTaskEvents(accessToken, taskId, tracking) {
+export async function unsyncTaskEvents(accessToken, taskId, tracking, on401 = null) {
   const entries = Object.entries(tracking || {});
   const matches = entries.flatMap(([week, entry]) =>
     (entry?.events || [])
@@ -712,7 +759,7 @@ export async function unsyncTaskEvents(accessToken, taskId, tracking) {
 
   if (matches.length === 0) return { tracking: tracking || {}, deleted: 0, failed: 0 };
 
-  const res = await deleteSyncedEvents(accessToken, matches.map(m => m.ev));
+  const res = await deleteSyncedEvents(accessToken, matches.map(m => m.ev), on401);
   if (res.failed > 0) return { tracking: tracking || {}, deleted: res.deleted, failed: res.failed };
 
   // All matched events confirmed gone — drop them from the tracking store.

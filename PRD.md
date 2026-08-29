@@ -84,6 +84,43 @@
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
 >
+> **2026-08-29 (Jeremy + Claude — GCal production test fix round):**
+> Live test on Vercel (Grok-supervised, jonyou2019@gmail.com, ~22:50 HKT)
+> confirmed timezone (Asia/Hong_Kong ✓), per-task unsync ✓, idempotent
+> re-sync ✓ — and found four remaining issues, now fixed:
+>
+> **1) Remove bounced to Connect on a stale token (P0).** The 401 path
+> refreshed + retried once, but a mid-batch 401 aborted the whole delete
+> batch. `deleteSyncedEvents`/`unsyncTaskEvents` now take an `on401`
+> callback: one dead token refreshes ONCE and retries the failing event
+> in place; only a second consecutive 401 gives up (mappings kept, so
+> Remove stays retryable). Also: Remove now has the confirm dialog the
+> PRD always promised (`T.gcalUnsyncConfirm`).
+>
+> **2) Popup timeout fired during 2FA (P1).** The interactive
+> TokenClient had a 5-minute "safety net" timeout — it still misfired
+> while the account-chooser/2FA popup was open, showing "Sign-in was
+> cancelled or timed out" alongside a successful Connect. Interactive
+> requests now have NO timeout — the GIS callback owns the lifecycle;
+> only the invisible silent client keeps its 30s timeout.
+>
+> **3) First import refresh failed, second worked (P1).** Transient
+> 5xx/network failures on `calendarList`/`events.list` are now retried
+> once via `fetchWithRetry` (4xx still surfaces immediately so the token
+> path runs).
+>
+> **4) Cached G-blocks rendered next to Connect (P1).** Hard reload
+> restored last week's imported blocks from localStorage while the
+> memory-only token was gone — grid and connection state disagreed.
+> Google blocks are no longer restored from cache on load; reconnecting
+> re-imports.
+>
+> Suite: 104 google-calendar checks (5,852 total), 0 failures, lint
+> clean, build clean. Remaining known follow-ups: multi-tab plan state
+> (BroadcastChannel, P2), non-primary calendar toggles untested live,
+> Safari/Firefox popup pass, and manual cleanup of the leftover test
+> events (math/math review/Badminton) on calendar.google.com.
+>
 > **2026-08-27 (Jeremy + Claude — Google Calendar Stage 5 completion):**
 > Steps 86–94 were the last unfinished block — the code existed but was
 > paused behind `VITE_GOOGLE_CLIENT_ID`. All code gaps are now closed:
