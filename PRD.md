@@ -52,13 +52,15 @@
 >
 > **Stage 1 (Foundation): 13/13 = 100%** | **Stage 2 (Core): 52/52 = 100%** |
 > **Stage 3 (App Shell): 9/9 = 100%** | **Stage 4 (Integration): 11/11 = 100%** |
-> **Stage 5 (Google Calendar): ACTIVATED (2026-08-27)** — steps 86–94
-> implemented (multi-calendar sync + picker, calendar color-coding,
-> clipped-event ↑↓ indicators, Retry-After backoff, central sign-out
-> clearing) and the GCP OAuth client is configured (Testing status —
-> test user jonyou2019@gmail.com). Client ID in gitignored `.env`, GSI
-> script live in `index.html`. Remaining: set `VITE_GOOGLE_CLIENT_ID`
-> on Vercel + redeploy + live smoke test.
+> **Stage 5 (Google Calendar): PRODUCTION-VERIFIED (2026-08-29)** —
+> steps 86–94 implemented (multi-calendar sync + picker, calendar
+> color-coding, clipped-event ↑↓ indicators, Retry-After backoff,
+> central sign-out clearing, per-task unsync, orphan sweep, token
+> resilience) and acceptance-tested live on Vercel as
+> jonyou2019@gmail.com (Testing status): all 8 steps PASS, including
+> Bulk Remove clearing every MindFlow event while staying Connected.
+> Client ID in gitignored `.env`, GSI script live in `index.html`.
+> Note: other Google accounts stay blocked until Google verification.
 >
 > **Stage 6 (Schedule Image Export): 10/10 = 100%** — Part 8 (steps
 > 101–110) implemented and verified end-to-end (dependency-free SVG→PNG)
@@ -112,6 +114,16 @@
 > Suite: 118 google-calendar checks (5,866 total), 0 failures, lint
 > clean, build clean. Remaining: multi-tab state (P2), Safari/Firefox
 > popup pass, checkbox-visual confirmation on the calendar picker.
+>
+> ✅ **Final acceptance (2026-08-29 ~16:30 HKT, deployed build):** all 8
+> steps PASS — connect + first-try import, HKT-correct Sync, stress
+> re-sync idempotent, per-task delete, no resurrection, plan-grid
+> G-blocks, Bulk Remove cleared EVERY MindFlow event (including the
+> historical math/math review/Beta orphans) while staying Connected.
+> Verdict: Yes-with-caveats. Caveats are by-design: the cascade
+> schedules "unscheduled" tasks into later weeks (export covers all
+> weeks), and deleted tasks leave stale plan blocks until the user
+> regenerates (existing banner).
 >
 > **2026-08-29 (Jeremy + Claude — GCal Remove fix, round 2):**
 > Focused re-test on Vercel: no-false-timeout ✓, hard-reload consistency
