@@ -493,7 +493,7 @@ function buildEventPayload(session, task, startISO, endISO, sessionKey, timeZone
  * Returns [{ id, key }] — the Google event id and its mindflow_session_key
  * extended property, used to skip duplicates on re-export.
  */
-async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
+export async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
   const url = new URL(CALENDAR_API + '/calendars/primary/events');
   url.searchParams.set('timeMin', new Date(weekStartISO + 'T00:00:00').toISOString());
   url.searchParams.set('timeMax', new Date(weekEndISO + 'T23:59:59').toISOString());
@@ -520,6 +520,29 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
 }
 
 /**
+ * Find every MindFlow event in the API across the given weeks — INCLUDING
+ * orphans that local tracking never recorded (a POST that failed after
+ * server-side creation, or events written by an older build whose
+ * localStorage tracking is gone). Bulk Remove sweeps these so "Remove
+ * all" really means all.
+ *
+ * @param {string} accessToken
+ * @param {string[]} weekStartISOs Week Monday ISO dates (range min→max+7d)
+ * @returns {Promise<Array<{ id, key }>>}
+ */
+export async function findMindFlowEvents(accessToken, weekStartISOs) {
+  if (!Array.isArray(weekStartISOs) || weekStartISOs.length === 0) return [];
+  const sorted = [...weekStartISOs].sort();
+  const earliest = sorted[0];
+  const latest = (() => {
+    const d = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
+  return findExistingEvents(accessToken, earliest, latest);
+}
+
+/**
  * Export generated study sessions to Google Calendar.
  * Syncs ALL weeks at once.
  *
@@ -529,9 +552,13 @@ async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
  * @param {(current: number, total: number) => void} [onProgress]
  * @param {Set<string>} [alreadySyncedKeys] Session keys already present in
  *   local tracking — skipped before any API call (local idempotence).
+ * @param {Set<string>} [activeTaskIds] Ids of tasks still in the task
+ *   list — sessions of deleted tasks are skipped so a re-sync never
+ *   resurrects events the user just deleted (production: per-task delete
+ *   PASSED, then a later Sync recreated the event from the stale plan).
  * @returns {Promise<{ created: number, skipped: number, failed: number, events: object[] }>}
  */
-export async function exportSessions(accessToken, weekStartISOs, weekResults, onProgress = null, alreadySyncedKeys = null) {
+export async function exportSessions(accessToken, weekStartISOs, weekResults, onProgress = null, alreadySyncedKeys = null, activeTaskIds = null) {
   // Flatten all sessions from all weeks
   const flat = [];
   for (const ws of weekStartISOs) {
@@ -575,6 +602,13 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
 
     for (const { dayName, session, weekStart } of batch) {
       const dayIdx = ALL_DAYS.indexOf(dayName);
+
+      // Deleted-task guard: the plan still holds these sessions until the
+      // next generation, but the task no longer exists for the user.
+      if (activeTaskIds && !activeTaskIds.has(session.task.id)) {
+        skipped++;
+        continue;
+      }
 
       // Skip if end time > 10pm or start time < 6am (clamped out)
       if (session.startTick < 36 || session.endTick > 132) {
@@ -627,9 +661,13 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
 
         if (response.status === 401) throw new Error('token_expired');
         if (response.status === 403) throw new Error('permission_denied');
-        if (response.status === 429) {
-          // Rate limited — honor the server's Retry-After, wait and retry once
-          await new Promise(r => setTimeout(r, retryDelayFrom(response)));
+        if (response.status === 429 || response.status >= 500) {
+          // Transient failure — honor Retry-After (429) or a short
+          // backoff (5xx), wait and retry once. Retrying 5xx matters
+          // for orphan prevention: a POST that fails AFTER server-side
+          // creation otherwise leaves an untracked event that no future
+          // Remove can see.
+          await new Promise(r => setTimeout(r, retryDelayFrom(response, response.status === 429 ? 5000 : 1500)));
           const retry = await fetch(CALENDAR_API + '/calendars/primary/events', {
             method: 'POST',
             headers: {
@@ -697,11 +735,38 @@ export async function deleteSyncedEvents(accessToken, events, on401 = null) {
   let refreshed = false;
 
   const doDelete = async (evt) => {
-    const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: timeoutSignal(30000),
-    });
+    const attempt = async () => {
+      try {
+        const response = await fetch(CALENDAR_API + `/calendars/primary/events/${evt.googleEventId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: timeoutSignal(30000),
+        });
+        return { response, networkError: false };
+      } catch {
+        return { response: null, networkError: true };
+      }
+    };
+
+    let { response, networkError } = await attempt();
+    if (networkError) {
+      // ERR_FAILED-style network blips (production: one live DELETE
+      // aborted mid-flight) — short backoff, one retry.
+      await new Promise(r => setTimeout(r, 300));
+      ({ response, networkError } = await attempt());
+    }
+    if (networkError) return 'failed';
+
+    // Transient failures (429/5xx) retried once — the production Remove
+    // died with "1 failed" when a rapid export/delete sequence hit the
+    // rate limiter; a single retry after the server's Retry-After heals
+    // that without hammering the API.
+    if (response.status === 429 || response.status >= 500) {
+      await new Promise(r => setTimeout(r, retryDelayFrom(response, response.status === 429 ? 5000 : 1500)));
+      const retry = await attempt();
+      if (retry.networkError) return 'failed';
+      response = retry.response;
+    }
     if (response.ok || response.status === 410 || response.status === 404) {
       // 410/404 = already gone — treat as success so stale mappings
       // clear instead of blocking every future unsync.

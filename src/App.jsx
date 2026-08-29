@@ -412,6 +412,8 @@ export default function App() {
           <PlanView
             weekResults={weekResults}
             calendarBlocks={calendarBlocks}
+            googleBlocks={googleBlocks}
+            tasks={tasks}
             isStale={isStale}
             isCalculating={isCalculating}
             genProgress={genProgress}

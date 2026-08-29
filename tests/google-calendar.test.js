@@ -15,6 +15,7 @@ import {
   exportSessions,
   deleteSyncedEvents,
   unsyncTaskEvents,
+  findMindFlowEvents,
   zonedISOFromParts,
   DEFAULT_CALENDAR_TIME_ZONE,
 } from '../src/utils/googleCalendar.js';
@@ -799,6 +800,180 @@ function mockFetch(routes) {
       .catch(e => { threw = e; });
     assert(threw?.message === 'token_expired', 'persistent 401 surfaces as token_expired');
     assert(deletes === 2, 'one retry with the fresh token, then give up');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transient DELETE failures — the production "1 failed" during Remove
+// (rapid export/delete sequence hit the rate limiter)
+// ---------------------------------------------------------------------------
+
+{
+  let deletes = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => {
+      deletes++;
+      if (deletes === 1) return { status: 429, headers: { 'Retry-After': '1' }, body: {} };
+      return { status: 200, body: {} };
+    }],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [{ googleEventId: 'e1' }]);
+    assert(deletes === 2, '429 DELETE retried once after Retry-After');
+    assert(res.deleted === 1 && res.failed === 0, 'event deleted after the retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  let deletes = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => {
+      deletes++;
+      if (deletes === 1) return { status: 500, body: {} };
+      return { status: 200, body: {} };
+    }],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [{ googleEventId: 'e1' }]);
+    assert(deletes === 2, '500 DELETE retried once with short backoff');
+    assert(res.deleted === 1 && res.failed === 0, '5xx healed by the retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  let deletes = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => { deletes++; return { status: 500, body: {} }; }],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [{ googleEventId: 'e1' }]);
+    assert(deletes === 2 && res.failed === 1 && res.deleted === 0, 'persistent 5xx reported as failed after one retry');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST 5xx retry (orphan prevention — a POST that dies AFTER server-side
+// creation otherwise leaves an event no Remove can see)
+// ---------------------------------------------------------------------------
+
+{
+  const session = { startTick: 60, endTick: 66, task: { id: 't1', title: 'Study', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
+
+  let postCalls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async () => {
+      postCalls++;
+      if (postCalls === 1) return { status: 500, body: {} };
+      return { status: 200, body: { id: 'created-5xx' } };
+    }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const result = await exportSessions('token', [WEEK], weekResults);
+    assert(postCalls === 2, '5xx POST retried once');
+    assert(result.created === 1 && result.failed === 0, 'event created after 5xx retry');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// findMindFlowEvents — the Remove sweep finds orphans in the API that
+// local tracking never recorded
+// ---------------------------------------------------------------------------
+
+{
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({
+      status: 200,
+      body: {
+        items: [
+          { id: 'orphan-1', extendedProperties: { private: { mindflow_session_key: 'k1' } } },
+          { id: 'orphan-2', extendedProperties: { private: { mindflow_session_key: 'k2' } } },
+          { id: 'not-mindflow', extendedProperties: { private: {} } },
+        ],
+      },
+    })],
+  ]);
+  try {
+    const events = await findMindFlowEvents('token', [WEEK]);
+    assert(events.length === 2, 'MindFlow events found (non-MindFlow filtered out)');
+    assert(events[0].id === 'orphan-1' && events[0].key === 'k1', 'orphan ids + keys returned');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Network-level DELETE failure (ERR_FAILED) — the production Remove saw
+// one live DELETE abort mid-flight; retried once with a short backoff
+// ---------------------------------------------------------------------------
+
+{
+  let calls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => {
+      calls++;
+      if (calls === 1) throw new Error('net::ERR_FAILED');
+      return { status: 200, body: {} };
+    }],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [{ googleEventId: 'e1' }]);
+    assert(calls === 2, 'network error retried once');
+    assert(res.deleted === 1 && res.failed === 0, 'network blip healed by the retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  let calls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events/e1', 'DELETE', async () => { calls++; throw new Error('net::ERR_FAILED'); }],
+  ]);
+  try {
+    const res = await deleteSyncedEvents('token', [{ googleEventId: 'e1' }]);
+    assert(calls === 2 && res.failed === 1 && res.deleted === 0, 'persistent network error reported as failed after one retry');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deleted-task resurrection guard — re-sync skips sessions whose task was
+// deleted from the list (production: per-task delete PASSED, then a later
+// Sync recreated the event from the stale plan)
+// ---------------------------------------------------------------------------
+
+{
+  const live = { startTick: 60, endTick: 66, task: { id: 'alive', title: 'Alive', type: 'academic', difficulty: 3 } };
+  const dead = { startTick: 72, endTick: 78, task: { id: 'dead', title: 'Deleted', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [live, dead] } } } };
+
+  const postBodies = [];
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async (url, opts) => {
+      postBodies.push(JSON.parse(opts.body));
+      return { status: 200, body: { id: 'c-' + postBodies.length } };
+    }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const result = await exportSessions('token', [WEEK], weekResults, null, null, new Set(['alive']));
+    assert(result.created === 1 && result.skipped === 1, 'deleted-task session skipped, live task exported');
+    assert(postBodies.length === 1 && postBodies[0].summary === 'Alive', 'only the live task POSTed');
   } finally {
     restore();
   }

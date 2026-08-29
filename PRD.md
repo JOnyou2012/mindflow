@@ -84,6 +84,66 @@
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
 >
+> **2026-08-29 (Jeremy + Claude — GCal Remove fix, round 3):**
+> The 15:50 HKT re-test ran against the ROUND-1 build (round 2 had not
+> been deployed yet), so its three failures — no orphan sweep, no
+> transient DELETE retry, "Connect" error link — were round-1 code. The
+> 410 console lines are the browser logging non-2xx responses; the app
+> already treats 410/404 as deleted. What the report DID expose beyond
+> round 2:
+>
+> **1) Network-level DELETE failures (net::ERR_FAILED) were not
+> retried** — round 2 only retried HTTP 429/5xx. `deleteSyncedEvents`
+> now retries fetch rejections once (300ms backoff) before counting a
+> failure.
+>
+> **2) Re-sync resurrected deleted tasks.** A per-task delete clears
+> the mapping, but the stale plan still holds the session — the next
+> Sync recreated the event (seen twice in testing). `exportSessions`
+> now takes `activeTaskIds` and skips sessions whose task no longer
+> exists; `GoogleCalendarExport` passes the live task list.
+>
+> **3) The plan grid omitted Google-imported blocks** (Schedule showed
+> them, the optimized-week Gantt didn't). `PlanView` now renders
+> `googleBlocks` in today's week only (calendar-colored, G-badged,
+> tooltip names the source calendar) — they were already part of the
+> scheduler's fixed-commitment input, so only the visual was missing.
+>
+> Suite: 118 google-calendar checks (5,866 total), 0 failures, lint
+> clean, build clean. Remaining: multi-tab state (P2), Safari/Firefox
+> popup pass, checkbox-visual confirmation on the calendar picker.
+>
+> **2026-08-29 (Jeremy + Claude — GCal Remove fix, round 2):**
+> Focused re-test on Vercel: no-false-timeout ✓, hard-reload consistency
+> ✓, first-refresh ✓, per-task delete ✓, idempotence ✓, HKT timezone ✓ —
+> but Bulk Remove still reported "1 failed" and left events behind. Root
+> causes found and fixed:
+>
+> **1) Transient DELETE failures were never retried.** The rapid
+> export→delete→export test sequence hit a 429/5xx on one DELETE, which
+> the batch path counted as failed. `deleteSyncedEvents` now retries
+> 429 (honoring Retry-After) and 5xx (1.5s backoff) once per event, and
+> `exportSessions` POSTs retry 5xx once too — a POST that dies AFTER
+> server-side creation otherwise leaves an untracked orphan.
+>
+> **2) Remove only deleted locally-tracked events.** Orphans — events
+> written by older builds whose tracking is gone (the persistent
+> "math"/"math review" leftovers), or failed-POST orphans — survived
+> every Remove. `findMindFlowEvents()` now sweeps the API for
+> `mindflow_session=true` events across the plan weeks, and Remove
+> deletes tracked ∪ swept events. "Remove all" now means all.
+>
+> **3) The error-state button lied.** It always showed "Connect Google
+> Calendar" and always re-ran Sync — after a failed Remove, clicking it
+> re-synced (recreating the events the user just tried to delete) and
+> read as "bounced to Connect" though the session was still alive. The
+> button now retries the action that actually failed and only shows
+> "Connect" when genuinely signed out.
+>
+> Suite: 113 google-calendar checks (5,861 total), 0 failures, lint
+> clean, build clean. Remaining follow-ups: multi-tab plan state (P2),
+> Safari/Firefox popup pass, non-primary calendar toggles untested live.
+>
 > **2026-08-29 (Jeremy + Claude — GCal production test fix round):**
 > Live test on Vercel (Grok-supervised, jonyou2019@gmail.com, ~22:50 HKT)
 > confirmed timezone (Asia/Hong_Kong ✓), per-task unsync ✓, idempotent
