@@ -125,6 +125,17 @@ export function zonedISOFromParts(y, m, d, hh, mm, timeZone) {
 }
 
 /**
+ * Grid-end time after a start change: when the new start lands on or
+ * after the current end, the end auto-advances to start + 30 min
+ * (clamped to the 22:00 grid edge). The STATE must move, not just the
+ * select's display — the production bug was the display jumping to
+ * 9:30 while the validator still read the stale 8:30 state.
+ */
+export function autoAdvanceEnd(newStart, currentEnd) {
+  return currentEnd <= newStart ? Math.min(newStart + 0.5, 22) : currentEnd;
+}
+
+/**
  * Split an instant into calendar parts in a target IANA zone — the
  * inverse of zonedISOFromParts. Used to map imported event instants to
  * the grid's day/hour in the CALENDAR's zone, never the machine's.
@@ -395,6 +406,7 @@ export async function fetchWeekEvents(accessToken, weekStartISO, calendarIds = n
     calendarNames,
     calendarName: calendarNames.join(', '),
     failures,
+    timeZone,
   };
 }
 
@@ -749,16 +761,33 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
         timeZone,
       );
 
+      // POST with one retry on network-level failures (net::ERR_FAILED)
+      // on top of the HTTP 429/5xx retry — the production first-Sync
+      // "1 failed" was a network blip, self-healed by the next click.
+      const attempt = async () => {
+        try {
+          const response = await fetch(CALENDAR_API + '/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: timeoutSignal(30000),
+          });
+          return { response, networkError: false };
+        } catch {
+          return { response: null, networkError: true };
+        }
+      };
+
       try {
-        const response = await fetch(CALENDAR_API + '/calendars/primary/events', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          signal: timeoutSignal(30000),
-        });
+        let { response, networkError } = await attempt();
+        if (networkError) {
+          await new Promise(r => setTimeout(r, 300));
+          ({ response, networkError } = await attempt());
+        }
+        if (networkError) { failed++; continue; }
 
         if (response.status === 401) throw new Error('token_expired');
         if (response.status === 403) throw new Error('permission_denied');
@@ -769,19 +798,12 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
           // creation otherwise leaves an untracked event that no future
           // Remove can see.
           await new Promise(r => setTimeout(r, retryDelayFrom(response, response.status === 429 ? 5000 : 1500)));
-          const retry = await fetch(CALENDAR_API + '/calendars/primary/events', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-            signal: timeoutSignal(30000),
-          });
-          if (retry.status === 401) throw new Error('token_expired');
-          if (retry.status === 403) throw new Error('permission_denied');
-          if (!retry.ok) { failed++; continue; }
-          const data = await retry.json();
+          const retry = await attempt();
+          if (retry.networkError) { failed++; continue; }
+          if (retry.response.status === 401) throw new Error('token_expired');
+          if (retry.response.status === 403) throw new Error('permission_denied');
+          if (!retry.response.ok) { failed++; continue; }
+          const data = await retry.response.json();
           created.push({ googleEventId: data.id, dayName, startTick: session.startTick, weekStart, taskId: session.task.id, sessionKey });
           continue;
         }

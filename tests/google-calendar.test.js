@@ -21,6 +21,7 @@ import {
   deleteGoogleEvent,
   buildZonedTimesForBlock,
   blocksDiffer,
+  autoAdvanceEnd,
   DEFAULT_CALENDAR_TIME_ZONE,
 } from '../src/utils/googleCalendar.js';
 
@@ -1092,6 +1093,83 @@ function mockFetch(routes) {
   assert(blocksDiffer(base, [{ ...base[0], label: 'B' }]) === true, 'renamed block differs');
   assert(blocksDiffer(base, [{ ...base[0], startHour: 10 }]) === true, 'moved block differs');
   assert(blocksDiffer(base, [{ ...base[0], durationHours: 2 }]) === true, 'resized block differs');
+}
+
+// ---------------------------------------------------------------------------
+// autoAdvanceEnd — the start change must move the end STATE, not just the
+// select's display (production: display showed 9:30, validator read 8:30)
+// ---------------------------------------------------------------------------
+
+{
+  assert(autoAdvanceEnd(9, 8.5) === 9.5, 'end auto-advances to start + 30min');
+  assert(autoAdvanceEnd(9, 9.5) === 9.5, 'end stays when still after the new start');
+  assert(autoAdvanceEnd(9, 9) === 9.5, 'equal start/end advances');
+  assert(autoAdvanceEnd(21.5, 21.5) === 22, 'clamped to the 22:00 grid edge');
+  assert(autoAdvanceEnd(8, 10) === 10, 'later end untouched');
+}
+
+// ---------------------------------------------------------------------------
+// POST network-level retry — the production first-Sync "1 failed"
+// (net::ERR_FAILED) self-heals instead of counting a failure
+// ---------------------------------------------------------------------------
+
+{
+  const session = { startTick: 60, endTick: 66, task: { id: 't1', title: 'Study', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
+
+  let postCalls = 0;
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async () => {
+      postCalls++;
+      if (postCalls === 1) throw new Error('net::ERR_FAILED');
+      return { status: 200, body: { id: 'created-net' } };
+    }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const result = await exportSessions('token', [WEEK], weekResults);
+    assert(postCalls === 2, 'network-level POST failure retried once');
+    assert(result.created === 1 && result.failed === 0, 'event created after the retry');
+  } finally {
+    restore();
+  }
+}
+
+{
+  // Persistent network failure → reported as failed, not thrown
+  const session = { startTick: 60, endTick: 66, task: { id: 't1', title: 'Study', type: 'academic', difficulty: 3 } };
+  const weekResults = { [WEEK]: { days: { Mon: { sessions: [session] } } } };
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { items: [] } })],
+    ['/calendars/primary/events', 'POST', async () => { throw new Error('net::ERR_FAILED'); }],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const result = await exportSessions('token', [WEEK], weekResults);
+    assert(result.created === 0 && result.failed === 1, 'persistent network failure surfaced as 1 failed');
+  } finally {
+    restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// fetchWeekEvents returns the resolved timeZone — "Last synced" must show
+// the CALENDAR's zone clock, not the machine's
+// ---------------------------------------------------------------------------
+
+{
+  const event = makeTimedEvent({ id: 'eA', start: '2026-08-24T02:00:00.000Z', end: '2026-08-24T03:00:00.000Z' });
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async () => ({ status: 200, body: { summary: 'Primary', items: [event] } })],
+    ['/calendars/primary', 'GET', async () => ({ status: 200, body: { timeZone: 'Asia/Hong_Kong' } })],
+  ]);
+  try {
+    const { timeZone } = await fetchWeekEvents('token', WEEK);
+    assert(timeZone === 'Asia/Hong_Kong', 'resolved calendar zone returned for the Last-synced clock');
+  } finally {
+    restore();
+  }
 }
 
 summary();

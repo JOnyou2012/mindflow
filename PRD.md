@@ -86,6 +86,36 @@
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
 >
+> **2026-08-29 (Jeremy + Claude — two-way sync acceptance fixes):**
+> Live acceptance (build 721a3b0) found the inbound half dead except on
+> first rename, plus three smaller bugs. Root causes + fixes:
+>
+> **P0 — auto-sync dead on Plan:** the poll/focus listeners lived in the
+> import widget, which unmounts on Plan — and its state (calendar list,
+> last-synced) was lost on remount, leaving "Loading calendars…" stuck
+> until a manual Refresh. All Google sync state is now owned by App:
+> one shared `refreshGoogleEvents()` powers the Refresh link, the 60s
+> poll, and the focus trigger on EVERY step; the widget is purely
+> presentational. "Last synced" updates on every completion, shown in
+> the calendar's zone (Asia/Hong_Kong) with seconds — not the machine
+> clock.
+>
+> **P0 — all-day title save blocked:** the conflict checker compared the
+> all-day 6:00–22:00 rendering span against every study block and
+> refused to save. All-day Google edits (title-only) now skip the
+> time-overlap check; the summary PATCH proceeds.
+>
+> **P1 — end time didn't commit on auto-adjust:** the select's display
+> advanced but the STATE didn't, so the validator read the stale end.
+> `autoAdvanceEnd()` moves the end state with the start (clamped to
+> 22:00, which is now a selectable end option).
+>
+> **P1 — first Sync "1 failed":** network-level POST failures
+> (net::ERR_FAILED) are now retried once before counting a failure.
+>
+> Suite: 142 google-calendar checks (5,890 total), 0 failures, lint
+> clean, build clean.
+>
 > **2026-08-29 (Jeremy + Claude — two-way sync):**
 > The Future-Enhancements item "two-way sync (changes in Google Calendar
 > update MindFlow)" is implemented, both directions:

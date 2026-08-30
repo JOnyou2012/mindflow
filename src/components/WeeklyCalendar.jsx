@@ -5,7 +5,7 @@ import { getStoredLang, langToLocale, getDayShortNames } from '../utils/i18n.js'
 import { uuid } from '../utils/uuid.js';
 import { isGoogleConfigured } from '../utils/googleAuthCore.js';
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
-import { updateGoogleEvent, deleteGoogleEvent, buildZonedTimesForBlock, DEFAULT_CALENDAR_TIME_ZONE } from '../utils/googleCalendar.js';
+import { updateGoogleEvent, deleteGoogleEvent, buildZonedTimesForBlock, DEFAULT_CALENDAR_TIME_ZONE, autoAdvanceEnd } from '../utils/googleCalendar.js';
 import QuestionFlow from './QuestionFlow.jsx';
 import GoogleCalendarImport from './GoogleCalendarImport.jsx';
 
@@ -49,7 +49,11 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 
 const FRESH_ANSWERS = () => ({ label: '', type: 'academic', time: { start: 9, end: 10 }, days: [...WEEKDAYS] });
 
-export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChange, onGoogleImport, weekStart = null, onViewChange, onError, T }) {
+export default function WeeklyCalendar({
+  blocks = [], googleBlocks = [], onChange, onGoogleImport, weekStart = null, onViewChange, T,
+  gCalendars, gSelectedIds, gSyncInfo, gSyncing, gListError,
+  onGoogleSync, onGoogleToggleCalendar, onGoogleSignOut,
+}) {
   const { refreshToken } = useGoogleAuth();
   const TYPE_CFG = {
     academic: { ...TYPE_ICONS.academic, label: T.typeAcademic },
@@ -334,13 +338,18 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
     const dur = popEnd - popStart;
     if (dur <= 0) { setPopMsg(T.calErrEndAfterStart); return; }
 
-    const conflicts = [...blocks, ...(googleBlocks || [])].filter(b =>
-      b.day === pop.day && b.id !== pop.id &&
-      overlaps(popStart, popEnd, b.startHour, b.startHour + b.durationHours)
-    );
-    if (conflicts.length > 0) {
-      setPopMsg(`${T.calConflictsWith} ${conflicts.map(b => b.label).join(', ')}`);
-      return;
+    // All-day Google edits are title-only (their 6:00–22:00 grid span is
+    // a rendering artifact, not the real event) — a time-overlap check
+    // would flag the whole day busy against every study block (P0).
+    if (!(popGoogle && pop.isAllDay)) {
+      const conflicts = [...blocks, ...(googleBlocks || [])].filter(b =>
+        b.day === pop.day && b.id !== pop.id &&
+        overlaps(popStart, popEnd, b.startHour, b.startHour + b.durationHours)
+      );
+      if (conflicts.length > 0) {
+        setPopMsg(`${T.calConflictsWith} ${conflicts.map(b => b.label).join(', ')}`);
+        return;
+      }
     }
 
     if (popGoogle) {
@@ -459,13 +468,19 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
       </div>
 
       {/* Google Calendar import — hidden until a real VITE_GOOGLE_CLIENT_ID
-          is configured at build time (Stage 5 is paused pre-launch). */}
+          is configured at build time. All sync state lives in App (shared
+          with the two-way-sync poll) — this widget is presentational. */}
       {isGoogleConfigured && (
         <div className="mb-3">
           <GoogleCalendarImport
-            weekStart={weekStart}
-            onImport={onGoogleImport}
-            onError={onError}
+            gCalendars={gCalendars}
+            gSelectedIds={gSelectedIds}
+            gSyncInfo={gSyncInfo}
+            gSyncing={gSyncing}
+            gListError={gListError}
+            onGoogleSync={onGoogleSync}
+            onGoogleToggleCalendar={onGoogleToggleCalendar}
+            onGoogleSignOut={onGoogleSignOut}
             T={T}
           />
         </div>
@@ -691,7 +706,16 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
               <label htmlFor="mf-event-time-start" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calTime}</label>
               <div className="flex items-center gap-2">
                 <select id="mf-event-time-start" value={popStart} disabled={popSaving || (popGoogle && pop.isAllDay)}
-                  onChange={e => { setPopStart(Number(e.target.value)); setPopMsg(''); }}
+                  onChange={e => {
+                    const s = Number(e.target.value);
+                    setPopStart(s);
+                    // The end STATE must follow the start — the display
+                    // auto-jumping while the validator still reads the
+                    // stale end was the "End time must be after start
+                    // time" production bug on first Save.
+                    setPopEnd(autoAdvanceEnd(s, popEnd));
+                    setPopMsg('');
+                  }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
                   {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
@@ -699,7 +723,7 @@ export default function WeeklyCalendar({ blocks = [], googleBlocks = [], onChang
                 <select id="mf-event-time-end" value={popEnd} disabled={popSaving || (popGoogle && pop.isAllDay)}
                   onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
-                  {TIME_OPTIONS.filter(t => t > popStart).map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
+                  {[...TIME_OPTIONS.filter(t => t > popStart), 22].map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
               </div>
               {popGoogle && pop.isAllDay && (

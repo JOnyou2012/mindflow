@@ -1,7 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
-import { fetchWeekEvents, fetchCalendarList, blocksDiffer } from '../utils/googleCalendar.js';
-import { saveGoogleCache, saveGoogleCalendars, loadGoogleCalendars } from '../utils/storage.js';
 import { getStoredLang, langToLocale } from '../utils/i18n.js';
 import GoogleSyncButton from './GoogleSyncButton.jsx';
 
@@ -19,183 +16,51 @@ function GLogo({ className = 'w-4 h-4' }) {
 }
 
 /**
- * Import widget — renders in Step 2 (schedule) to pull Google Calendar
- * events into MindFlow as fixed blocks.
+ * Import widget — renders in Step 2 (schedule).
  *
- * Multi-calendar (PRD step 91): once connected, the user sees their
- * readable calendars with toggle checkboxes + color dots. The selection
- * persists to localStorage; toggling re-syncs immediately.
+ * PRESENTATIONAL ONLY: all sync state lives in App so the two-way-sync
+ * poll/focus refresh keeps running on every step (this widget unmounts
+ * on Plan — keeping the state here killed inbound sync).
  *
  * Props:
- *   weekStart      ISO Monday date string
- *   onImport       (blocks: CalendarBlock[]) => void
- *   onError        (message: string) => void
- *   T              translations
+ *   gCalendars / gSelectedIds / gSyncInfo / gSyncing / gListError
+ *     App-owned Google sync state
+ *   onGoogleSync          () => void — the shared refresh (Refresh link)
+ *   onGoogleToggleCalendar(id)        — checkbox toggles
+ *   onGoogleSignOut       () => void  — clear App-side Google state
+ *   T                     translations
  */
-export default function GoogleCalendarImport({ weekStart, onImport, onError, T }) {
-  const { isSignedIn, getToken, refreshToken, signOut } = useGoogleAuth();
-  const [calendars, setCalendars] = useState(null); // calendar list, null = not loaded
-  const [selectedIds, setSelectedIds] = useState(() => loadGoogleCalendars());
-  const [syncInfo, setSyncInfo] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [listError, setListError] = useState(null);
-  // Two-way sync bookkeeping: what the grid currently shows, and a guard
-  // so the auto-refresh poll never overlaps a manual sync.
-  const lastBlocksRef = useRef(null);
-  const syncingRef = useRef(false);
+export default function GoogleCalendarImport({
+  gCalendars: calendars,
+  gSelectedIds: selectedIds,
+  gSyncInfo: syncInfo,
+  gSyncing: syncing,
+  gListError: listError,
+  onGoogleSync,
+  onGoogleToggleCalendar,
+  onGoogleSignOut,
+  T,
+}) {
+  const { isSignedIn, signOut } = useGoogleAuth();
 
-  /**
-   * Saved selection ∩ current list; falls back to the primary calendar
-   * when nothing valid was saved (first connect, or every saved calendar
-   * was deleted since).
-   */
-  const resolveSelection = useCallback((calList) => {
-    const listIds = calList.map(c => c.id);
-    const intersect = selectedIds.filter(id => listIds.includes(id));
-    if (intersect.length > 0) return intersect;
-    const fallback = calList.find(c => c.primary) || calList[0];
-    return fallback ? [fallback.id] : [];
-  }, [selectedIds]);
+  if (!isSignedIn) {
+    return <GoogleSyncButton onSync={onGoogleSync} T={T} />;
+  }
 
-  /**
-   * One sync attempt. On a 401 the token is refreshed and the attempt is
-   * retried once — a single expired token must never sign the user out or
-   * reset the widget; only a failed re-auth does (the provider flips to
-   * signed-out itself in that case).
-   */
-  const performSync = useCallback(async (token, idsOverride, allowRetry) => {
-    try {
-      // Load the calendar list once per session (per connect) — it feeds
-      // both the picker UI and the per-calendar block coloring.
-      let calList = calendars;
-      if (!calList) {
-        try {
-          calList = await fetchCalendarList(token);
-        } catch (err) {
-          if (err.message === 'token_expired' && allowRetry) {
-            return performSync(await refreshToken(), idsOverride, false);
-          }
-          throw err;
-        }
-        setCalendars(calList);
-      }
-
-      const ids = idsOverride || resolveSelection(calList);
-      saveGoogleCalendars(ids);
-      setSelectedIds(ids);
-
-      if (ids.length === 0) {
-        // All calendars toggled off — clear the grid, keep the picker open.
-        const syncedAt = new Date().toISOString();
-        setSyncInfo({ eventCount: 0, calendarNames: [], failures: 0, syncedAt });
-        saveGoogleCache({ data: [], syncedAt, weekStart, calendarNames: [], eventCount: 0 });
-        lastBlocksRef.current = [];
-        onImport([]);
-        return;
-      }
-
-      const { blocks, eventCount, calendarNames, failures } = await fetchWeekEvents(token, weekStart, ids, calList);
-      const syncedAt = new Date().toISOString();
-      setSyncInfo({ eventCount, calendarNames, failures, syncedAt });
-      saveGoogleCache({ data: blocks, syncedAt, weekStart, calendarNames, eventCount });
-      if (onImport) {
-        // Change detection (two-way sync): a no-change poll must NOT
-        // re-import — that would bump the data version and spuriously
-        // mark the plan stale. Google-side edits/deletions DO re-import.
-        if (blocksDiffer(lastBlocksRef.current, blocks)) {
-          lastBlocksRef.current = blocks;
-          onImport(blocks);
-        }
-      }
-    } catch (err) {
-      if (err.message === 'token_expired' && allowRetry) {
-        return performSync(await refreshToken(), idsOverride, false);
-      }
-      if (err.message === 'permission_denied') { onError?.(T.gcalPermissionDenied); return; }
-      if (err.message === 'rate_limited') { onError?.(T.gcalRateLimited); return; }
-      if (typeof err.message === 'string' && err.message.startsWith('CalendarList API error')) {
-        setListError(T.gcalCalendarsError);
-        return;
-      }
-      onError?.(T.gcalImportError);
-    }
-  }, [calendars, resolveSelection, refreshToken, weekStart, onImport, onError, T]);
-
-  const handleSync = useCallback(async (idsOverride = null) => {
-    if (syncingRef.current) return; // never overlap a running sync
-    syncingRef.current = true;
-    setSyncing(true);
-    setListError(null);
-    try {
-      // Token-on-demand: a dead token (or none at all) triggers a quiet
-      // refresh instead of a 401 on the first API call.
-      let token = getToken();
-      if (!token) {
-        try {
-          token = await refreshToken();
-        } catch {
-          setSyncInfo(null);
-          return; // provider shows Connect; nothing to sync yet
-        }
-      }
-      await performSync(token, idsOverride, true);
-    } catch {
-      // Only token-refresh failures escape performSync (everything else is
-      // mapped inside). The provider already flipped state if needed.
-      onError?.(T.gcalTokenExpired);
-    } finally {
-      syncingRef.current = false;
-      setSyncing(false);
-    }
-  }, [getToken, refreshToken, performSync, onError, T]);
-
-  // Two-way sync: pull Google-side changes automatically — every 60s and
-  // whenever the tab regains focus. Skipped while hidden, while another
-  // sync is running, or while the user isn't connected. Change detection
-  // inside performSync keeps no-change polls from marking the plan stale.
-  useEffect(() => {
-    if (!isSignedIn || !syncInfo) return undefined;
-    const tick = () => {
-      if (document.hidden || syncingRef.current) return;
-      handleSync();
-    };
-    const onFocus = () => tick();
-    const interval = setInterval(tick, 60000);
-    window.addEventListener('focus', onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [isSignedIn, syncInfo, handleSync]);
-
-  const toggleCalendar = (id) => {
-    const next = selectedIds.includes(id)
-      ? selectedIds.filter(x => x !== id)
-      : [...selectedIds, id];
-    saveGoogleCalendars(next);
-    setSelectedIds(next);
-    // Live re-sync when a toggle changes an already-synced week — instant
-    // feedback instead of making the user hunt for a refresh button.
-    if (syncInfo) handleSync(next);
-  };
+  // Last synced in the CALENDAR's zone (not the machine's — a Pacific
+  // browser clock confused testers) and with seconds so every completed
+  // refresh is visibly newer.
+  const syncedAtLabel = syncInfo?.syncedAt
+    ? new Date(syncInfo.syncedAt).toLocaleTimeString(langToLocale(getStoredLang()), {
+      hour: 'numeric', minute: '2-digit', second: '2-digit',
+      timeZone: syncInfo.timeZone || undefined,
+    })
+    : null;
 
   const handleSignOut = () => {
     signOut(); // provider clears token + cached calendar data
-    setSyncInfo(null);
-    setCalendars(null);
-    setSelectedIds([]);
-    setListError(null);
-    lastBlocksRef.current = [];
-    onImport?.([]);
+    onGoogleSignOut();
   };
-
-  if (!isSignedIn) {
-    return <GoogleSyncButton onSync={handleSync} onError={onError} T={T} />;
-  }
-
-  const syncedAtLabel = syncInfo?.syncedAt
-    ? new Date(syncInfo.syncedAt).toLocaleTimeString(langToLocale(getStoredLang()), { hour: 'numeric', minute: '2-digit' })
-    : null;
 
   return (
     <div className="space-y-2">
@@ -208,7 +73,7 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
         {syncedAtLabel && !syncing && (
           <span className="text-mindflow-muted">{T.gcalLastSync}: {syncedAtLabel}</span>
         )}
-        <button type="button" onClick={() => handleSync()} disabled={syncing}
+        <button type="button" onClick={onGoogleSync} disabled={syncing}
           className="text-mindflow-accent hover:underline disabled:opacity-40">{T.gcalRefresh}</button>
         <button type="button" onClick={handleSignOut}
           className="text-mindflow-muted hover:text-mindflow-danger">{T.gcalSignOut}</button>
@@ -226,7 +91,7 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
       ) : listError ? (
         <p className="text-xs text-mindflow-danger">
           {listError}
-          <button type="button" onClick={() => handleSync()} className="text-mindflow-accent hover:underline ms-1">{T.gcalRefresh}</button>
+          <button type="button" onClick={onGoogleSync} className="text-mindflow-accent hover:underline ms-1">{T.gcalRefresh}</button>
         </p>
       ) : calendars.length === 0 ? (
         <p className="text-xs text-mindflow-muted">{T.gcalCalendarsNone}</p>
@@ -240,7 +105,7 @@ export default function GoogleCalendarImport({ weekStart, onImport, onError, T }
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(c.id)}
-                    onChange={() => toggleCalendar(c.id)}
+                    onChange={() => onGoogleToggleCalendar(c.id)}
                     disabled={syncing}
                     className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   />

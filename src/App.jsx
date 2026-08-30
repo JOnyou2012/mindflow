@@ -11,9 +11,14 @@ import {
   saveTasks, loadTasks,
   saveSettings, loadSettings,
   clearAll, clearGoogleCache,
+  saveGoogleCache, saveGoogleCalendars, loadGoogleCalendars,
   loadGoogleExport, saveGoogleExport,
 } from './utils/storage.js';
-import { unsyncTaskEvents } from './utils/googleCalendar.js';
+import {
+  unsyncTaskEvents,
+  fetchWeekEvents, fetchCalendarList,
+  blocksDiffer, DEFAULT_CALENDAR_TIME_ZONE,
+} from './utils/googleCalendar.js';
 import { useGoogleAuth } from './utils/googleAuthContext.js';
 import { isGoogleConfigured } from './utils/googleAuthCore.js';
 import { LANGUAGES, getTranslations, getStoredLang, setStoredLang } from './utils/i18n.js';
@@ -53,6 +58,17 @@ export default function App() {
   // grid and the connection state must never disagree (production bug E).
   // Re-connecting re-imports the current week.
   const [googleBlocks, setGoogleBlocks] = useState([]);
+
+  // Two-way-sync state lives HERE (App level), not in the import widget:
+  // the auto-refresh must keep running on every step — on Plan the widget
+  // is unmounted, which is exactly why focus/poll refreshes died (P0).
+  const [gCalendars, setGCalendars] = useState(null); // calendar list, null = not loaded
+  const [gSelectedIds, setGSelectedIds] = useState(() => loadGoogleCalendars());
+  const [gSyncInfo, setGSyncInfo] = useState(null); // { eventCount, calendarNames, failures, syncedAt, timeZone }
+  const [gSyncing, setGSyncing] = useState(false);
+  const [gListError, setGListError] = useState(null);
+  const gBlocksRef = useRef([]); // what the grid currently shows (for diffs)
+  const gSyncBusyRef = useRef(false); // never overlap a sync
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result
@@ -139,10 +155,137 @@ export default function App() {
     }
   }, [getGoogleToken, googleSignedIn, refreshGoogleToken, T]);
 
-  // Google Calendar import handler
+  // Google Calendar import handler (grid edits from WeeklyCalendar's
+  // two-way-sync PATCH/DELETE flows). Keeps the diff ref in sync so the
+  // next poll doesn't re-import identical data.
   const handleGoogleImport = (importedBlocks) => {
+    gBlocksRef.current = importedBlocks;
     setGoogleBlocks(importedBlocks);
     dataVersionRef.current++;
+  };
+
+  /**
+   * THE shared Google refresh — one function for the Refresh link, the
+   * 60s poll, and the window-focus trigger, on ANY step. Token-on-demand,
+   * one 401 refresh + retry, change detection before re-import (a
+   * no-change poll must not mark the plan stale), and "Last synced"
+   * updated on every completion.
+   */
+  const refreshGoogleEvents = useCallback(async (idsOverride = null) => {
+    if (!isGoogleConfigured || gSyncBusyRef.current) return;
+    gSyncBusyRef.current = true;
+    setGSyncing(true);
+    setGListError(null);
+    try {
+      let token = getGoogleToken();
+      if (!token) {
+        try {
+          token = await refreshGoogleToken();
+        } catch {
+          setGSyncInfo(null);
+          return;
+        }
+      }
+
+      const doFetch = async (tok) => {
+        // Load the calendar list once per session (per connect) — it
+        // feeds the picker UI and the per-calendar block coloring.
+        let calList = gCalendars;
+        if (!calList) {
+          calList = await fetchCalendarList(tok);
+          setGCalendars(calList);
+        }
+        const listIds = calList.map(c => c.id);
+        const intersect = gSelectedIds.filter(id => listIds.includes(id));
+        const primary = calList.find(c => c.primary) || calList[0];
+        const ids = idsOverride
+          || (intersect.length > 0 ? intersect : primary ? [primary.id] : []);
+        saveGoogleCalendars(ids);
+        setGSelectedIds(ids);
+
+        const syncedAt = new Date().toISOString();
+        if (ids.length === 0) {
+          // All calendars toggled off — clear the grid, keep the picker.
+          setGSyncInfo({ eventCount: 0, calendarNames: [], failures: 0, syncedAt, timeZone: DEFAULT_CALENDAR_TIME_ZONE });
+          saveGoogleCache({ data: [], syncedAt, weekStart: getWeekStart(0), calendarNames: [], eventCount: 0 });
+          gBlocksRef.current = [];
+          setGoogleBlocks([]);
+          return;
+        }
+
+        const { blocks, eventCount, calendarNames, failures, timeZone } =
+          await fetchWeekEvents(tok, getWeekStart(0), ids, calList);
+        setGSyncInfo({ eventCount, calendarNames, failures, syncedAt, timeZone });
+        saveGoogleCache({ data: blocks, syncedAt, weekStart: getWeekStart(0), calendarNames, eventCount });
+        if (blocksDiffer(gBlocksRef.current, blocks)) {
+          // Real Google-side change — update the grid and mark the plan
+          // stale. A no-change poll never reaches this branch.
+          gBlocksRef.current = blocks;
+          setGoogleBlocks(blocks);
+          dataVersionRef.current++;
+        }
+      };
+
+      try {
+        await doFetch(token);
+      } catch (err) {
+        if (err.message === 'token_expired') {
+          try {
+            await doFetch(await refreshGoogleToken());
+          } catch {
+            setError(T.gcalTokenExpired);
+          }
+        } else if (err.message === 'permission_denied') {
+          setError(T.gcalPermissionDenied);
+        } else if (err.message === 'rate_limited') {
+          setError(T.gcalRateLimited);
+        } else if (typeof err.message === 'string' && err.message.startsWith('CalendarList API error')) {
+          setGListError(T.gcalCalendarsError);
+        } else {
+          setError(T.gcalImportError);
+        }
+      }
+    } finally {
+      gSyncBusyRef.current = false;
+      setGSyncing(false);
+    }
+  }, [getGoogleToken, refreshGoogleToken, gCalendars, gSelectedIds, T]);
+
+  // Two-way sync: Google-side changes flow in automatically — every 60s
+  // and whenever the tab regains focus — on EVERY step (App-level, so
+  // Plan keeps syncing while the Schedule widget is unmounted).
+  useEffect(() => {
+    if (!isGoogleConfigured || !googleSignedIn || !gSyncInfo) return undefined;
+    const tick = () => {
+      if (document.hidden || gSyncBusyRef.current) return;
+      refreshGoogleEvents();
+    };
+    const onFocus = () => tick();
+    const interval = setInterval(tick, 60000);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [googleSignedIn, gSyncInfo, refreshGoogleEvents]);
+
+  const toggleGoogleCalendar = (id) => {
+    const next = gSelectedIds.includes(id)
+      ? gSelectedIds.filter(x => x !== id)
+      : [...gSelectedIds, id];
+    saveGoogleCalendars(next);
+    setGSelectedIds(next);
+    // Live re-sync when a toggle changes an already-synced week.
+    if (gSyncInfo) refreshGoogleEvents(next);
+  };
+
+  const handleGoogleSignOut = () => {
+    setGoogleBlocks([]);
+    gBlocksRef.current = [];
+    setGSyncInfo(null);
+    setGCalendars(null);
+    setGSelectedIds([]);
+    setGListError(null);
   };
 
   const handleGenerate = useCallback((onDone) => {
@@ -293,6 +436,12 @@ export default function App() {
     saveCalendar([]);
     setGoogleBlocks([]);
     clearGoogleCache();
+    // Google two-way-sync state resets with the rest of the wizard data.
+    setGSyncInfo(null);
+    setGCalendars(null);
+    setGSelectedIds([]);
+    setGListError(null);
+    gBlocksRef.current = [];
     setStep(1);
   };
 
@@ -404,7 +553,24 @@ export default function App() {
           )
         )}
 
-        {step === 2 && <WeeklyCalendar blocks={calendarBlocks} googleBlocks={googleBlocks} onChange={setCalendarBlocks} onGoogleImport={handleGoogleImport} weekStart={getWeekStart(0)} onViewChange={setSubView} onError={setError} T={T} />}
+        {step === 2 && <WeeklyCalendar
+          blocks={calendarBlocks}
+          googleBlocks={googleBlocks}
+          onChange={setCalendarBlocks}
+          onGoogleImport={handleGoogleImport}
+          weekStart={getWeekStart(0)}
+          onViewChange={setSubView}
+          onError={setError}
+          T={T}
+          gCalendars={gCalendars}
+          gSelectedIds={gSelectedIds}
+          gSyncInfo={gSyncInfo}
+          gSyncing={gSyncing}
+          gListError={gListError}
+          onGoogleSync={refreshGoogleEvents}
+          onGoogleToggleCalendar={toggleGoogleCalendar}
+          onGoogleSignOut={handleGoogleSignOut}
+        />}
 
         {step === 3 && <TaskInputForm tasks={tasks} onChange={setTasks} onViewChange={setSubView} T={T} />}
 
