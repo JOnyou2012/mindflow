@@ -1,5 +1,6 @@
 import { useGoogleAuth } from '../utils/googleAuthContext.js';
 import { getStoredLang, langToLocale } from '../utils/i18n.js';
+import { formatLastSynced } from '../utils/googleCalendar.js';
 import GoogleSyncButton from './GoogleSyncButton.jsx';
 
 // Small inline Google "G" mark — mirrors the lucide-free SVGs used in
@@ -47,14 +48,12 @@ export default function GoogleCalendarImport({
     return <GoogleSyncButton onSync={onGoogleSync} T={T} />;
   }
 
-  // Last synced in the CALENDAR's zone (not the machine's — a Pacific
-  // browser clock confused testers) and with seconds so every completed
-  // refresh is visibly newer.
+  // Last synced in the USER's local time (machine zone) with seconds so
+  // every completed refresh is visibly newer. The calendar's zone was
+  // wrong here — a UTC-zoned calendar showed the live time hours behind
+  // the user's own clock (production bug, 2026-08-31).
   const syncedAtLabel = syncInfo?.syncedAt
-    ? new Date(syncInfo.syncedAt).toLocaleTimeString(langToLocale(getStoredLang()), {
-      hour: 'numeric', minute: '2-digit', second: '2-digit',
-      timeZone: syncInfo.timeZone || undefined,
-    })
+    ? formatLastSynced(syncInfo.syncedAt, langToLocale(getStoredLang()))
     : null;
 
   const handleSignOut = () => {

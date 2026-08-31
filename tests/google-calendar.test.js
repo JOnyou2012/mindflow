@@ -22,6 +22,7 @@ import {
   buildZonedTimesForBlock,
   blocksDiffer,
   autoAdvanceEnd,
+  formatLastSynced,
   DEFAULT_CALENDAR_TIME_ZONE,
 } from '../src/utils/googleCalendar.js';
 
@@ -1154,8 +1155,10 @@ function mockFetch(routes) {
 }
 
 // ---------------------------------------------------------------------------
-// fetchWeekEvents returns the resolved timeZone — "Last synced" must show
-// the CALENDAR's zone clock, not the machine's
+// fetchWeekEvents returns the resolved timeZone — the calendar zone is
+// authoritative for EVENT mapping (imported events land on the grid day
+// the calendar says they're on), while the "Last synced" LABEL is rendered
+// in the user's local zone via formatLastSynced (see below).
 // ---------------------------------------------------------------------------
 
 {
@@ -1166,10 +1169,44 @@ function mockFetch(routes) {
   ]);
   try {
     const { timeZone } = await fetchWeekEvents('token', WEEK);
-    assert(timeZone === 'Asia/Hong_Kong', 'resolved calendar zone returned for the Last-synced clock');
+    assert(timeZone === 'Asia/Hong_Kong', 'resolved calendar zone returned for event mapping');
   } finally {
     restore();
   }
+}
+
+// ---------------------------------------------------------------------------
+// formatLastSynced — the "Last synced" live time must read in the USER's
+// local zone, never the calendar's. A UTC-zoned calendar rendered a
+// 15:00 HKT sync as "7:00", hours behind the user's own clock
+// (production bug, 2026-08-31).
+// ---------------------------------------------------------------------------
+
+{
+  // Build the ISO string from machine-LOCAL parts, so the expected label
+  // is the machine zone by construction — a fixed UTC instant string
+  // would change its expected hour per test-machine timezone.
+  const iso = new Date(2026, 7, 31, 15, 15, 42).toISOString();
+  const label = formatLastSynced(iso, 'en-US');
+  const expected = new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+  });
+  assert(label === expected, 'label = local-zone date + time with seconds');
+
+  // The regression itself: the same instant must NOT be re-zoned to the
+  // calendar's zone. Format once as UTC — on any non-UTC machine the
+  // label must differ from the UTC rendering (a UTC-zoned calendar made
+  // the live time read hours behind the user's clock).
+  const utcRendering = new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+    timeZone: 'UTC',
+  });
+  assert(label !== utcRendering || expected === utcRendering,
+    'label must not be re-zoned to UTC (unless the machine IS UTC)');
+  assert(typeof label === 'string' && label.length > 0, 'valid input returns a non-empty label');
+  assert(formatLastSynced('not-a-date', 'en-US') === null, 'invalid input returns null');
 }
 
 summary();

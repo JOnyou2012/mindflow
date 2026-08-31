@@ -959,3 +959,26 @@ export async function unsyncTaskEvents(accessToken, taskId, tracking, on401 = nu
   }
   return { tracking: next, deleted: res.deleted, failed: 0 };
 }
+
+/**
+ * "Last synced" label for the import widget — the USER's local wall-clock
+ * time (the browser machine zone), date included so a sync from an earlier
+ * day is unambiguous. Deliberately NOT the calendar's zone: a calendar
+ * living in UTC rendered a 15:00 HKT sync as "7:00", which reads as the
+ * live time being hours behind the user's clock (production bug,
+ * 2026-08-31). The calendar zone stays authoritative for event mapping —
+ * only this display uses the machine zone.
+ *
+ * @param {string} syncedAtISO ISO instant string (toISOString() output)
+ * @param {string} locale BCP 47 locale for date/number formatting
+ * @returns {string|null} "Aug 31, 3:15:42 PM" style label, or null on
+ *   invalid input
+ */
+export function formatLastSynced(syncedAtISO, locale) {
+  const d = new Date(syncedAtISO);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(locale, {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+  });
+}

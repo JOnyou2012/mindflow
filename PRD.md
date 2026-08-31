@@ -76,8 +76,8 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 8 suites (5,815 assertion
-> checks — recount 2026-08-27, google-calendar suite +67; counts every
+> All tiers resolved. `npm test` runs 8 suites (5,894 assertion
+> checks — recount 2026-08-31, google-calendar suite 146; counts every
 > "N passed" summary line), 0 failures.
 > `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
@@ -85,6 +85,27 @@
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
+>
+> **2026-08-31 (Jeremy + Claude — Last-synced live time fix):**
+> User-reported bug: the "Last synced" live time (the import widget's
+> auto-refreshing sync clock) always read in the CALENDAR's zone. The
+> connected account's primary calendar lives in UTC, so a sync
+> completed at 15:00 HKT rendered as "7:00" — the UTC hour, hours
+> behind the user's own clock. The calendar-zone display was added on
+> 2026-08-29 ("shown in the calendar's zone … not the machine clock")
+> to stop a Pacific test browser from confusing testers — but for the
+> actual user, "when did MY sync happen" must read in the user's local
+> time, exactly like every other app's last-updated label. Fix:
+> `formatLastSynced(syncedAtISO, locale)` in `googleCalendar.js`
+> renders the label in the browser machine zone (date + time with
+> seconds, so a sync from an earlier day is unambiguous);
+> `GoogleCalendarImport.jsx` calls it instead of formatting with
+> `timeZone: syncInfo.timeZone`. The calendar zone stays authoritative
+> for EVENT mapping (imported events land on the grid day the calendar
+> says they're on) — only this display changed. 4 new regression checks
+> lock the machine-zone rendering (and the no-UTC-rezoning rule) in
+> `tests/google-calendar.test.js`. Suite: 146 google-calendar checks
+> (5,894 total), 0 failures, lint clean, build clean.
 >
 > **2026-08-29 (Jeremy + Claude — two-way sync acceptance fixes):**
 > Live acceptance (build 721a3b0) found the inbound half dead except on
@@ -98,7 +119,8 @@
 > poll, and the focus trigger on EVERY step; the widget is purely
 > presentational. "Last synced" updates on every completion, shown in
 > the calendar's zone (Asia/Hong_Kong) with seconds — not the machine
-> clock.
+> clock. *(Superseded 2026-08-31 — see Last-synced live time fix: the
+> label now reads in the user's local zone.)*
 >
 > **P0 — all-day title save blocked:** the conflict checker compared the
 > all-day 6:00–22:00 rendering span against every study block and
