@@ -203,7 +203,8 @@ export function alertness(hour, timeAwakeHours, breakMinutes, chronotype = 'morn
  *   Δstrain = (ticks × difficulty × gamma) / (maxDailyTicks × 5 × 1.25)
  *
  * Normalized so that 8 hours of difficulty-3 work at gamma=1.0
- * produces approximately 0.8 strain (80% of daily max).
+ * produces approximately 0.48 strain (8h × 3 / (8h × 5 × 1.25));
+ * 0.8 is the difficulty-5 worst case. (JSDoc corrected 2026-08-31.)
  *
  * @param {number} ticks       Task duration in 10-min ticks
  * @param {number} difficulty  Task difficulty (1–5)
@@ -252,6 +253,20 @@ function normalizeDeadline(deadline) {
   if (s.endsWith('T')) s = s.slice(0, -1);
   if (!s.includes('T')) s += 'T23:59';
   return s;
+}
+
+/**
+ * Whole days from a slot's midnight to the deadline, negative once the
+ * deadline has passed by ANY amount. The explicit overdue check matters:
+ * a "yesterday 23:59" deadline is −0.0007 days and Math.round gives −0,
+ * and −0 < 0 is FALSE in JS — so overdue tasks were landing on Monday
+ * with the "due soon" BONUS instead of the overdue penalty (production
+ * bug, 2026-08-31).
+ */
+function deadlineDaysUntil(deadlineDate, slotDateMidnight) {
+  return deadlineDate < slotDateMidnight
+    ? -1
+    : Math.round((deadlineDate - slotDateMidnight) / 86400000);
 }
 
 export function sortTasks(tasks) {
@@ -493,7 +508,7 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
     if (dl && !isNaN(dl.getTime())) {
       const slotDate = new Date(weekStartDate + 'T00:00:00');
       slotDate.setDate(slotDate.getDate() + DAY_INDEX[slot.day]);
-      const daysUntilDeadline = Math.round((dl - slotDate) / 86400000);
+      const daysUntilDeadline = deadlineDaysUntil(dl, slotDate);
       if (daysUntilDeadline > 7) {
         // Task is scheduled too early — penalize proportionally
         deadlineWeekScore = (daysUntilDeadline / 7) * 0.3;
@@ -1272,6 +1287,13 @@ export default function generateWeeklySchedule(
 
     // Place the task
     const absStart = bestSlot.startTick + bestSlot.usedTicks;
+    // Actual gap to the previously placed session on this day — the carry-
+    // over recovery must model THIS, not a hardcoded GAP_TICKS (a session
+    // 4h after the last one gets 4h of modeled rest, production bug
+    // 2026-08-31). Non-negative: an inversion (new session placed earlier
+    // in the day than the last-placed one) models no recovery, which is
+    // the honest floor without chronological re-simulation.
+    const gapSinceLastTask = Math.max(0, absStart - dayLastTaskEndTick[bestSlot.day]);
     const gamma = circadianGamma(absStart / 6, chronotype) * profile.gammaBoost;
 
     // Apply cumulative strain + deadline pressure to effective alpha
@@ -1334,12 +1356,6 @@ export default function generateWeeklySchedule(
         burnoutTick = findBurnoutTick(timeline, 0.50);
       }
 
-      if ((timeline.length - 1) > bestSlot.durationTicks) {
-        timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks,
-                                            initialState);
-        burnoutTick = findBurnoutTick(timeline, 0.50);
-      }
-
       const fittedTicks = Math.min(timeline.length - 1, bestSlot.durationTicks);
       if (timeline.length - 1 > fittedTicks) {
         timeline = timeline.slice(0, fittedTicks + 1);
@@ -1347,9 +1363,16 @@ export default function generateWeeklySchedule(
 
       let bc = 0, fm = 0;
       let peakFatigueInSession = 0;
-      for (const p of timeline) {
+      // flowMinutes sums minutes in flow DURING the session: ticks
+      // 0..fittedTicks−1 (the final point is the end-state, whose 10-min
+      // window is past the session — it overcounted every session by one
+      // window, production bug 2026-08-31).
+      const duringTicks = timeline.slice(0, Math.max(1, timeline.length - 1));
+      for (const p of duringTicks) {
         if (p.fatigue > 0.50) bc++;
         fm += p.flow * 10;
+      }
+      for (const p of timeline) {
         if (p.fatigue > peakFatigueInSession) peakFatigueInSession = p.fatigue;
       }
 
@@ -1386,9 +1409,14 @@ export default function generateWeeklySchedule(
       week.days[bestSlot.day].totalFlowMins += Math.round(fm);
       if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
 
-      // v8: Record occupied interval to prevent double-booking
+      // v8: Record occupied interval to prevent double-booking. The
+      // interval is padded with GAP_TICKS on the right so the overlap
+      // check also enforces the 30-min inter-session gap — sessions used
+      // to start exactly at the previous session's endTick (back-to-back)
+      // when the next task landed in a sibling candidate slot (production
+      // bug, 2026-08-31).
       dayOccupiedIntervals[bestSlot.day].push({
-        start: absStart, end: absStart + fittedTicks,
+        start: absStart, end: absStart + fittedTicks + GAP_TICKS,
       });
 
       // Update per-day state
@@ -1412,10 +1440,14 @@ export default function generateWeeklySchedule(
       dayLastTaskType[bestSlot.day] = task.type || 'other';
       bestSlot.lastTaskType = task.type || 'other';  // v8: gate flow-block bonus on type match
 
-      // Compute carryover state for next task on this day
+      // Compute carryover state for next task on this day. The burnout
+      // break's 20-min rest is applied INSIDE computeNextInitialState —
+      // the outer block used to apply a second 20-min recovery on top,
+      // giving the next task 40 modeled minutes of rest (production bug,
+      // 2026-08-31).
       const hadBurnout = burnoutTick > 0;
       dayNextInitialState[bestSlot.day] = computeNextInitialState(
-        timeline, GAP_TICKS, hadBurnout
+        timeline, gapSinceLastTask, hadBurnout
       );
 
       if (hadBurnout) {
@@ -1424,12 +1456,6 @@ export default function generateWeeklySchedule(
         dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
         dayAccumulatedStrain[bestSlot.day] *= 0.85;
         dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
-        // Stronger recovery for next task
-        if (dayNextInitialState[bestSlot.day]) {
-          dayNextInitialState[bestSlot.day] = computeRecoveryState(
-            dayNextInitialState[bestSlot.day], RECOVERY_TICKS * 10
-          );
-        }
       }
     } catch (err) {
       console.error(`Scheduler: failed to simulate task "${task.title}"`, err);
@@ -1499,6 +1525,7 @@ export default function generateWeeklySchedule(
       if (!bestSlot) { stillUnschedule.push(task); continue; }
 
       const absStart = bestSlot.startTick + bestSlot.usedTicks;
+      const gapSinceLastTask = Math.max(0, absStart - dayLastTaskEndTick[bestSlot.day]);
       const gamma = circadianGamma(absStart / 6, chronotype) * profile.gammaBoost;
       const effAlpha = effectiveAlpha(alpha, dayAccumulatedStrain[bestSlot.day]);
 
@@ -1522,12 +1549,6 @@ export default function generateWeeklySchedule(
           burnoutTick = findBurnoutTick(timeline, 0.50);
         }
 
-        if ((timeline.length - 1) > bestSlot.durationTicks) {
-          timeline = calculateMarkovTimeline(effAlpha, task.difficulty || 3, gamma, taskTicks,
-                                              initialState);
-          burnoutTick = findBurnoutTick(timeline, 0.50);
-        }
-
         const fittedTicks = Math.min(timeline.length - 1, bestSlot.durationTicks);
         if (timeline.length - 1 > fittedTicks) {
           timeline = timeline.slice(0, fittedTicks + 1);
@@ -1535,9 +1556,14 @@ export default function generateWeeklySchedule(
 
         let bc = 0, fm = 0;
         let peakFatigueInSession = 0;
-        for (const p of timeline) {
+        // Same off-by-one guard as the primary pass (production bug
+        // 2026-08-31): the final point is the end-state, past the session.
+        const duringTicks = timeline.slice(0, Math.max(1, timeline.length - 1));
+        for (const p of duringTicks) {
           if (p.fatigue > 0.50) bc++;
           fm += p.flow * 10;
+        }
+        for (const p of timeline) {
           if (p.fatigue > peakFatigueInSession) peakFatigueInSession = p.fatigue;
         }
 
@@ -1560,9 +1586,10 @@ export default function generateWeeklySchedule(
         week.days[bestSlot.day].totalFlowMins += Math.round(fm);
         if (burnoutTick > 0) week.days[bestSlot.day].burnoutCount += 1;
 
-        // v8: Record occupied interval to prevent double-booking (refinement pass)
+        // v8: Record occupied interval to prevent double-booking (refinement
+        // pass). Padded with GAP_TICKS like the primary pass.
         dayOccupiedIntervals[bestSlot.day].push({
-          start: absStart, end: absStart + fittedTicks,
+          start: absStart, end: absStart + fittedTicks + GAP_TICKS,
         });
 
         const totalConsumed = fittedTicks + GAP_TICKS;
@@ -1584,10 +1611,12 @@ export default function generateWeeklySchedule(
         dayLastTaskType[bestSlot.day] = task.type || 'other';
         bestSlot.lastTaskType = task.type || 'other';  // v8: gate flow-block bonus on type match
 
-        // Compute carryover state for next task on this day
+        // Compute carryover state for next task on this day. Same fixes as
+        // the primary pass: actual gap, single (not double) burnout
+        // recovery.
         const hadBurnout = burnoutTick > 0;
         dayNextInitialState[bestSlot.day] = computeNextInitialState(
-          timeline, GAP_TICKS, hadBurnout
+          timeline, gapSinceLastTask, hadBurnout
         );
 
         if (burnoutTick > 0) {
@@ -1596,12 +1625,6 @@ export default function generateWeeklySchedule(
           dayUsedTicks[bestSlot.day] += RECOVERY_TICKS;
           dayAccumulatedStrain[bestSlot.day] *= 0.85;
           dayLastTaskEndTick[bestSlot.day] += RECOVERY_TICKS;
-          // Stronger recovery for next task
-          if (dayNextInitialState[bestSlot.day]) {
-            dayNextInitialState[bestSlot.day] = computeRecoveryState(
-              dayNextInitialState[bestSlot.day], RECOVERY_TICKS * 10
-            );
-          }
         }
       } catch (err) {
         console.error(`Scheduler refinement: failed for "${task.title}"`, err);
@@ -1611,6 +1634,18 @@ export default function generateWeeklySchedule(
     week.unscheduled = stillUnschedule;
   } else {
     week.unscheduled = [];
+  }
+
+  // Sessions are placed in priority order, which is NOT chronological
+  // (the day-spread bonus parks the first task in the afternoon and later
+  // tasks fill morning slots). Sort each day by startTick so the fatigue
+  // curve, streak warnings, and any consumer reading the array see time
+  // order (production bug, 2026-08-31). The carryover chain was computed
+  // at placement time and is not re-derived — see PRD known limitations.
+  for (const day of ALL_DAYS) {
+    const dd = week.days[day];
+    if (dd.sessions.length <= 1) continue;
+    dd.sessions.sort((a, b) => a.startTick - b.startTick);
   }
 
   // Build daily aggregate fatigue curves
@@ -1639,4 +1674,5 @@ export {
   ALL_DAYS, DAY_START_TICK, DAY_END_TICK, WEEKEND_DAYS,
   GAP_TICKS, RECOVERY_TICKS,
   TAU_BUILD, TAU_DECAY, CIRCADIAN_AMPLITUDE, PROCESS_S_WEIGHT,
+  deadlineDaysUntil,
 };

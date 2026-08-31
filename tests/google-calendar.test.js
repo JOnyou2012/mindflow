@@ -16,7 +16,9 @@ import {
   deleteSyncedEvents,
   unsyncTaskEvents,
   findMindFlowEvents,
+  findExistingEvents,
   zonedISOFromParts,
+  zonedPartsFromInstant,
   updateGoogleEvent,
   deleteGoogleEvent,
   buildZonedTimesForBlock,
@@ -1207,6 +1209,86 @@ function mockFetch(routes) {
     'label must not be re-zoned to UTC (unless the machine IS UTC)');
   assert(typeof label === 'string' && label.length > 0, 'valid input returns a non-empty label');
   assert(formatLastSynced('not-a-date', 'en-US') === null, 'invalid input returns null');
+}
+
+// ---------------------------------------------------------------------------
+// 2026-08-31 production bug sweep — regression tests
+// ---------------------------------------------------------------------------
+
+// A) All-day events compare CALENDAR DATES, not instants — a machine east
+// of the calendar zone dropped the week's Monday all-day event entirely
+// (a machine far west could wrongly admit the previous Sunday).
+{
+  const mondayAllDay = { id: 'allDayMon', summary: 'Mon all-day', start: { date: '2026-08-24' }, end: { date: '2026-08-25' } };
+  // Calendar west of the machine (LA) reproduces the cross-zone Monday
+  // drop in this test process itself: under the old instant compare the
+  // machine-local Monday midnight lands BEFORE the week's LA midnight.
+  const blocks = mapToCalendarBlocks([mondayAllDay], WEEK, { timeZone: 'America/Los_Angeles' });
+  assert(blocks.some(b => b.label === 'Mon all-day' && b.day === 'Mon'),
+    'A1: Monday all-day survives a calendar zone west of the machine');
+}
+
+// B) Old engines format midnight as hour "24" (V8 quirk) — the % 24 guard
+// must keep zone mapping correct.
+{
+  const orig = Intl.DateTimeFormat.prototype.formatToParts;
+  Intl.DateTimeFormat.prototype.formatToParts = function (d) {
+    const parts = orig.call(this, d);
+    return parts.map(p => (p.type === 'hour' && p.value === '00' ? { ...p, value: '24' } : p));
+  };
+  try {
+    const iso = zonedISOFromParts(2026, 8, 24, 0, 30, 'Asia/Hong_Kong');
+    assert(iso === '2026-08-23T16:30:00.000Z', `B1: midnight target survives hour-24 engines (${iso})`);
+    const parts = zonedPartsFromInstant(Date.parse('2026-08-23T16:30:00Z'), 'Asia/Hong_Kong');
+    assert(parts.hour === 0 && parts.day === 24, `B2: parts hour normalized (${parts.hour}:${parts.minute} day ${parts.day})`);
+  } finally {
+    Intl.DateTimeFormat.prototype.formatToParts = orig;
+  }
+}
+
+// C) Timed multi-day events split into per-day segments — an overnight
+// event used to emit NO block at all, and multi-day events lost every
+// day after the first.
+{
+  const overnight = { id: 'overnight', summary: 'Night shift', start: { dateTime: '2026-08-24T14:30:00Z' }, end: { dateTime: '2026-08-24T22:30:00Z' } };
+  // HK: Mon 22:30 → Tue 06:30 — only the Tue 06:00–06:30 part is visible
+  const b1 = mapToCalendarBlocks([overnight], WEEK, { timeZone: 'Asia/Hong_Kong' });
+  assert(b1.length === 1, `C1: overnight event emits one visible segment (${b1.length})`);
+  assert(b1[0].day === 'Tue' && b1[0].startHour === 6 && b1[0].durationHours === 0.5,
+    `C2: overnight visible portion lands on day 2 (${b1[0]?.day} ${b1[0]?.startHour}–${b1[0]?.startHour + b1[0]?.durationHours})`);
+  assert(b1[0].clipped === 'early', `C3: day-2 segment clipped early (${b1[0]?.clipped})`);
+
+  const multi = { id: 'multi', summary: 'Trip', start: { dateTime: '2026-08-27T12:00:00Z' }, end: { dateTime: '2026-08-29T02:00:00Z' } };
+  // HK: Thu 20:00 → Sat 10:00 — three visible segments
+  const b2 = mapToCalendarBlocks([multi], WEEK, { timeZone: 'Asia/Hong_Kong' });
+  assert(b2.length === 3, `C4: 3-day event splits into 3 segments (${b2.length})`);
+  assert(b2.every(x => x.segment === true), 'C5: segments flagged');
+  assert(b2[0].day === 'Thu' && b2[0].clipped === 'late', `C6: Thu segment clipped late (${b2[0]?.day}/${b2[0]?.clipped})`);
+  assert(b2[1].day === 'Fri' && b2[1].clipped === 'both',
+    `C7: Fri segment clips both 0–6 and 22–24 (${b2[1]?.day}/${b2[1]?.clipped})`);
+  assert(b2[2].day === 'Sat' && b2[2].clipped === 'early', `C8: Sat segment clipped early (${b2[2]?.day}/${b2[2]?.clipped})`);
+}
+
+// D) findExistingEvents query window must match the calendar zone events
+// are WRITTEN in — machine-zone bounds missed Monday events from a
+// west-of-calendar browser, breaking duplicate detection + orphan sweeps.
+{
+  let capturedUrl = null;
+  const restore = mockFetch([
+    ['/calendars/primary/events', 'GET', async (u) => {
+      capturedUrl = new URL(u);
+      return { status: 200, body: { items: [] } };
+    }],
+  ]);
+  try {
+    await findExistingEvents('token', '2026-08-24', '2026-08-31');
+    assert(capturedUrl.searchParams.get('timeMin') === zonedISOFromParts(2026, 8, 24, 0, 0, DEFAULT_CALENDAR_TIME_ZONE),
+      'D1: timeMin in calendar zone');
+    assert(capturedUrl.searchParams.get('timeMax') === zonedISOFromParts(2026, 8, 31, 23, 59, DEFAULT_CALENDAR_TIME_ZONE),
+      'D2: timeMax in calendar zone');
+  } finally {
+    restore();
+  }
 }
 
 summary();

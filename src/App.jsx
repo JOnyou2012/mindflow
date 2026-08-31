@@ -38,7 +38,7 @@ function getWeekMonday() {
 }
 
 export default function App() {
-  const { isSignedIn: googleSignedIn, getToken: getGoogleToken, refreshToken: refreshGoogleToken } = useGoogleAuth();
+  const { isSignedIn: googleSignedIn, getToken: getGoogleToken, refreshToken: refreshGoogleToken, signOut: googleSignOut } = useGoogleAuth();
   const getWeekStart = (offset = 0) => {
     const [y, m, d] = getWeekMonday().split('-').map(Number);
     const date = new Date(y, m - 1, d + offset * 7);
@@ -69,6 +69,10 @@ export default function App() {
   const [gListError, setGListError] = useState(null);
   const gBlocksRef = useRef([]); // what the grid currently shows (for diffs)
   const gSyncBusyRef = useRef(false); // never overlap a sync
+  // Epoch guard: goHome / sign-out bump this; an in-flight
+  // refreshGoogleEvents that started before the reset aborts on the next
+  // check instead of resurrecting cleared Google state (race, 2026-08-31).
+  const gEpochRef = useRef(0);
 
   const [step, setStep] = useState(() => (loadCalibration() ? 2 : 1));
   const [weekResults, setWeekResults] = useState({}); // weekStart -> result
@@ -94,8 +98,18 @@ export default function App() {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   }, [lang]);
 
-  // Leaving a step resets any active sub-flow
-  useEffect(() => { setSubView('overview'); }, [step]);
+  // Leaving a step resets any active sub-flow. It also cancels an
+  // in-flight generation — otherwise the reveal-hold commit fires up to
+  // ~3.5s later and force-jumps the user to Plan from wherever they
+  // navigated (production bug, 2026-08-31).
+  useEffect(() => {
+    setSubView('overview');
+    if (generateTimerRef.current) { clearTimeout(generateTimerRef.current); generateTimerRef.current = null; }
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+    setGenProgress(0);
+    setIsCalculating(false);
+  }, [step]);
 
   // Clean up the generate/hold timers on unmount
   useEffect(() => () => {
@@ -176,13 +190,18 @@ export default function App() {
     gSyncBusyRef.current = true;
     setGSyncing(true);
     setGListError(null);
+    const epoch = gEpochRef.current;
     try {
       let token = getGoogleToken();
       if (!token) {
         try {
           token = await refreshGoogleToken();
         } catch {
+          // Surface the failure instead of silently dropping the sync
+          // info — the old behavior left the UI claiming "Connected"
+          // while auto-refresh silently died (production bug, 2026-08-31).
           setGSyncInfo(null);
+          setError(T.gcalTokenExpired);
           return;
         }
       }
@@ -193,6 +212,7 @@ export default function App() {
         let calList = gCalendars;
         if (!calList) {
           calList = await fetchCalendarList(tok);
+          if (epoch !== gEpochRef.current) return; // reset happened mid-flight
           setGCalendars(calList);
         }
         const listIds = calList.map(c => c.id);
@@ -215,6 +235,7 @@ export default function App() {
 
         const { blocks, eventCount, calendarNames, failures, timeZone } =
           await fetchWeekEvents(tok, getWeekStart(0), ids, calList);
+        if (epoch !== gEpochRef.current) return; // reset happened mid-flight
         setGSyncInfo({ eventCount, calendarNames, failures, syncedAt, timeZone });
         saveGoogleCache({ data: blocks, syncedAt, weekStart: getWeekStart(0), calendarNames, eventCount });
         if (blocksDiffer(gBlocksRef.current, blocks)) {
@@ -232,10 +253,24 @@ export default function App() {
         if (err.message === 'token_expired') {
           try {
             await doFetch(await refreshGoogleToken());
-          } catch {
-            setError(T.gcalTokenExpired);
+          } catch (retryErr) {
+            // Classify the RETRY's own error — the old code reported every
+            // retry failure as "token expired", masking 403/429s and
+            // skipping the sign-out path for revoked consent (production
+            // bug, 2026-08-31).
+            if (retryErr.message === 'permission_denied') {
+              googleSignOut();
+              setError(T.gcalPermissionDenied);
+            } else if (retryErr.message === 'rate_limited') {
+              setError(T.gcalRateLimited);
+            } else if (typeof retryErr.message === 'string' && retryErr.message.startsWith('CalendarList API error')) {
+              setGListError(T.gcalCalendarsError);
+            } else {
+              setError(T.gcalTokenExpired);
+            }
           }
         } else if (err.message === 'permission_denied') {
+          googleSignOut();
           setError(T.gcalPermissionDenied);
         } else if (err.message === 'rate_limited') {
           setError(T.gcalRateLimited);
@@ -249,7 +284,7 @@ export default function App() {
       gSyncBusyRef.current = false;
       setGSyncing(false);
     }
-  }, [getGoogleToken, refreshGoogleToken, gCalendars, gSelectedIds, T]);
+  }, [getGoogleToken, refreshGoogleToken, googleSignOut, gCalendars, gSelectedIds, T]);
 
   // Two-way sync: Google-side changes flow in automatically — every 60s
   // and whenever the tab regains focus — on EVERY step (App-level, so
@@ -280,6 +315,7 @@ export default function App() {
   };
 
   const handleGoogleSignOut = () => {
+    gEpochRef.current++; // abort any in-flight refresh
     setGoogleBlocks([]);
     gBlocksRef.current = [];
     setGSyncInfo(null);
@@ -291,6 +327,11 @@ export default function App() {
   const handleGenerate = useCallback((onDone) => {
     if (isCalculating) return;
     setError(null);
+    // Snapshot the staleness counter: edits made DURING the 0.5–3.5s
+    // reveal hold must leave the plan stale after commit (the old code
+    // reset to 0 unconditionally, hiding that the plan was built from
+    // pre-edit data — production bug, 2026-08-31).
+    const versionAtStart = dataVersionRef.current;
     if (!calibration || typeof calibration.alphaScore !== 'number' || !Number.isFinite(calibration.alphaScore)) {
       setError(T.noCalibration);
       return;
@@ -341,7 +382,14 @@ export default function App() {
           // list, miles from where the user looks).
           const deferred = remaining.filter(t => !eligible.includes(t));
           const weekCap = 0.80 + Math.min(w * 0.10, 0.20);
-          const cappedSettings = { ...settings, maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap) };
+          // Cap BOTH weekday and weekend hours — capping only weekdays
+          // left weekends at up to 12h, the highest-capacity days of a
+          // "don't fill beyond ~80%" week (production bug, 2026-08-31).
+          const cappedSettings = {
+            ...settings,
+            maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap),
+            maxHoursWeekend: Math.round((settings.maxHoursWeekend || 4) * weekCap),
+          };
           // Google-imported blocks are week-scoped (imported for the current
           // week only). Applying them to every cascade week planted a
           // one-off event (e.g. "Dentist Tue 15:00") in all 7 future weeks.
@@ -364,7 +412,9 @@ export default function App() {
           if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
           setWeekResults(results);
           setPlanVersion(v => v + 1);
-          dataVersionRef.current = 0;
+          // Keep the delta over versionAtStart: anything edited while the
+          // hold was running must still read as stale.
+          dataVersionRef.current = dataVersionRef.current - versionAtStart;
           setIsCalculating(false);
           setGenProgress(0);
           if (onDone) onDone();
@@ -418,6 +468,7 @@ export default function App() {
   // cache, generated plan) and lands on step 1 with the Stroop start
   // screen. App preferences (theme, language, schedule settings) are kept.
   const goHome = () => {
+    gEpochRef.current++; // abort any in-flight Google refresh
     if (generateTimerRef.current) { clearTimeout(generateTimerRef.current); generateTimerRef.current = null; }
     if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
     if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }

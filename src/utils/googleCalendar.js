@@ -107,19 +107,25 @@ async function fetchPrimaryCalendarTimeZone(accessToken) {
 export function zonedISOFromParts(y, m, d, hh, mm, timeZone) {
   const pad = (n) => String(n).padStart(2, '0');
   const target = `${y}-${pad(m)}-${pad(d)} ${pad(hh)}:${pad(mm)}`;
+  // hour12: false (not hourCycle: 'h23') — the latter is ignored by
+  // engines without hourCycle support (Safari < 15.4), silently falling
+  // back to h12 and shifting every mapped time by 12h. The % 24 guard
+  // also covers the old V8 "24" at-midnight quirk (production bug,
+  // 2026-08-31).
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
   let guess = Date.UTC(y, m - 1, d, hh, mm);
   for (let i = 0; i < 3; i++) {
     const parts = fmt.formatToParts(new Date(guess));
     const get = (type) => Number(parts.find(p => p.type === type).value);
-    const got = `${get('year')}-${pad(get('month'))}-${pad(get('day'))} ${pad(get('hour'))}:${pad(get('minute'))}`;
+    const hour = get('hour') % 24;
+    const got = `${get('year')}-${pad(get('month'))}-${pad(get('day'))} ${pad(hour)}:${pad(get('minute'))}`;
     if (got === target) return new Date(guess).toISOString();
     guess += Date.UTC(y, m - 1, d, hh, mm)
-      - Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'));
+      - Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'));
   }
   return new Date(guess).toISOString();
 }
@@ -141,10 +147,12 @@ export function autoAdvanceEnd(newStart, currentEnd) {
  * the grid's day/hour in the CALENDAR's zone, never the machine's.
  */
 export function zonedPartsFromInstant(instantMs, timeZone) {
+  // hour12: false + % 24 — same old-engine guards as zonedISOFromParts
+  // (a "24" hour made midnight events vanish from the import entirely).
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone,
     weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
   const parts = fmt.formatToParts(new Date(instantMs));
   const get = (type) => parts.find(p => p.type === type)?.value;
@@ -153,7 +161,7 @@ export function zonedPartsFromInstant(instantMs, timeZone) {
     year: Number(get('year')),
     month: Number(get('month')),
     day: Number(get('day')),
-    hour: Number(get('hour')),
+    hour: Number(get('hour')) % 24,
     minute: Number(get('minute')),
   };
 }
@@ -437,21 +445,25 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
   const visibleStartH = DAY_START_TICK / 6; // 6am
   const visibleEndH = DAY_END_TICK / 6; // 10pm
   const blocks = [];
-  // Week window: in the calendar's zone when known, else machine-local
-  // (DST-safe end: setDate handles the shift).
-  let weekStart;
-  let weekEnd;
-  if (timeZone) {
-    const [wy, wm, wd] = weekStartISO.split('-').map(Number);
-    const weDate = new Date(wy, wm - 1, wd + 7);
-    weekStart = new Date(zonedISOFromParts(wy, wm, wd, 0, 0, timeZone));
-    weekEnd = new Date(zonedISOFromParts(weDate.getFullYear(), weDate.getMonth() + 1, weDate.getDate(), 0, 0, timeZone));
-  } else {
-    weekStart = new Date(weekStartISO + 'T00:00:00');
-    weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-  }
+  // Week window as CALENDAR DATES (YYYY-MM-DD), compared lexically.
+  // Comparing instants was wrong for all-day events: a machine east of
+  // the calendar zone parses its local midnight BEFORE the week's
+  // calendar-midnight instant, silently dropping the week's Monday all-day
+  // event — and a machine far west could wrongly admit the previous
+  // Sunday (production bug, 2026-08-31).
+  const [wkY, wkM, wkD] = weekStartISO.split('-').map(Number);
+  const wkEndDate = new Date(wkY, wkM - 1, wkD + 7);
+  const weekEndKey = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`;
   const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Calendar-zone date parts of an instant (machine zone when opts.timeZone
+  // is absent — pure-function callers like tests).
+  const partsOf = (ms) => {
+    if (timeZone) return zonedPartsFromInstant(ms, timeZone);
+    const d = new Date(ms);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate(), hour: d.getHours(), minute: d.getMinutes() };
+  };
+  const keyOf = (p) => `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 
   for (const event of events) {
     if (event.status === 'cancelled') continue;
@@ -468,12 +480,13 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
       // Multi-day: split into per-day blocks
       const cursor = new Date(startDate);
       while (cursor < endDate) {
-        // Only include if within the target week
-        if (cursor >= weekStart && cursor < weekEnd) {
+        // Local date parts — toISOString() would shift the suffix by a
+        // day in UTC+ timezones, breaking the id's date meaning.
+        const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        // Only include if within the target week (calendar-date compare —
+        // see the weekEndKey comment above).
+        if (dateKey >= weekStartISO && dateKey < weekEndKey) {
           const day = dayMap[cursor.getDay()];
-          // Local date parts — toISOString() would shift the suffix by a
-          // day in UTC+ timezones, breaking the id's date meaning.
-          const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
           blocks.push({
             id: `gcal-${event.id}-${dateKey}`,
             day,
@@ -495,39 +508,49 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
         cursor.setDate(cursor.getDate() + 1);
       }
     } else {
-      // Timed event
+      // Timed event — split into per-day segments in the calendar's zone.
+      // A multi-day (or overnight) event used to emit NO block at all
+      // when its visible span on the start day was empty (23:00→02:00
+      // vanished entirely; Fri 20:00→Sun 10:00 lost Sat/Sun), production
+      // bug 2026-08-31.
       const startDt = new Date(event.start.dateTime);
       const endDt = new Date(event.end.dateTime);
-      let day;
-      let startHour;
-      let durationHours;
-      if (timeZone) {
-        // Calendar-zone wall time — a Sat 10:00 HK event must land on
-        // Sat 10:00 in the grid even when the browser runs in LA.
-        const sp = zonedPartsFromInstant(startDt.getTime(), timeZone);
-        day = sp.weekday;
-        startHour = sp.hour + sp.minute / 60;
-        durationHours = (endDt.getTime() - startDt.getTime()) / 3600000;
-      } else {
-        day = dayMap[startDt.getDay()];
-        startHour = startDt.getHours() + startDt.getMinutes() / 60;
-        durationHours = (endDt - startDt) / 3600000;
+      const sp = partsOf(startDt.getTime());
+      const epRaw = partsOf(endDt.getTime());
+      // An event ending exactly at midnight belongs entirely to the
+      // previous day.
+      const ep = (epRaw.hour === 0 && epRaw.minute === 0)
+        ? partsOf(endDt.getTime() - 1000)
+        : epRaw;
+      const firstKey = keyOf(sp);
+      const lastKey = keyOf(ep);
+
+      // Every calendar date the event touches, start to end inclusive.
+      const segKeys = [];
+      for (let p = { ...sp }; keyOf(p) <= lastKey;) {
+        segKeys.push(keyOf(p));
+        const next = new Date(p.year, p.month - 1, p.day + 1);
+        p = { year: next.getFullYear(), month: next.getMonth() + 1, day: next.getDate() };
       }
 
-      // Only include if within the target week
-      if (startDt >= weekStart && startDt < weekEnd) {
+      for (const dateKey of segKeys) {
+        if (dateKey < weekStartISO || dateKey >= weekEndKey) continue;
+        const [sy, sm, sd] = dateKey.split('-').map(Number);
+        const day = dayMap[new Date(sy, sm - 1, sd).getDay()];
+        const segStartHour = dateKey === firstKey ? sp.hour + sp.minute / 60 : 0;
+        const segEndHour = dateKey === lastKey ? ep.hour + ep.minute / 60 : 24;
 
         // Clip to visible range (6am–10pm); remember what was cut so the
         // UI can flag "starts before 6:00" / "ends after 22:00" instead of
         // silently showing a truncated block (PRD step 93).
-        const visibleStart = Math.max(startHour, visibleStartH);
-        const visibleEnd = Math.min(startHour + durationHours, visibleEndH);
-        const clippedEarly = startHour < visibleStartH;
-        const clippedLate = startHour + durationHours > visibleEndH;
+        const visibleStart = Math.max(segStartHour, visibleStartH);
+        const visibleEnd = Math.min(segEndHour, visibleEndH);
+        const clippedEarly = segStartHour < visibleStartH;
+        const clippedLate = segEndHour > visibleEndH;
 
         if (visibleEnd > visibleStart) {
           const block = {
-            id: `gcal-${event.id}`,
+            id: segKeys.length > 1 ? `gcal-${event.id}-${dateKey}` : `gcal-${event.id}`,
             day,
             startHour: visibleStart,
             durationHours: visibleEnd - visibleStart,
@@ -541,6 +564,10 @@ export function mapToCalendarBlocks(events, weekStartISO, opts = {}) {
             googleCalendarName: calendarName || event.organizer?.displayName || 'Google Calendar',
             googleCalendarColor: calendarColor,
             isAllDay: false,
+            // Multi-day segments are label-only in the edit popover —
+            // PATCHing a segment's grid times would rewrite the REAL
+            // event's whole span in Google Calendar.
+            segment: segKeys.length > 1,
             recurrenceRule: isRecurring ? (event.recurrence?.[0] || null) : null,
           };
           if (clippedEarly || clippedLate) {
@@ -608,8 +635,14 @@ function buildEventPayload(session, task, startISO, endISO, sessionKey, timeZone
  */
 export async function findExistingEvents(accessToken, weekStartISO, weekEndISO) {
   const url = new URL(CALENDAR_API + '/calendars/primary/events');
-  url.searchParams.set('timeMin', new Date(weekStartISO + 'T00:00:00').toISOString());
-  url.searchParams.set('timeMax', new Date(weekEndISO + 'T23:59:59').toISOString());
+  // The window must match the zone events are WRITTEN in (the calendar's
+  // zone). Machine-zone bounds missed the first ~15h of the week from a
+  // west-of-calendar browser, so duplicate detection and the orphan sweep
+  // skipped Monday events (production bug, 2026-08-31).
+  const [sy, sm, sd] = weekStartISO.split('-').map(Number);
+  const [ey, em, ed] = weekEndISO.split('-').map(Number);
+  url.searchParams.set('timeMin', zonedISOFromParts(sy, sm, sd, 0, 0, DEFAULT_CALENDAR_TIME_ZONE));
+  url.searchParams.set('timeMax', zonedISOFromParts(ey, em, ed, 23, 59, DEFAULT_CALENDAR_TIME_ZONE));
   url.searchParams.set('privateExtendedProperty', 'mindflow_session=true');
   url.searchParams.set('maxResults', '250');
 

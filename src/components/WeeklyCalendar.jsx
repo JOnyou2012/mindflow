@@ -302,8 +302,17 @@ export default function WeeklyCalendar({
         setPopMsg(err.message || T.gcalEventUpdateError);
         return;
       }
+      // Only PATCH real times when the event's true span is fully visible
+      // in the grid AND the user actually changed them. A clipped event's
+      // grid values are the VISIBLE 6:00–22:00 window, not the real
+      // times — pushing them back silently truncated/moved the real event
+      // in Google Calendar (production bug, 2026-08-31). Multi-day
+      // segments are label-only for the same reason.
+      const timesChanged = !pop.isAllDay
+        && (popStart !== pop.startHour || popEnd !== pop.startHour + pop.durationHours);
+      const timesPatchable = !pop.isAllDay && !pop.clipped && !pop.segment;
       const changes = { summary: popLabel.trim() };
-      if (!pop.isAllDay) {
+      if (timesChanged && timesPatchable) {
         const tz = pop.googleCalendarTimeZone || DEFAULT_CALENDAR_TIME_ZONE;
         const { startISO, endISO } = buildZonedTimesForBlock(weekStart, pop.day, popStart, popEnd, tz);
         changes.start = { dateTime: startISO, timeZone: tz };
@@ -320,10 +329,16 @@ export default function WeeklyCalendar({
           throw err;
         }
       }
-      // Grid times follow the edit; clipped flags reset (the popover's
-      // time options are all inside the visible 6:00–22:00 window).
+      // Grid times follow the edit only when times were actually PATCHed;
+      // a label-only save keeps the visible window and the clipped badge.
       onGoogleImport((googleBlocks || []).map(b => b.id === pop.id
-        ? { ...b, label: popLabel.trim(), startHour: popStart, durationHours: popEnd - popStart, clipped: null }
+        ? {
+            ...b,
+            label: popLabel.trim(),
+            startHour: timesChanged && timesPatchable ? popStart : b.startHour,
+            durationHours: timesChanged && timesPatchable ? popEnd - popStart : b.durationHours,
+            clipped: timesChanged && timesPatchable ? null : b.clipped,
+          }
         : b));
       setPop(null);
     } catch (err) {
@@ -341,7 +356,9 @@ export default function WeeklyCalendar({
     // All-day Google edits are title-only (their 6:00–22:00 grid span is
     // a rendering artifact, not the real event) — a time-overlap check
     // would flag the whole day busy against every study block (P0).
-    if (!(popGoogle && pop.isAllDay)) {
+    // Clipped/segment Google edits are label-only too (the grid shows the
+    // visible window, not the real times), so they also skip the check.
+    if (!(popGoogle && (pop.isAllDay || pop.clipped || pop.segment))) {
       const conflicts = [...blocks, ...(googleBlocks || [])].filter(b =>
         b.day === pop.day && b.id !== pop.id &&
         overlaps(popStart, popEnd, b.startHour, b.startHour + b.durationHours)
@@ -705,7 +722,7 @@ export default function WeeklyCalendar({
             <div>
               <label htmlFor="mf-event-time-start" className="text-xs font-medium text-mindflow-muted block mb-1">{T.calTime}</label>
               <div className="flex items-center gap-2">
-                <select id="mf-event-time-start" value={popStart} disabled={popSaving || (popGoogle && pop.isAllDay)}
+                <select id="mf-event-time-start" value={popStart} disabled={popSaving || (popGoogle && (pop.isAllDay || pop.clipped || pop.segment))}
                   onChange={e => {
                     const s = Number(e.target.value);
                     setPopStart(s);
@@ -720,7 +737,7 @@ export default function WeeklyCalendar({
                   {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
                 <span className="text-mindflow-muted text-xs">{T.calTo}</span>
-                <select id="mf-event-time-end" value={popEnd} disabled={popSaving || (popGoogle && pop.isAllDay)}
+                <select id="mf-event-time-end" value={popEnd} disabled={popSaving || (popGoogle && (pop.isAllDay || pop.clipped || pop.segment))}
                   onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
                   {[...TIME_OPTIONS.filter(t => t > popStart), 22].map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
@@ -728,6 +745,9 @@ export default function WeeklyCalendar({
               </div>
               {popGoogle && pop.isAllDay && (
                 <p className="text-[11px] text-mindflow-muted mt-1">{T.gcalAllDayTimeLocked}</p>
+              )}
+              {popGoogle && !pop.isAllDay && (pop.clipped || pop.segment) && (
+                <p className="text-[11px] text-mindflow-muted mt-1">{T.gcalClippedTimeNote}</p>
               )}
             </div>
 

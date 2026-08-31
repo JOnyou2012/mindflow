@@ -11,7 +11,7 @@
 
 import generateWeeklySchedule, {
   circadianGamma, processC, processS, alertness, requiredBreakMinutes,
-  sortTasks, findFreeSlots, ALL_DAYS, GAP_TICKS,
+  sortTasks, findFreeSlots, ALL_DAYS, GAP_TICKS, deadlineDaysUntil,
 } from '../src/utils/scheduler.js';
 
 // Future-proof Monday — always 4 weeks ahead so no days are past.
@@ -400,7 +400,11 @@ summary('Task auto-splitting');
 
 console.log('\n📋 5. Strain & fatigue invariants');
 
-// 5a: Multiple hard tasks on same day → fatigue increases monotonically
+// 5a: Multiple hard tasks on same day → valid timelines AND chronological
+// session order. (2026-08-31: sessions are now sorted by startTick; the
+// old monotonic-fatigue assertion was tuned to the placement-ordered
+// array and no longer holds — the carryover CHAIN is still computed in
+// placement order, not chronological order, see PRD known limitations.)
 {
   const tasks = [];
   for (let i = 0; i < 4; i++) {
@@ -415,13 +419,33 @@ console.log('\n📋 5. Strain & fatigue invariants');
   const sessions = r.days.Mon.sessions;
 
   if (sessions.length >= 2) {
-    const firstAvgFatigue = sessions[0].timeline.reduce((s, p) => s + p.fatigue, 0) / sessions[0].timeline.length;
-    const lastAvgFatigue = sessions[sessions.length - 1].timeline.reduce((s, p) => s + p.fatigue, 0) / sessions[sessions.length - 1].timeline.length;
+    for (let i = 1; i < sessions.length; i++) {
+      assert(sessions[i].startTick >= sessions[i - 1].startTick,
+        `S5.1: Sessions sorted chronologically (${sessions[i - 1].startTick} → ${sessions[i].startTick})`);
+    }
+    for (const s of sessions) {
+      const avg = s.timeline.reduce((a, p) => a + p.fatigue, 0) / s.timeline.length;
+      assert(avg >= 0 && avg <= 1, `S5.1: avg fatigue in [0,1] (${avg.toFixed(3)})`);
+    }
+  }
+}
 
-    // Last session should have at least as much fatigue as the first
-    // (cumulative strain + carryover state)
-    assert(lastAvgFatigue >= firstAvgFatigue * 0.95,
-      `S5.1: Later session avg fatigue (${lastAvgFatigue.toFixed(3)}) ≥ first (${firstAvgFatigue.toFixed(3)}) * 0.95`);
+// 5a2: Inter-session gap — the 30-min GAP_TICKS must hold even when the
+// next task lands in a sibling candidate slot of the same free window
+// (2026-08-31 regression: sessions started exactly at the previous
+// session's endTick).
+{
+  const tasks = [
+    makeTask({ title: 'Gap A', durationMins: 60, difficulty: 3, priority: 'high', type: 'academic' }),
+    makeTask({ title: 'Gap B', durationMins: 60, difficulty: 3, priority: 'high', type: 'sports' }),
+  ];
+  const r = generateWeeklySchedule([], tasks, 1.0, { chronotype: 'morning' });
+  for (const d of ALL_DAYS) {
+    const sessions = r.days[d].sessions;
+    for (let i = 1; i < sessions.length; i++) {
+      const gap = sessions[i].startTick - sessions[i - 1].endTick;
+      assert(gap >= 3, `S5.4: ${d} gap between sessions ≥ 3 ticks (got ${gap})`);
+    }
   }
 }
 
@@ -1163,6 +1187,24 @@ console.log('\n📋 17. Week start date timezone safety');
   ], 1.0, {}, '2026-12-28');
   const any = Object.values(r.days).some(d => d.sessions.length > 0);
   assert(any, 'TZ17.4: Week crossing year boundary → valid schedule');
+}
+
+// 17c: deadlineDaysUntil — a deadline passed by HOURS must count as
+// overdue. Math.round(-0.0007) = -0 and -0 < 0 is false in JS, which
+// gave overdue tasks the "due soon" BONUS on Monday (production bug,
+// 2026-08-31).
+{
+  const slotMidnight = new Date('2026-08-24T00:00:00'); // Monday
+  assert(deadlineDaysUntil(new Date('2026-08-23T23:59:00'), slotMidnight) === -1,
+    'TZ17.5: yesterday-23:59 deadline counts as overdue');
+  assert(deadlineDaysUntil(new Date('2026-08-24T00:00:00'), slotMidnight) === 0,
+    'TZ17.6: deadline at slot midnight counts as day 0');
+  assert(deadlineDaysUntil(new Date('2026-08-25T09:00:00'), slotMidnight) === 1,
+    'TZ17.7: +1.375 days rounds to 1');
+  assert(deadlineDaysUntil(new Date('2026-08-25T12:00:00'), slotMidnight) === 2,
+    'TZ17.8: +1.5 days rounds up to 2');
+  assert(deadlineDaysUntil(new Date('2026-08-31T00:00:00'), slotMidnight) === 7,
+    'TZ17.8: +7 days counts as 7');
 }
 
 summary('Week start date timezone safety');

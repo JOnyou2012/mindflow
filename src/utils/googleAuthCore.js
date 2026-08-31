@@ -135,6 +135,11 @@ function friendlyError(code) {
 
 // -- Core Auth Functions -------------------------------------------------------
 
+// In-flight guards: concurrent token requests share one underlying GIS
+// request (each TokenClient has a single callback slot).
+let inFlightInteractiveRequest = null;
+let inFlightFreshToken = null;
+
 /**
  * Initialize both GIS TokenClients. Call once on app mount.
  * Safe to call when VITE_GOOGLE_CLIENT_ID is unset — does nothing.
@@ -182,23 +187,35 @@ export function isSignedIn() {
 export async function requestAccessToken() {
   if (accessToken && Date.now() < tokenExpiresAt) return accessToken;
 
-  const hadToken = accessToken !== null;
-  accessToken = null; // clear silently — re-auth is about to run
-  tokenExpiresAt = 0;
+  // Serialize: requestFromClient swaps the TokenClient's single callback
+  // slot, so two concurrent callers clobbered each other's wrapper and
+  // could mis-resolve or hang (production bug, 2026-08-31). Concurrent
+  // callers await the same in-flight request.
+  if (inFlightInteractiveRequest) return inFlightInteractiveRequest;
+  inFlightInteractiveRequest = (async () => {
+    const hadToken = accessToken !== null;
+    accessToken = null; // clear silently — re-auth is about to run
+    tokenExpiresAt = 0;
 
-  if (!tokenClient) {
-    try { await waitForGis(); } catch { /* tokenClient stays null → error below */ }
-  }
-  if (!tokenClient) return Promise.reject(new Error('Google sign-in could not be loaded. Check your network connection or ad-blocker.'));
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await requestFromClient(tokenClient, null); // no timeout — wait for the GIS callback
-    } catch (err) {
-      if (err.message === 'popup_closed' && attempt === 0) continue; // auto-retry once
-      if (hadToken) tokenListeners.forEach(cb => cb('token_expired')); // surface only after refresh failed
-      throw friendlyError(err.message);
+    if (!tokenClient) {
+      try { await waitForGis(); } catch { /* tokenClient stays null → error below */ }
     }
+    if (!tokenClient) throw new Error('Google sign-in could not be loaded. Check your network connection or ad-blocker.');
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await requestFromClient(tokenClient, null); // no timeout — wait for the GIS callback
+      } catch (err) {
+        if (err.message === 'popup_closed' && attempt === 0) continue; // auto-retry once
+        if (hadToken) tokenListeners.forEach(cb => cb('token_expired')); // surface only after refresh failed
+        throw friendlyError(err.message);
+      }
+    }
+  })();
+  try {
+    return await inFlightInteractiveRequest;
+  } finally {
+    inFlightInteractiveRequest = null;
   }
 }
 
@@ -209,12 +226,23 @@ export async function requestAccessToken() {
  */
 export async function getFreshToken() {
   if (accessToken && Date.now() < tokenExpiresAt) return accessToken;
-  if (silentTokenClient) {
-    try {
-      return await requestFromClient(silentTokenClient, SILENT_TIMEOUT_MS);
-    } catch { /* session gone or consent needed — fall through to interactive */ }
+  // Same serialization as requestAccessToken: the silent client also has
+  // one callback slot, and a poll + PATCH landing together used to swap
+  // wrappers mid-flight.
+  if (inFlightFreshToken) return inFlightFreshToken;
+  inFlightFreshToken = (async () => {
+    if (silentTokenClient) {
+      try {
+        return await requestFromClient(silentTokenClient, SILENT_TIMEOUT_MS);
+      } catch { /* session gone or consent needed — fall through to interactive */ }
+    }
+    return requestAccessToken();
+  })();
+  try {
+    return await inFlightFreshToken;
+  } finally {
+    inFlightFreshToken = null;
   }
-  return requestAccessToken();
 }
 
 /** Revoke the token and clear module state. */

@@ -76,8 +76,8 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 8 suites (5,894 assertion
-> checks — recount 2026-08-31, google-calendar suite 146; counts every
+> All tiers resolved. `npm test` runs 8 suites (5,934 assertion
+> checks — recount 2026-08-31, full-product bug sweep +40; counts every
 > "N passed" summary line), 0 failures.
 > `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
@@ -85,6 +85,95 @@
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
+>
+> **2026-08-31 (Jeremy + Claude — full-product bug sweep):**
+> Four parallel adversarial reviews (engine, scheduler, React app, GCal/
+> auth/storage utils) + independent repro verification. The v6 engine
+> CORE is sound — every headline calibration claim reproduces (burnout
+> hierarchy β=5@2h … β=2 never, drain 2h midpoint, 85% post-break
+> conversion, [0.5,2.0] γ clamp alive) and all invariants hold. 14 bugs
+> fixed at the engine↔scheduler seam, in the GCal zone math, and in App
+> state handling:
+>
+> **Scheduler realism (engine seam):** 1) The documented 30-min
+> inter-session gap was NOT enforced — `dayOccupiedIntervals` stored
+> unpadded spans, so a sibling candidate slot started a session exactly
+> at the previous session's `endTick` (back-to-back) while the model
+> assumed a 30-min recovery; intervals are now padded with `GAP_TICKS`.
+> 2) Carryover recovery always modeled a fixed 30-min gap — it now uses
+> the actual `gapSinceLastTask`. 3) Burnout recovery was double-applied
+> (20+20 modeled minutes) — the duplicate outer application is removed.
+> 4) `flowMinutes` summed the end-state point too (one 10-min window
+> overcount per session) — now ticks 0..N−1. 5) Sessions are sorted
+> chronologically after placement (the day-spread bonus parks the first
+> task in the afternoon, later tasks fill morning slots) — fatigueCurve
+> and streak warnings now read time order. 6) An overdue-by-hours task
+> (deadline yesterday 23:59) rounds to −0 days and `−0 < 0` is false in
+> JS — it got Monday's "due soon" BONUS instead of the overdue penalty;
+> `deadlineDaysUntil()` checks `dl < slotDate` explicitly. 7) App
+> cascade now caps `maxHoursWeekend` too (weekends were the
+> highest-capacity days of a "don't fill beyond ~80%" week). 8) Dead
+> "re-simulate without break" branch removed (condition provably false).
+>
+> **Engine API guards:** `calculateMarkovTimeline` clamps `steps` to
+> [1,144] (steps=1e7 froze the UI allocating millions of points);
+> `optimizeWithBreak` clamps `burnoutTick` into [1,steps] (a tick beyond
+> the session emitted a timeline LONGER than the session) and treats NaN
+> as no-break. Doc drift fixed (break-effectiveness midpoint 0.55/8.0,
+> strain JSDoc 0.48 not 0.8).
+>
+> **Google Calendar data integrity:** 1) **Editing a clipped imported
+> event silently rewrote its REAL times in Google Calendar** — the grid
+> shows the visible 6:00–22:00 window, and save PATCHed those clipped
+> values back (renaming an 04:30 gym event truncated it to 06:00).
+> Time edits are now disabled + noted for clipped/multi-day-segment
+> events; only full-visible events PATCH times, label-only saves keep
+> the clipped badge (new `gcalClippedTimeNote` key ×6). 2) All-day
+> events compared machine-local midnight instants against calendar-zone
+> week bounds — a machine east of the calendar zone dropped the week's
+> Monday all-day events (west machines could admit the previous Sunday);
+> all-day inclusion now compares calendar DATE strings. 3) Timed
+> multi-day events were never split — an overnight 23:00→02:00 event
+> emitted NO block and Fri 20:00→Sun 10:00 lost Sat/Sun; timed events
+> now split into per-day segments with clip flags (`segment: true`,
+> label-only in the popover). 4) `hourCycle: 'h23'` is ignored on
+> engines without hourCycle support (Safari < 15.4) → silent 12h shifts;
+> switched to `hour12: false` + `hour % 24` guards in both zone
+> functions. 5) `findExistingEvents` built its dedupe/orphan-sweep
+> window in the MACHINE zone, missing Monday events written in the
+> calendar zone — now calendar-zone via `zonedISOFromParts`.
+>
+> **App state:** 1) Back/stepper during the 0.5–3.5s reveal hold no
+> longer force-jumps the user to Plan — step changes cancel the
+> generate/hold/progress timers. 2) A failed background token refresh
+> silently killed auto-refresh while the UI said "Connected" — now
+> surfaces `gcalTokenExpired` and stops the poll. 3) `goHome`/sign-out
+> race with an in-flight refresh is fixed with an epoch guard (in-flight
+> results can't resurrect cleared Google state). 4) 401-retry errors are
+> re-classified (403 → sign-out, 429 → rate-limit) instead of all being
+> reported as "token expired". 5) `commit()` keeps the staleness delta
+> over the generation-start snapshot — edits during the hold no longer
+> get their stale banner wiped. 6) Task duration validation rejects NaN
+> (`Number('e')` passed both bounds checks). 7) Task-row keyboard
+> handler no longer swallows Enter/Space from the nested edit/delete
+> buttons. 8) Concurrent token requests are serialized (requestFromClient
+> swaps the client's single callback slot — concurrent callers could
+> mis-resolve or hang).
+>
+> **Known limitations (documented, not fixed):** one planned break per
+> session (a second burnout inside one session gets no intervention —
+> product concept is "a break right before you crash"); the carryover
+> chain is computed in placement order, not chronological order (sessions
+> are sorted for display, but within-day fatigue carryover between
+> sessions is approximate for multi-task days); the default-path
+> scheduler API (no weekStartDate) doesn't clamp to "now" (App always
+> passes a week); literal `T00:00` deadlines are unschedulable in their
+> deadline week; the day-spread bonus gates on window start, not the
+> actual hour; `sortTasks` treats corrupt truthy deadlines as real;
+> `loadGoogleCache` is written but never read (deliberate — the OAuth
+> token is memory-only, so cached blocks must not render after reload).
+> Suite: 159 google-calendar checks, 1,431 extreme, 944 engine-v3
+> (5,934 total), 0 failures, lint 0, build 0 errors.
 >
 > **2026-08-31 (Jeremy + Claude — Last-synced live time fix):**
 > User-reported bug: the "Last synced" live time (the import widget's

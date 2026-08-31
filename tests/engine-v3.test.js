@@ -366,6 +366,25 @@ assert(rRec[0] > rRec[2], `R11.10: post-break flow > fatigue (${rRec.map(x => x.
 assert(rRec[3] < 0.15, `R11.10b: recovery pool stays small (${rRec[3].toFixed(3)})`);
 
 // ===========================================================================
+// §12 — API guards (2026-08-31 production bug sweep)
+// ===========================================================================
+
+// 12.1: steps upper clamp — an unclamped steps=1e7 allocated millions of
+// timeline points and froze the UI.
+const hugeTimeline = calculateMarkovTimeline(1.0, 3, 1.0, 1e7);
+assert(hugeTimeline.length <= 145, `12.1: steps clamped (got ${hugeTimeline.length} points)`);
+
+// 12.2: burnoutTick clamped into [1, steps] — a tick beyond the session
+// used to emit a timeline LONGER than the session itself.
+const clampOpt = optimizeWithBreak(1.0, 3, 1.0, 6, 10, 15);
+assert(clampOpt.optimized.length === clampOpt.original.length,
+  `12.2: optimized length matches session (got ${clampOpt.optimized.length} vs ${clampOpt.original.length})`);
+
+// 12.3: NaN burnoutTick is a no-op, not a corrupted timeline
+const nanOpt = optimizeWithBreak(1.0, 3, 1.0, 6, NaN, 15);
+assert(nanOpt.optimized.length === nanOpt.original.length, '12.3: NaN burnoutTick returns original');
+
+// ===========================================================================
 // Done
 // ===========================================================================
 

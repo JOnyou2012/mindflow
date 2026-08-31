@@ -93,6 +93,11 @@ const INTERVENTION_STEEPNESS = 8.0; // how sharply effectiveness drops
 // Cognitive capacity
 const CAPACITY_BASE = 180.0;       // base cognitive capacity (load units)
 
+// Simulation size guard: the longest schedulable session is 8h = 48 ticks,
+// and the backend validates 1..144 steps. Anything larger is an API misuse
+// and would freeze the UI allocating millions of timeline points.
+const MAX_STEPS = 144;
+
 // Temporal cognitive drain (v4/v6) — prevents steady-state plateau.
 // v6: drain is keyed to ABSOLUTE session time, not session fraction.
 // A 60-minute task experiences almost no drain (real life: you're still
@@ -126,10 +131,14 @@ export function calculateMarkovTimeline(
   alpha = 1.0, beta = 3, gamma = 1.0, steps = 18, initialState = null, options = null
 ) {
   // Guard against invalid steps (negative, NaN, zero) — downstream code
-  // accessing timeline[0] or timeline.length - 1 would crash on an empty array
+  // accessing timeline[0] or timeline.length - 1 would crash on an empty
+  // array. Also clamp the upper bound: the longest schedulable session is
+  // 8h = 48 ticks, and an unclamped steps=1e7 would allocate millions of
+  // points and freeze the UI (production bug, 2026-08-31).
   if (!Number.isFinite(steps) || steps < 1) {
     return [{ tick: 0, timeLabel: '0h00', flow: 1, distracted: 0, fatigue: 0, recovery: 0 }];
   }
+  steps = Math.min(Math.floor(steps), MAX_STEPS);
   const opts = options || {};
   let v0 = validateInitialState(initialState);
 
@@ -156,11 +165,16 @@ export function optimizeWithBreak(
   const initialState = opts.initialState || null;
   const original = calculateMarkovTimeline(alpha, beta, gamma, steps, initialState, opts);
 
-  if (!burnoutTick || burnoutTick <= 0) {
+  if (!burnoutTick || burnoutTick <= 0 || !Number.isFinite(burnoutTick)) {
     return { original, optimized: original };
   }
 
-  const breakInsertTick = Math.max(0, burnoutTick - 1);
+  // Clamp into the session: a burnoutTick beyond `steps` (or NaN) used to
+  // build a timeline LONGER than the session itself (production bug,
+  // 2026-08-31). The scheduler always passes a tick from findBurnoutTick,
+  // but the exported API must be safe on its own.
+  const safeBurnoutTick = Math.max(1, Math.min(Math.floor(burnoutTick), steps));
+  const breakInsertTick = Math.max(0, safeBurnoutTick - 1);
   const v0 = validateInitialState(initialState);
 
   const preBreak = simulateTrajectory(alpha, beta, gamma, breakInsertTick, [...v0], opts);
@@ -222,7 +236,7 @@ function invertBiexponentialDecay(ratio) {
  * significantly.
  *
  * Then scaled by intervention sensitivity:
- *   effectiveness = 1 − σ(fatigue − 0.40, 10)
+ *   effectiveness = 1 − σ(fatigue − 0.55, 8.0)
  *   t_adjusted = t_raw / effectiveness
  *
  * @param {MarkovTimePoint[]} timeline

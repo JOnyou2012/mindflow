@@ -188,7 +188,10 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
       question: T.qTaskDuration,
       manual: true,
       validate: (a) => {
-        if (a.durationMins < 5) return T.taskErrDurationMin;
+        // NaN sneaks through `<`/`>` comparisons (both false) — a
+        // type="number" input accepts 'e', producing Number('e') = NaN,
+        // which used to save a corrupt task (production bug, 2026-08-31).
+        if (!Number.isFinite(a.durationMins) || a.durationMins < 5) return T.taskErrDurationMin;
         if (a.durationMins > 480) return T.taskErrDurationMax;
         return null;
       },
@@ -405,7 +408,13 @@ export default function TaskInputForm({ tasks = [], onChange, onViewChange, T })
                 tabIndex={0}
                 aria-label={`${task.title}, ${tm.label}, ${task.durationMins} ${T.taskMinutes}`}
                 onClick={() => startEdit(task)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(task); } }}
+                onKeyDown={e => {
+                  // The row's key handler must not swallow Enter/Space from
+                  // the nested edit/delete buttons (keyboard users were
+                  // triggering the row's edit flow from the Delete button).
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(task); }
+                }}
                 className="flex items-start justify-between gap-3 rounded-lg border border-mindflow-border-light bg-mindflow-surface px-4 py-3 hover:bg-mindflow-surface-alt cursor-pointer group transition-colors"
                 style={{ opacity: overdue ? 0.6 : 1 }}
               >
