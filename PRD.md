@@ -76,8 +76,8 @@
 > bugs found. **Stroop scoring v2 (2026-08-20)** — user-reported unfair
 > scoring rebuilt: accuracy-dominant, correct-trials-only speed, median
 > RT, capped penalties, reachable 0.5–1.5 scale (see audit entry).
-> All tiers resolved. `npm test` runs 8 suites (5,934 assertion
-> checks — recount 2026-08-31, full-product bug sweep +40; counts every
+> All tiers resolved. `npm test` runs 9 test files (5,962 assertion
+> checks — recount 2026-09-07, full-product bug sweep #2 +28; counts every
 > "N passed" summary line), 0 failures.
 > `npm run build` 0 errors, 0 warnings.
 > Project lint: 0 warnings. `npm audit`: 0 vulnerabilities.
@@ -85,6 +85,92 @@
 > the Vercel preview URLs are SSO-protected — see the 2026-08-20 audit
 > entries below; neither affects the site (backend is optional, the
 > production domain is public).
+>
+> **2026-09-07 (Jeremy + Claude — full-product bug sweep #2 + custom-domain
+> launch prep):**
+> Four parallel adversarial reviews (core app flows, calendar
+> integration, engine/utils, backend + launch readiness), every finding
+> verified against the code before fixing. 23 confirmed bugs fixed
+> (several in paths with zero test coverage). Commit 919f4c0 pushed.
+>
+> **Calendar selection (App state):** an explicit "all calendars off"
+> was silently reverted within one poll interval — every no-arg
+> `refreshGoogleEvents()` (60s poll / focus / Refresh link) fell back
+> to the primary calendar, re-imported its events, and overwrote the
+> persisted `[]`. The primary auto-select now fires only when the user
+> has NEVER saved a selection (new `hasStoredGoogleCalendars()`);
+> toggle-off survives every poll. `goHome` persists the calendar
+> wipe; sign-out keeps the choice (reconnect restores it) — memory and
+> storage no longer disagree across reloads.
+>
+> **Scheduler:** 1) The deadline-time gate checked against a slot's
+> ORIGINAL start instead of its used start (`startTick + usedTicks`) —
+> a due-09:00 task could be placed 9:00–10:00 while reported compliant;
+> fixed in both the main and refinement passes, with a regression test
+> proven to fail against the old code. 2) `validAlternatives` now
+> applies the same gates as the real search (deadline time, day cap,
+> double-booking) instead of inflating the confidence number. 3)
+> Sequencing compares task TYPES, not `gammaBoost` (academic↔other,
+> both 1.0, were penalized as "same type", disagreeing with the
+> flow-block gate and streak warnings). 4) `utilizationPct` capped at
+> 100 (tick-rounding showed "Capacity 120%" for a 25-min task). 5)
+> Cascade caps use `??` — `maxHoursWeekend: 0` (weekend off, a valid
+> setting) was coerced to 3–4h by `|| 4`.
+>
+> **Storage (silent data loss):** `sanitizeTask` ran string priorities
+> through `Number()` — `Number('high')` → NaN → `delete`, so every
+> valid priority was stripped on EVERY load and permanently collapsed
+> to medium after the next save (P1, zero coverage). Numeric coercion
+> now touches only numeric fields. `sanitizeBlock` drops negative
+> durations (the scheduler handled them, but the PNG exporter drew a
+> phantom 20px chip). New `tests/storage.test.js` (16 checks) locks
+> both, plus calendar-selection presence semantics.
+>
+> **GCal export/import:** 1) Remove-all only swept weeks still in the
+> current plan — a plan that regenerated with fewer weeks left its
+> dropped weeks' events in Google Calendar forever; Remove now covers
+> EVERY tracked week (date-validated union), sweeps the full range, and
+> clears the whole tracking store. 2) Double-click during the consent
+> popup started a second concurrent export whose dedup snapshot predated
+> the first run's POSTs → every session duplicated; the button now
+> flips to syncing BEFORE the token await. 3) A mid-export 401
+> discarded the already-POSTed `created[]` — the retry only tracked its
+> own events, so per-task unsync missed the first pass forever; the
+> error now carries `err.partialEvents` and `saveTracking` dedupes by
+> `googleEventId`. 4) The edit popover's time selects rendered blank
+> for imported events at non-half-hour minutes (07:15–08:45) — the true
+> value is now included in the options. 5) Editing/deleting one segment
+> of a multi-day event updates only that segment block; both flows now
+> match by `googleEventId` so every segment reflects the PATCH/DELETE
+> immediately. 6) A PATCH/DELETE bumps the sync epoch, so an in-flight
+> poll carrying the stale event list can't repaint a just-deleted
+> G-block (ghost), revert a just-saved edit, or fire a spurious
+> stale-plan flag.
+>
+> **Plan image export:** the exported PNG now renders Google-imported
+> blocks (today's week only, calendar color + G badge — PlanView
+> parity); previously the image omitted what the user sees on the grid.
+>
+> **Backend/launch hygiene:** `render.yaml` healthCheckPath added
+> (Render's default `GET /` 404s against the FastAPI app); backend
+> `break_minutes` capped at 24h; `api.js` trailing-slash + Safari
+> timeout-timer cleanup; dead docstring moved. README refreshed
+> (9 test files, Vercel production, GCal LIVE) + custom-domain launch
+> checklist. Prod-side note: `mindflow-api.onrender.com` serves a stale
+> Express 404, not the FastAPI app — documented, zero user impact (the
+> frontend makes no non-Google calls).
+>
+> **Launch prep:** og:image (1200×630 generated from the favicon),
+> og:url, canonical, twitter large-image cards, apple-touch-icon;
+> robots.txt + sitemap.xml. The custom-domain swap points are marked
+> with `TODO(custom-domain)` comments in `index.html` and
+> `public/sitemap.xml`; the blocking launch action is the Google Cloud
+> console origin registration (console-only).
+>
+> **Test hygiene:** TZ17.3 hardcoded a now-past week (the scheduler
+> correctly skips past days) — the test now computes the next
+> month-boundary Monday dynamically. Suite: 5,962 checks (9 files),
+> 0 failures, lint 0, build 0 errors.
 >
 > **2026-08-31 (Jeremy + Claude — full-product bug sweep):**
 > Four parallel adversarial reviews (engine, scheduler, React app, GCal/
@@ -3705,9 +3791,17 @@ This PRD incorporates fixes for every known bug from previous iterations:
 ---
 ---
 
-# Part 7: Stage 5 — Google Calendar Integration ⏸️ PAUSED
+# Part 7: Stage 5 — Google Calendar Integration ✅ LIVE
 
-> **Status (2026-08-11):** Import + export code is complete and in the repo
+> **Status (2026-09-07):** Import + export are LIVE in production —
+> multi-calendar two-way sync since 2026-08-27 (all-day events, multi-day
+> segments, per-task unsync, bulk Remove with orphan sweep), hardened by
+> two full-product bug sweeps (2026-08-31, 2026-09-07). Gated by
+> `VITE_GOOGLE_CLIENT_ID` (injected at build time by Vercel). Original
+> 2026-08-11 note kept below for history:
+>
+> **Status (2026-08-11, superseded):** Import + export code is complete
+> and in the repo
 > (`googleCalendar.js`, `googleAuth.jsx`, `GoogleSyncButton.jsx`,
 > `GoogleCalendarImport.jsx`, `GoogleCalendarExport.jsx`). Development is
 > paused — no further work on OAuth setup, RRULE, multi-calendar, or
