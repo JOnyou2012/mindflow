@@ -11,7 +11,7 @@ import {
   saveTasks, loadTasks,
   saveSettings, loadSettings,
   clearAll, clearGoogleCache,
-  saveGoogleCache, saveGoogleCalendars, loadGoogleCalendars,
+  saveGoogleCache, saveGoogleCalendars, loadGoogleCalendars, hasStoredGoogleCalendars,
   loadGoogleExport, saveGoogleExport,
 } from './utils/storage.js';
 import {
@@ -173,6 +173,12 @@ export default function App() {
   // two-way-sync PATCH/DELETE flows). Keeps the diff ref in sync so the
   // next poll doesn't re-import identical data.
   const handleGoogleImport = (importedBlocks) => {
+    // Bump the epoch too: a poll/focus fetch that started BEFORE this
+    // PATCH/DELETE carries the stale event list and, left unchecked,
+    // repaints a just-deleted G-block (ghost) or reverts a just-saved
+    // edit — plus a spurious stale-plan flag. The in-flight refresh
+    // aborts at its next epoch check and the following poll re-fetches.
+    gEpochRef.current++;
     gBlocksRef.current = importedBlocks;
     setGoogleBlocks(importedBlocks);
     dataVersionRef.current++;
@@ -218,8 +224,14 @@ export default function App() {
         const listIds = calList.map(c => c.id);
         const intersect = gSelectedIds.filter(id => listIds.includes(id));
         const primary = calList.find(c => c.primary) || calList[0];
+        // Auto-select the primary calendar ONLY when the user has never
+        // saved a selection. An explicit "all off" ([] persisted) must
+        // survive the no-arg poll/focus refresh — falling back to primary
+        // there silently re-imported events the user just deselected
+        // (production bug, 2026-09-07).
         const ids = idsOverride
-          || (intersect.length > 0 ? intersect : primary ? [primary.id] : []);
+          || (intersect.length > 0 ? intersect
+              : primary && !hasStoredGoogleCalendars() ? [primary.id] : []);
         saveGoogleCalendars(ids);
         setGSelectedIds(ids);
 
@@ -320,7 +332,10 @@ export default function App() {
     gBlocksRef.current = [];
     setGSyncInfo(null);
     setGCalendars(null);
-    setGSelectedIds([]);
+    // Keep the calendar selection: sign-out disconnects, it doesn't
+    // un-choose — reconnecting restores the user's calendars. Resetting
+    // only memory here left localStorage holding the old ids, so a reload
+    // silently re-selected them (inconsistency, 2026-09-07).
     setGListError(null);
   };
 
@@ -387,8 +402,11 @@ export default function App() {
           // "don't fill beyond ~80%" week (production bug, 2026-08-31).
           const cappedSettings = {
             ...settings,
-            maxHoursPerDay: Math.round((settings.maxHoursPerDay || 8) * weekCap),
-            maxHoursWeekend: Math.round((settings.maxHoursWeekend || 4) * weekCap),
+            // ?? not ||: the valid setting 0 (weekend off) must survive
+            // the cap math — `0 || 4` coerced it to 3–4h and scheduled
+            // weekend sessions the user explicitly disabled.
+            maxHoursPerDay: Math.round((settings.maxHoursPerDay ?? 8) * weekCap),
+            maxHoursWeekend: Math.round((settings.maxHoursWeekend ?? 4) * weekCap),
           };
           // Google-imported blocks are week-scoped (imported for the current
           // week only). Applying them to every cascade week planted a
@@ -491,6 +509,9 @@ export default function App() {
     setGSyncInfo(null);
     setGCalendars(null);
     setGSelectedIds([]);
+    // Persist the wipe — an in-memory-only reset left the old selection in
+    // localStorage, silently re-selected after reload + reconnect.
+    saveGoogleCalendars([]);
     setGListError(null);
     gBlocksRef.current = [];
     setStep(1);

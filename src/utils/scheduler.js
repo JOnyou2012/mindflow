@@ -545,8 +545,11 @@ function scoreSlot(slot, profile, chronotype, dayStrain, timeAwakeHrs, breakMins
   // per day, allowing back-to-back same-type tasks after the first one
   let sequencingScore = 0;
   if (lastTaskType) {
-    const lastProfile = TYPE_PROFILES[lastTaskType] || TYPE_PROFILES.other;
-    if (profile.gammaBoost === lastProfile.gammaBoost) {
+    // Compare the actual TYPES — comparing gammaBoost misclassified
+    // academic↔other (both 1.0) as "same type" and penalized a real
+    // alternation, disagreeing with the flow-block gate below and the
+    // warnings' streak logic.
+    if (task.type === lastTaskType) {
       sequencingScore = SEQUENCING_BONUS * 1.5; // same type → stronger penalty
     } else {
       sequencingScore = -SEQUENCING_BONUS; // different type → bonus
@@ -630,8 +633,11 @@ function computeStats(week, tasks, settings) {
   }
 
   const totalTaskMins = tasks.reduce((sum, t) => sum + (t.durationMins || 0), 0);
+  // Scheduled minutes are tick-rounded up (ceil to 10 min), so the ratio
+  // can exceed the requested minutes — "Capacity 120%" for a 25-min task.
+  // Cap at 100: utilization cannot exceed the work the user asked for.
   const utilizationPct = totalTaskMins > 0
-    ? Math.round((totalScheduledMins / totalTaskMins) * 100)
+    ? Math.min(100, Math.round((totalScheduledMins / totalTaskMins) * 100))
     : 100;
 
   const utils = Object.values(dayUtilization);
@@ -1228,8 +1234,12 @@ export default function generateWeeklySchedule(
       if (slot.usedTicks >= slot.maxTicks) continue;
       if (taskTicks > slot.durationTicks) continue;
       if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
-      // Check deadline time: slot must end before the specific deadline hour
-      if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
+      // Check deadline time: slot must end before the specific deadline hour.
+      // The task actually lands at startTick + usedTicks — checking against
+      // the ORIGINAL start validated the end ~usedTicks early, so a task
+      // placed into a partially-used slot could run past its deadline hour
+      // (e.g. due 09:00, placed 9:00–10:00, reported as compliant).
+      if (!slotBeforeDeadline(slot.startTick + slot.usedTicks + taskTicks, task, slot.day, wsDate)) continue;
 
       // v7: Per-day capacity check — uses the day-aggregate usedTicks
       // (not the per-slot counter) to prevent exceeding daily caps when
@@ -1320,18 +1330,27 @@ export default function generateWeeklySchedule(
     }
     const effAlpha = strainAlpha * dayRelativeBoost;
 
-    // Count valid alternatives for explainability
+    // Count valid alternatives for explainability — same gates as the real
+    // search (deadline time, day cap, double-booking); skipping any of
+    // them inflated the number users see as a confidence signal.
     let validAlternatives = 0;
     for (const slot of allSlots) {
       if (slot.usedTicks >= slot.maxTicks) continue;
       if (taskTicks > slot.durationTicks) continue;
       if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
+      if (!slotBeforeDeadline(slot.startTick + slot.usedTicks + taskTicks, task, slot.day, wsDate)) continue;
       if (slot === bestSlot) continue;
       // v7: Per-day cap for alternative counting
       const altDayMaxTicks = WEEKEND_DAYS.has(slot.day)
         ? (s.maxHoursWeekend ?? 4) * 6
         : (s.maxHoursPerDay ?? 8) * 6;
       if (dayUsedTicks[slot.day] + taskTicks > altDayMaxTicks) continue;
+      // v8: Double-booking check (same 30-min gap padding as placement)
+      const altCandStart = slot.startTick + slot.usedTicks;
+      const altCandEnd = altCandStart + taskTicks + GAP_TICKS;
+      const overlapsPlaced = (dayOccupiedIntervals[slot.day] || [])
+        .some(iv => altCandStart < iv.end && iv.start < altCandEnd);
+      if (overlapsPlaced) continue;
       validAlternatives++;
     }
 
@@ -1478,7 +1497,8 @@ export default function generateWeeklySchedule(
         if (slot.usedTicks >= slot.maxTicks) continue;
         if (taskTicks > slot.durationTicks) continue;
         if (!deadlineAllowsDay(task, slot.day, wsDate)) continue;
-        if (!slotBeforeDeadline(slot.startTick + taskTicks, task, slot.day, wsDate)) continue;
+        // Same fix as the main pass: the real start is startTick + usedTicks.
+        if (!slotBeforeDeadline(slot.startTick + slot.usedTicks + taskTicks, task, slot.day, wsDate)) continue;
 
         // v7: Per-day capacity check for refinement pass
         const refDayMaxTicks = WEEKEND_DAYS.has(slot.day)

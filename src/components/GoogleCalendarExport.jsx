@@ -41,11 +41,21 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
 
   const saveTracking = (result) => {
     const existing = loadGoogleExport();
+    const seen = new Set(
+      Object.values(existing)
+        .flatMap(e => e?.events || [])
+        .map(ev => ev?.googleEventId)
+        .filter(Boolean),
+    );
     for (const evt of result.events) {
+      // Dedupe: a mid-export 401 retry re-records the first-pass events
+      // (via err.partialEvents) — the store must not hold them twice.
+      if (!evt?.googleEventId || seen.has(evt.googleEventId)) continue;
       const key = evt.weekStart;
       if (!existing[key]) existing[key] = { syncedAt: new Date().toISOString(), events: [] };
       existing[key].events.push(evt);
       existing[key].syncedAt = new Date().toISOString();
+      seen.add(evt.googleEventId);
     }
     saveGoogleExport(existing);
   };
@@ -59,6 +69,11 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
   const handleExport = useCallback(async () => {
     setErrorMsg(null);
     setProgress({ current: 0, total: totalSessions });
+    // Flip to syncing BEFORE the token await: while the consent popup is
+    // open the button must be disabled, or a double-click starts a second
+    // concurrent export whose dedup snapshot predates the first run's
+    // POSTs — every session ended up duplicated in Google Calendar.
+    setStatus('syncing');
 
     // Token-on-demand before a write: a missing/expired token must trigger
     // a quiet refresh, not a 401 storm. If even the refresh fails, surface
@@ -70,8 +85,6 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
       fail('export', err.message || T.gcalExportError.replace('{detail}', ''));
       return;
     }
-
-    setStatus('syncing');
     // Local idempotence: sessions already present in the tracking store are
     // skipped before any API call, on top of the API-side dedup.
     const alreadySyncedKeys = new Set(
@@ -96,6 +109,12 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
     try {
       await runExport(token);
     } catch (err) {
+      // Events POSTed before the token died are already in Google —
+      // record them in tracking so per-task unsync / Remove can find them
+      // later; otherwise they survive as untracked orphans.
+      if (Array.isArray(err.partialEvents) && err.partialEvents.length > 0) {
+        saveTracking({ events: err.partialEvents });
+      }
       if (err.message === 'token_expired') {
         // One 401: refresh and retry once (export is idempotent — dedup
         // makes a partial export safe to re-run). Never reset the UI to
@@ -127,7 +146,19 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
 
     setStatus('syncing');
     const exportData = loadGoogleExport();
-    const tracked = weekStarts.reduce((arr, ws) => {
+    // Remove must cover EVERY tracked week, not just the weeks still in
+    // the current plan: a plan that regenerates with fewer weeks (tasks
+    // completed) drops weeks whose Google events are still tracked —
+    // restricting the sweep to weekStarts left those events in Google
+    // Calendar forever, with no code path to ever delete them.
+    // (Date-validate the union: corrupted localStorage keys would make
+    // findMindFlowEvents' `new Date(...)` throw; their tracked events are
+    // still deleted below via the tracking list itself.)
+    const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+      && !Number.isNaN(new Date(s + 'T00:00:00').getTime());
+    const trackedWeeks = Array.from(new Set([...weekStarts, ...Object.keys(exportData)]))
+      .filter(isIsoDate);
+    const tracked = trackedWeeks.reduce((arr, ws) => {
       if (exportData[ws]?.events) arr.push(...exportData[ws].events);
       return arr;
     }, []);
@@ -150,7 +181,7 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
      * too (production: old math/math review survived every Remove).
      */
     const collectEvents = async (tok) => {
-      const apiEvents = await findMindFlowEvents(tok, weekStarts);
+      const apiEvents = await findMindFlowEvents(tok, trackedWeeks);
       const seen = new Set(tracked.map(e => e.googleEventId));
       const orphans = apiEvents
         .filter(e => typeof e.id === 'string' && e.id !== '' && !seen.has(e.id))
@@ -163,8 +194,9 @@ export default function GoogleCalendarExport({ weekResults, planVersion, tasks, 
     const runDelete = (tok, allEvents) => deleteSyncedEvents(tok, allEvents, () => refreshToken());
 
     const finishSuccess = () => {
-      for (const ws of weekStarts) delete exportData[ws];
-      saveGoogleExport(exportData);
+      // Clear the WHOLE tracking store — weeks dropped from the plan are
+      // removed above and their tracking must not survive either.
+      saveGoogleExport({});
       setSyncResult(null);
       setStatus('idle');
     };

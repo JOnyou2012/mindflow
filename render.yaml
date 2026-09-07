@@ -7,6 +7,9 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # FastAPI serves only /api/* — Render's default GET / health check
+    # would 404 and mark the deploy unhealthy.
+    healthCheckPath: /api/health
     envVars:
       # Pin the runtime: requirements.txt pins the exact dependency set,
       # and numpy==2.0.2 ships no wheels for the current Render default

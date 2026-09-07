@@ -40,15 +40,18 @@
  * hang a request forever.
  */
 function timeoutSignal(ms) {
-  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  if (typeof AbortSignal.timeout === 'function') return { signal: AbortSignal.timeout(ms), cancel: () => {} };
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
+  const timer = setTimeout(() => controller.abort(), ms);
+  // cancel() releases the timer the moment the request settles instead of
+  // letting it (and its closure) live for the full timeout window.
+  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
 }
 
 const API_ORIGIN =
-  import.meta.env.VITE_API_ORIGIN ||
-  (import.meta.env.DEV ? '' : 'https://mindflow-api.onrender.com');
+  (import.meta.env.VITE_API_ORIGIN ||
+   (import.meta.env.DEV ? '' : 'https://mindflow-api.onrender.com'))
+    .replace(/\/+$/, ''); // trailing slash → double-slash URLs
 
 /**
  * Call a MindFlow API endpoint (GET or POST).
@@ -59,21 +62,26 @@ const API_ORIGIN =
  */
 export async function api(path, body = undefined) {
   const url = API_ORIGIN + path;
+  const { signal, cancel } = timeoutSignal(30000);
   const init = {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
-    signal: timeoutSignal(30000),
+    signal,
   };
   if (body !== undefined) {
     init.method = 'POST';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`API ${res.status}: ${text || res.statusText}`);
+    }
+    return res.json();
+  } finally {
+    cancel();
   }
-  return res.json();
 }

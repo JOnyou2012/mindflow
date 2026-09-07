@@ -1,6 +1,6 @@
 # 🧠 MindFlow — Smart Study Scheduler
 
-MindFlow predicts mental burnout and builds an optimized weekly study schedule. Everything runs in the browser — no backend, no accounts, no database. Your data stays in localStorage.
+MindFlow predicts mental burnout and builds an optimized weekly study schedule. Everything runs in the browser — no backend, no database. Optional Google sign-in exists solely for calendar sync. Your data stays in localStorage.
 
 Hard tasks land when you're freshest, breaks appear right before you'd burn out, and the result is a Google-Calendar-style week plan you can iterate on.
 
@@ -34,7 +34,7 @@ uvicorn main:app --reload   # http://127.0.0.1:8000
 ## 🧪 Testing & Verification
 
 ```bash
-npm test          # 5 suites, 3,481 assertion checks (deterministic), 0 failures
+npm test          # 8 test files (scheduler ×3, engine, stress, image, stroop, GCal)
 npm run build     # production build → dist/ (0 errors expected)
 npm run lint      # oxlint over src/ and tests/ (0 warnings expected)
 npm audit         # 0 vulnerabilities expected
@@ -80,7 +80,7 @@ mindflow/
 │       ├── googleAuthCore.js / googleAuthContext.js / googleAuth.jsx
 │       └── googleCalendar.js # GCal OAuth + import/export (paused)
 ├── backend/                 # optional FastAPI mirror (main.py)
-├── tests/                   # 5 Node test suites
+├── tests/                   # 8 Node test files (see package.json)
 ├── netlify.toml             # Netlify deploy config
 ├── vercel.json              # Vercel deploy config
 ├── render.yaml              # Render blueprint (backend only)
@@ -89,16 +89,21 @@ mindflow/
 
 ## 🚢 Deployment
 
-**Frontend (recommended: Netlify)** — repo is fully configured:
+**Frontend (production: Vercel)** — `https://mindflow-liart.vercel.app`:
 
-1. Push to GitHub
-2. Netlify: **Add new site → Import from Git** — build command `npm run build`, publish dir `dist` (already in `netlify.toml`; SPA rewrites via `public/_redirects`)
-3. Vercel: **New Project → Import** — `vercel.json` provides SPA rewrites, immutable asset caching, and security headers
-4. No environment variables required — the app is fully client-side
+1. Push to GitHub → Vercel auto-deploys. `vercel.json` provides SPA rewrites, immutable asset caching, and security headers
+2. Google Calendar sync needs `VITE_GOOGLE_CLIENT_ID` set in the Vercel project env (injected at build time). Everything else is fully client-side — no other env vars required
+3. Netlify config (`netlify.toml` + `public/_redirects`) is kept as a dormant alternative
 
 **Optional backend (Render):** `render.yaml` deploys `mindflow-api` in one click. After the frontend is live, set `MDFLOW_FRONTEND_ORIGIN` in the Render dashboard to your deployed URL (CORS).
 
-**Google Calendar (paused):** code is complete but gated behind `VITE_GOOGLE_CLIENT_ID`. Set that env var at build time (and re-add the GSI script line documented in `index.html`) to light up connect/import/export.
+**Google Calendar:** live. Gated only by `VITE_GOOGLE_CLIENT_ID` (the GSI script tag is already in `index.html`). Two-way sync: import real events as plan blocks, export the generated plan, per-task unsync, bulk Remove with orphan sweep.
+
+**Custom-domain launch checklist** (when the domain is purchased):
+1. **Google Cloud console** — add the new domain to the OAuth Client ID's **Authorized JavaScript origins**, or Calendar sign-in fails with `origin_mismatch` (console-only change; no repo edit).
+2. **Vercel dashboard** — attach the domain; add a www→apex redirect (and optionally vercel.app→apex) via project redirects or a `redirects` block in `vercel.json`. SSL is auto-provisioned.
+3. **Repo** — swap every `mindflow-liart.vercel.app` for the new domain: `index.html` (og:url, og:image, twitter:image, canonical — marked with TODO comments) and `public/sitemap.xml`.
+4. Optional: revive the backend (see below) — it is dead weight today; the frontend makes no non-Google API calls.
 
 ## 🤝 Contributing
 

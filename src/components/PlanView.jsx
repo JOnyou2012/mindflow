@@ -139,7 +139,7 @@ export default function PlanView({ weekResults, calendarBlocks, googleBlocks = [
         locale: langToLocale(getStoredLang()),
         labels: T,
         today: todayIso(),
-      });
+      }, googleBlocks);
       const blob = await svgToPngBlob(svg, 2);
       await downloadPng(blob, scheduleImageFilename(new Date()));
     } catch (err) {

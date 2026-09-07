@@ -850,7 +850,15 @@ export async function exportSessions(accessToken, weekStartISOs, weekResults, on
         // A dead token (401) or revoked scope (403) must surface to the UI
         // so it can refresh and retry — counting it as a generic failure
         // left the user stuck on "{n} failed" forever.
-        if (err?.message === 'token_expired' || err?.message === 'permission_denied') throw err;
+        if (err?.message === 'token_expired' || err?.message === 'permission_denied') {
+          // Attach the events already POSTed this run: the caller records
+          // them in local tracking before retrying. Without this, a
+          // mid-export 401 discarded `created`, the retry only tracked its
+          // own events, and per-task unsync later missed the first-pass
+          // events in Google forever.
+          if (err instanceof Error) err.partialEvents = created;
+          throw err;
+        }
         failed++;
       }
       processed++;

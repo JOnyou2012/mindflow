@@ -33,7 +33,9 @@ function sanitizeBlock(b) {
   if (typeof b.day !== 'string' || !DAY_NAMES.includes(b.day)) return null;
   const startHour = Number(b.startHour);
   const durationHours = Number(b.durationHours);
-  if (!Number.isFinite(startHour) || !Number.isFinite(durationHours)) return null;
+  // Negative durations are corrupt — the scheduler drops the inverted
+  // interval, but buildScheduleSvg rendered a phantom 20px chip for them.
+  if (!Number.isFinite(startHour) || !Number.isFinite(durationHours) || durationHours < 0) return null;
   return { ...b, startHour, durationHours };
 }
 
@@ -46,7 +48,10 @@ function sanitizeTask(t) {
   if (typeof out.id !== 'string' || out.id === '') out.id = uuid();
   if (!['academic', 'sports', 'arts', 'other'].includes(out.type)) out.type = 'other';
   if (!['high', 'medium', 'low'].includes(out.priority)) delete out.priority;
-  for (const key of ['difficulty', 'durationMins', 'priority']) {
+  // Numeric coercion over NUMERIC fields only — including 'priority' here
+  // turned every valid string priority into NaN and deleted it, silently
+  // collapsing all task priorities to 'medium' on load (P1, 2026-09-07).
+  for (const key of ['difficulty', 'durationMins']) {
     const n = Number(out[key]);
     if (Number.isFinite(n)) out[key] = n; else delete out[key];
   }
@@ -186,6 +191,15 @@ export function loadGoogleCalendars() {
 
 export function clearGoogleCalendars() {
   try { localStorage.removeItem(KEYS.GOOGLE_CALENDARS); } catch {}
+}
+
+/**
+ * Whether the user has EVER saved a calendar selection. Distinguishes
+ * "first connect, auto-select primary" from "user explicitly deselected
+ * every calendar" — loadGoogleCalendars() returns [] for both.
+ */
+export function hasStoredGoogleCalendars() {
+  try { return localStorage.getItem(KEYS.GOOGLE_CALENDARS) !== null; } catch { return false; }
 }
 
 // -- Google Calendar export tracking ------------------------------------------

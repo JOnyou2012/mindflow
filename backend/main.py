@@ -309,8 +309,6 @@ def simulate_endpoint(
     gamma: float = 1.0,
     steps: int = 18,
 ):
-    if body is not None:
-        alpha, beta, gamma, steps = body.alpha, body.beta, body.gamma, body.steps
     """
     Run a non-linear Markov-chain simulation.
 
@@ -321,6 +319,8 @@ def simulate_endpoint(
       - matrix: transition matrix built at tick 0
       - params: input parameters
     """
+    if body is not None:
+        alpha, beta, gamma, steps = body.alpha, body.beta, body.gamma, body.steps
     err = validate_params(alpha, beta, gamma, steps)
     if err:
         raise HTTPException(status_code=422, detail=err)
@@ -373,6 +373,8 @@ def recovery_endpoint(
         raise HTTPException(status_code=422, detail="all inputs must be finite numbers")
     if any(v < 0 for v in vals):
         raise HTTPException(status_code=422, detail="all inputs must be >= 0")
+    if break_minutes > 1440:
+        raise HTTPException(status_code=422, detail="break_minutes must be <= 1440 (24h)")
     current = np.array([flow, distracted, fatigue, recovery])
     # Normalize input
     s = float(current.sum())

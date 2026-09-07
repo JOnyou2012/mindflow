@@ -1167,16 +1167,27 @@ console.log('\n📋 17. Week start date timezone safety');
   assert(any, 'TZ17.2: Explicit ISO week start → valid schedule');
 }
 
-// 17c: Cross-month wsDate (month boundary)
+// 17c: Cross-month wsDate (month boundary) — computed dynamically:
+// the scheduler skips past days, so a hardcoded date rots as time passes.
 {
-  // Aug 31 2026 is Monday
+  // Find the next Monday whose Tuesday falls in a different month.
+  let ws = null;
+  for (let i = 0; i < 60 && !ws; i++) {
+    const c = new Date();
+    c.setDate(c.getDate() + i);
+    if (c.getDay() === 1) { // Monday
+      const tue = new Date(c);
+      tue.setDate(c.getDate() + 1);
+      if (tue.getMonth() !== c.getMonth()) {
+        ws = `${c.getFullYear()}-${String(c.getMonth() + 1).padStart(2, '0')}-${String(c.getDate()).padStart(2, '0')}`;
+      }
+    }
+  }
   const r = generateWeeklySchedule([], [
     makeTask({ title: 'Cross Month', durationMins: 60 })
-  ], 1.0, {}, '2026-08-31');
+  ], 1.0, {}, ws);
   const any = Object.values(r.days).some(d => d.sessions.length > 0);
   assert(any, 'TZ17.3: Week starting at month boundary → valid schedule');
-  // Tuesday should be Sep 1, not Aug 32
-  // Just verify no crash
 }
 
 // 17d: Cross-year wsDate (year boundary)
@@ -1205,6 +1216,26 @@ console.log('\n📋 17. Week start date timezone safety');
     'TZ17.8: +1.5 days rounds up to 2');
   assert(deadlineDaysUntil(new Date('2026-08-31T00:00:00'), slotMidnight) === 7,
     'TZ17.8: +7 days counts as 7');
+}
+
+// 17e: deadline-time gate must account for slot.usedTicks — the check ran
+// against the slot's ORIGINAL start, so a task placed into a partially-used
+// slot was validated ~usedTicks early and could END past its deadline hour
+// (a due-09:00 task landed 9:00–10:00 while reported compliant,
+// production bug 2026-09-07). Dates are computed dynamically: an overdue
+// deadline bypasses the gate by design.
+{
+  const ws = futureMonday(); // Monday 3+ weeks out — never overdue
+  const x = makeTask({ title: 'DeadlineGateX', durationMins: 30, priority: 'high', deadline: ws + 'T08:30' });
+  const d = makeTask({ title: 'DeadlineGateD', durationMins: 60, priority: 'high', deadline: ws + 'T09:00' });
+  const r = generateWeeklySchedule([], [x, d], 1.0, {}, ws);
+  const placed = Object.values(r.days).flatMap(dd => dd.sessions);
+  for (const s of placed.filter(s => s.task.title === 'DeadlineGateX')) {
+    assert(s.endTick / 6 <= 8.5, 'TZ17.9: due-08:30 task ends by 08:30');
+  }
+  for (const s of placed.filter(s => s.task.title === 'DeadlineGateD')) {
+    assert(s.endTick / 6 <= 9, 'TZ17.10: due-09:00 task ends by 09:00 (used-slot gate)');
+  }
 }
 
 summary('Week start date timezone safety');

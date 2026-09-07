@@ -331,7 +331,11 @@ export default function WeeklyCalendar({
       }
       // Grid times follow the edit only when times were actually PATCHed;
       // a label-only save keeps the visible window and the clipped badge.
-      onGoogleImport((googleBlocks || []).map(b => b.id === pop.id
+      // The PATCH renames the WHOLE Google event, so match by event id:
+      // every segment block of a multi-day event must show the new label
+      // immediately — matching only pop.id left sibling segments stale
+      // until the next poll.
+      onGoogleImport((googleBlocks || []).map(b => b.googleEventId === pop.googleEventId
         ? {
             ...b,
             label: popLabel.trim(),
@@ -404,7 +408,9 @@ export default function WeeklyCalendar({
           throw err;
         }
       }
-      onGoogleImport((googleBlocks || []).filter(b => b.id !== pop.id));
+      // DELETE removes the WHOLE Google event — drop every segment block,
+      // not just the clicked one (siblings would linger until a poll).
+      onGoogleImport((googleBlocks || []).filter(b => b.googleEventId !== pop.googleEventId));
       setPop(null);
     } catch {
       setPopMsg(T.gcalEventDeleteError);
@@ -734,13 +740,19 @@ export default function WeeklyCalendar({
                     setPopMsg('');
                   }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
-                  {TIME_OPTIONS.map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
+                  {/* Imported events can start at non-half-hour minutes
+                      (07:15) — include the true value so the select shows
+                      it instead of rendering blank; picking a different
+                      time quantizes to the half-hour grid. */}
+                  {[...new Set([...TIME_OPTIONS, popStart])].sort((a, b) => a - b)
+                    .map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
                 <span className="text-mindflow-muted text-xs">{T.calTo}</span>
                 <select id="mf-event-time-end" value={popEnd} disabled={popSaving || (popGoogle && (pop.isAllDay || pop.clipped || pop.segment))}
                   onChange={e => { setPopEnd(Number(e.target.value)); setPopMsg(''); }}
                   className="bg-mindflow-bg border border-mindflow-border rounded-lg px-2 py-2 text-mindflow-text text-sm focus:border-mindflow-accent focus:outline-none flex-1 disabled:opacity-40">
-                  {[...TIME_OPTIONS.filter(t => t > popStart), 22].map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
+                  {[...new Set([...TIME_OPTIONS.filter(t => t > popStart), popEnd, 22])].sort((a, b) => a - b)
+                    .map(t => (<option key={t} value={t}>{fmtHr(t)}</option>))}
                 </select>
               </div>
               {popGoogle && pop.isAllDay && (

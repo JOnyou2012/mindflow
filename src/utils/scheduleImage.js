@@ -145,6 +145,13 @@ function dayInfo(ws, dayName, today) {
   return { dateNum: date.getDate(), isToday: today === iso, isPast: today ? iso < today : false };
 }
 
+/** iso + n days as ISO (machine-local parts, same convention as dayInfo). */
+function isoAddDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 // ===========================================================================
 // Per-week layout
 // ===========================================================================
@@ -163,7 +170,7 @@ function weekBlockHeight(result) {
  * chips, unscheduled note. Returns an SVG fragment with all y positions
  * relative to yTop (the block's top edge).
  */
-function renderWeek(ws, result, calendarBlocks, palette, locale, names, L, today, yTop) {
+function renderWeek(ws, result, calendarBlocks, googleBlocks, palette, locale, names, L, today, yTop) {
   const out = [];
   const gridX = SVG_MARGIN;
   const stats = result?.stats || null;
@@ -177,6 +184,10 @@ function renderWeek(ws, result, calendarBlocks, palette, locale, names, L, today
   // strip anything that could break the id / url(#…) reference.
   const clipId = `gclip-${ws.replace(/[^0-9-]/g, '')}`;
   const esc = escapeXml;
+  // Google-imported blocks are week-scoped: render them only in the week
+  // containing today (PlanView parity — other weeks would plant one-off
+  // events across the whole plan).
+  const isTodayWeek = !!today && today >= ws && today < isoAddDays(ws, 7);
 
   // ── Week header ──
   out.push(`<text x="${gridX}" y="${yTop + 24}" font-size="16" font-weight="600" fill="${esc(palette.heading)}">${esc(weekLabel(ws, locale))}</text>`);
@@ -261,6 +272,27 @@ function renderWeek(ws, result, calendarBlocks, palette, locale, names, L, today
       }
     }
 
+    // Google-imported blocks — solid chips in the calendar's color with a
+    // G badge (PlanView parity; today's week only).
+    if (isTodayWeek) {
+      for (const b of googleBlocks.filter(bl => bl.day === day)) {
+        const start = Number(b.startHour) || 0;
+        const dur = Number(b.durationHours) || 0;
+        const top = Math.max(0, (start - SVG_START_H) * SVG_ROW_H);
+        const end = Math.min(start + dur, SVG_END_H);
+        const h = Math.max(20, (end - Math.max(start, SVG_START_H)) * SVG_ROW_H);
+        const c = b.googleCalendarColor || typeColor(b.type);
+        out.push(`<rect x="${colX + 2}" y="${gridY + top + 1}" width="${SVG_DAY_W - 4}" height="${h - 2}" rx="4" fill="${esc(c)}"/>`);
+        // Shorter than manual blocks — the G badge occupies the right edge.
+        out.push(`<text x="${colX + 8}" y="${gridY + top + 14}" font-size="11" font-weight="600" fill="#ffffff">${esc(truncate(b.label, 15))}</text>`);
+        if (h >= 40) {
+          out.push(`<text x="${colX + 8}" y="${gridY + top + 27}" font-size="10" fill="#ffffff" fill-opacity="0.9">${esc(`${fmtHr(start, locale)}–${fmtHr(end, locale)}`)}</text>`);
+        }
+        out.push(`<circle cx="${colX + SVG_DAY_W - 13}" cy="${gridY + top + 9}" r="6" fill="#ffffff" fill-opacity="0.85"/>`);
+        out.push(`<text x="${colX + SVG_DAY_W - 13}" y="${gridY + top + 12.5}" font-size="8" font-weight="700" text-anchor="middle" fill="${esc(c)}">G</text>`);
+      }
+    }
+
     // Generated study sessions — tinted, bordered chips (tick/6 → hours)
     for (const s of result?.days?.[day]?.sessions || []) {
       // Defensive: corrupted/foreign session objects must never emit NaN
@@ -311,12 +343,16 @@ function renderWeek(ws, result, calendarBlocks, palette, locale, names, L, today
  * @param {string} [options.locale='en-US'] BCP 47 locale for dates/hours
  * @param {object} [options.labels] translations; defaults to English
  * @param {string|null} [options.today=null] ISO date — enables today/past
- *   highlighting; null keeps output deterministic (used by tests)
+ *   highlighting and scopes Google blocks to today's week; null keeps
+ *   output deterministic (used by tests)
+ * @param {CalendarBlock[]} [googleBlocks] Google-imported blocks — rendered
+ *   only in the week containing `today` (week-scoped, like PlanView)
  * @returns {string} complete SVG document (with explicit width/height)
  */
-export function buildScheduleSvg(weekResults, calendarBlocks, options = {}) {
+export function buildScheduleSvg(weekResults, calendarBlocks, options = {}, googleBlocks = []) {
   const results = weekResults || {};
   const blocks = calendarBlocks || [];
+  const gBlocks = googleBlocks || [];
   const { palette = DEFAULT_PALETTE, locale = 'en-US', labels = {}, today = null } = options;
   const L = { ...DEFAULT_LABELS, ...labels };
   const weeks = Object.keys(results).sort();
@@ -348,7 +384,7 @@ export function buildScheduleSvg(weekResults, calendarBlocks, options = {}) {
   const names = dayShortNames(locale);
   let y = SVG_MARGIN;
   weeks.forEach((ws, i) => {
-    parts.push(renderWeek(ws, results[ws], blocks, palette, locale, names, L, today, y));
+    parts.push(renderWeek(ws, results[ws], blocks, gBlocks, palette, locale, names, L, today, y));
     y += heights[i] + SVG_WEEK_GAP;
   });
 
