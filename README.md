@@ -89,7 +89,7 @@ mindflow/
 
 ## 🚢 Deployment
 
-**Frontend (production: Vercel)** — `https://mindflow-liart.vercel.app`:
+**Frontend (production: Vercel)** — `https://usemindflow.org` (canonical). `https://mindflow-liart.vercel.app` remains as a Vercel mirror:
 
 1. Push to GitHub → Vercel auto-deploys. `vercel.json` provides SPA rewrites, immutable asset caching, and security headers
 2. Google Calendar sync needs `VITE_GOOGLE_CLIENT_ID` set in the Vercel project env (injected at build time). Everything else is fully client-side — no other env vars required
@@ -99,11 +99,12 @@ mindflow/
 
 **Google Calendar:** live. Gated only by `VITE_GOOGLE_CLIENT_ID` (the GSI script tag is already in `index.html`). Two-way sync: import real events as plan blocks, export the generated plan, per-task unsync, bulk Remove with orphan sweep.
 
-**Custom-domain launch checklist** (when the domain is purchased):
-1. **Google Cloud console** — add the new domain to the OAuth Client ID's **Authorized JavaScript origins**, or Calendar sign-in fails with `origin_mismatch` (console-only change; no repo edit).
-2. **Vercel dashboard** — attach the domain; add a www→apex redirect (and optionally vercel.app→apex) via project redirects or a `redirects` block in `vercel.json`. SSL is auto-provisioned.
-3. **Repo** — swap every `mindflow-liart.vercel.app` for the new domain: `index.html` (og:url, og:image, twitter:image, canonical — marked with TODO comments) and `public/sitemap.xml`.
-4. Optional: revive the backend (see below) — it is dead weight today; the frontend makes no non-Google API calls.
+**Custom-domain launch** (2026-09-07, domain: `usemindflow.org`):
+1. ✅ **Vercel dashboard** — domain attached (owned by a collaborator), A + CNAME + TXT verification records added at Namecheap.
+2. ✅ **Repo** — `index.html` (og:url, og:image, twitter:image, canonical), `public/sitemap.xml`, `.env.example` swapped to `usemindflow.org`.
+3. **Google Cloud console** — add `https://usemindflow.org` to the OAuth Client ID's **Authorized JavaScript origins**, or Calendar sign-in on the new domain fails with `origin_mismatch` (console-only change; no repo edit). Keep the vercel.app origin until the mirror is retired.
+4. **Google Search Console** — verify domain ownership and submit `public/sitemap.xml` for indexing.
+5. Optional: revive the backend (see below) — it is dead weight today; the frontend makes no non-Google API calls.
 
 ## 🤝 Contributing
 

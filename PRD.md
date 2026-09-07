@@ -172,6 +172,23 @@
 > month-boundary Monday dynamically. Suite: 5,962 checks (9 files),
 > 0 failures, lint 0, build 0 errors.
 >
+> **2026-09-07 (Jeremy + Claude — custom domain go-live: `usemindflow.org`):**
+> Domain purchased (Namecheap). DNS: A `@` → 76.76.21.21, CNAME `www`
+> → cname.vercel-dns.com, TXT `_vercel` verification record added at
+> Namecheap; Vercel domain attach + SSL handled by the Vercel account
+> owner (collaborator). Repo swap done: `index.html` (og:url, og:image,
+> twitter:image, canonical), `public/sitemap.xml`, `.env.example`
+> authorized-origins list, README launch checklist → ✅. The
+> `mindflow-liart.vercel.app` URL stays as a Vercel mirror.
+> **Open (console-only, non-blocking for launch):** 1) add
+> `https://usemindflow.org` to the OAuth Client ID's Authorized
+> JavaScript origins (until then GCal sign-in on the new domain fails
+> with `origin_mismatch`; vercel.app origin untouched); 2) Google
+> Search Console domain verification + sitemap submission for
+> indexing; 3) sensitive-scope verification (calendar.events) only if
+> public Google accounts should sync — test users keep working
+> indefinitely in Testing status.
+>
 > **2026-08-31 (Jeremy + Claude — full-product bug sweep):**
 > Four parallel adversarial reviews (engine, scheduler, React app, GCal/
 > auth/storage utils) + independent repro verification. The v6 engine
